@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.0.3](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.2...v1.0.3) (2020-12-20)
+
+
+### Bug Fixes
+
+* use node12 for action ([fab90f8](https://www.github.com/JustinBeckwith/linkinator-action/commit/fab90f892c63085c9d212780862fb5c755a704c1))
+
 ### [1.0.2](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.1...v1.0.2) (2020-12-20)
 
 
