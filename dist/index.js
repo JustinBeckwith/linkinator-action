@@ -44146,7 +44146,6 @@ function wrappy (fn, cb) {
 /***/ 4351:
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
-/* module decorator */ module = __webpack_require__.nmd(module);
 const core = __webpack_require__(2186);
 const { LinkChecker } = __webpack_require__(356);
 
@@ -44158,7 +44157,7 @@ async function main () {
       recurse: core.getInput('recurse'),
       linksToSkip: core.getInput('skip'),
       timeout: core.getInput('timeout'),
-      markdown: core.getInput('markdown') ?? true,
+      markdown: typeof core.getInput('markdown') === 'undefined' ? true : core.getInput('markdown'),
       serverRoot: core.getInput('serverRoot')
     };
 
@@ -44183,7 +44182,7 @@ async function main () {
   }
 }
 
-if (__webpack_require__.c[__webpack_require__.s] === module) {
+if (require.main === require.cache[eval('__filename')]) {
   main();
 } else {
   module.exports = main;
@@ -44442,9 +44441,6 @@ module.exports = require("zlib");;
 /******/ 		return module.exports;
 /******/ 	}
 /******/ 	
-/******/ 	// expose the module cache
-/******/ 	__webpack_require__.c = __webpack_module_cache__;
-/******/ 	
 /************************************************************************/
 /******/ 	/* webpack/runtime/node module decorator */
 /******/ 	(() => {
@@ -44458,9 +44454,9 @@ module.exports = require("zlib");;
 /******/ 	/* webpack/runtime/compat */
 /******/ 	
 /******/ 	__webpack_require__.ab = __dirname + "/";/************************************************************************/
-/******/ 	// module cache are used so entry inlining is disabled
+/******/ 	// module exports must be returned from runtime so entry inlining is disabled
 /******/ 	// startup
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 4351);
+/******/ 	return __webpack_require__(4351);
 /******/ })()
 ;
