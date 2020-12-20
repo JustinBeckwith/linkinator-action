@@ -43,4 +43,13 @@ describe('linkinator action', () => {
     assert.ok(setFailedStub.called);
     scope.done();
   });
+
+  it('should surface exceptions from linkinator with call stack', async () => {
+    const inputStub = sinon.stub(core, 'getInput').throws(new Error('😱'));
+    const setFailedStub = sinon.stub(core, 'setFailed');
+    await action();
+    assert.ok(inputStub.called);
+    assert.ok(setFailedStub.called);
+    assert.ok(setFailedStub.firstCall.firstArg.includes('test.js:'));
+  });
 });

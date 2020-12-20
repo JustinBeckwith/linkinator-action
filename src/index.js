@@ -26,12 +26,13 @@ async function main () {
       for (const link of brokenLinks) {
         failureOutput += `\n [${link.status}] ${link.url}`;
       }
-      throw new Error(failureOutput);
+      core.setFailed(failureOutput);
+      return;
     }
     console.log(`Scanned total of ${result.links.length} links!`);
     core.setOutput('results', result);
   } catch (err) {
-    core.setFailed(`linkinator failed: \n${err.message}`);
+    core.setFailed(`Linkinator exception: \n${err.message}\n${err.stack}`);
   }
 }
 
