@@ -1,6 +1,6 @@
 {
   "name": "linkinator-action",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A GitHub Action that checks your README and other markdown for 404s.",
   "main": "dist/index.js",
   "scripts": {
