@@ -44152,14 +44152,15 @@ const { LinkChecker } = __webpack_require__(356);
 async function main () {
   try {
     const options = {
-      path: core.getInput('paths'),
+      path: qq('paths', '*.md'),
       concurrency: core.getInput('concurrency'),
       recurse: core.getInput('recurse'),
       linksToSkip: core.getInput('skip'),
       timeout: core.getInput('timeout'),
-      markdown: typeof core.getInput('markdown') === 'undefined' ? true : core.getInput('markdown'),
+      markdown: qq('markdown', true),
       serverRoot: core.getInput('serverRoot')
     };
+    console.log(options);
 
     const checker = new LinkChecker()
       .on('pagestart', url => {
@@ -44180,6 +44181,12 @@ async function main () {
   } catch (err) {
     core.setFailed(`linkinator failed: \n${err.message}`);
   }
+}
+
+function qq (propName, defaultValue) {
+  return typeof core.getInput(propName) === 'undefined'
+    ? defaultValue
+    : core.getInput(propName);
 }
 
 if (require.main === require.cache[eval('__filename')]) {
