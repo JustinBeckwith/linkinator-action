@@ -1,0 +1,39 @@
+{
+  "name": "linkinator-action",
+  "version": "1.0.0",
+  "description": "A GitHub Action that checks your README and other markdown for 404s.",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "c8 mocha",
+    "fix": "semistandard --fix",
+    "link": "semistandard",
+    "build": "ncc build src/index.js --license licenses.txt"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JustinBeckwith/linkinator-action.git"
+  },
+  "keywords": [
+    "404",
+    "link",
+    "checker"
+  ],
+  "author": "Justin Beckwith <justin.beckwith@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/JustinBeckwith/linkinator-action/issues"
+  },
+  "homepage": "https://github.com/JustinBeckwith/linkinator-action#readme",
+  "dependencies": {
+    "@actions/core": "^1.2.6",
+    "linkinator": "^2.8.0"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.26.1",
+    "c8": "^7.3.5",
+    "mocha": "^8.2.1",
+    "nock": "^13.0.5",
+    "semistandard": "^16.0.0",
+    "sinon": "^9.2.2"
+  }
+}

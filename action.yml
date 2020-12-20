@@ -1,0 +1,28 @@
+name: 'Linkinator'
+description: 'A GitHub Action that checks your README and other markdown for 404s.'
+inputs:
+  paths:
+    description: 'Paths to scan for 404s. Defaults to *.md.'
+    default: '*.md'
+  concurrency:
+    description: 'The number of connections to make simultaneously.'
+    default: 100
+  recurse:
+    description: 'Recursively follow links on the same root domain.'
+    default: false
+  linksToSkip:
+    description: 'List of urls in regexy form to not include in the check.'
+  timeout:
+    description: 'Request timeout in ms.  Defaults to 0 (no timeout).'
+    default: 0
+  markdown:
+    description: 'Automatically parse and scan markdown if scanning from a location on disk.'
+    default: true
+  serverRoot:
+    description: 'When scanning a locally directory, customize the location on disk where the server is started.'
+outputs:
+  time: # id of output
+    description: 'The time we greeted you'
+runs:
+  - using: 'node14'
+    main: 'index.js'
