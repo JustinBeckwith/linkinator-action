@@ -9,7 +9,6 @@ nock.disableNetConnect();
 nock.enableNetConnect('localhost');
 
 describe('linkinator action', () => {
-
   afterEach(() => {
     sinon.restore();
     nock.cleanAll();
