@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.0.2](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.1...v1.0.2) (2020-12-20)
+
+
+### Bug Fixes
+
+* update build config ([6d267f5](https://www.github.com/JustinBeckwith/linkinator-action/commit/6d267f5ee8f3cdfd28879220e446c3e153a378f3))
+
 ### [1.0.1](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.0...v1.0.1) (2020-12-20)
 
 
