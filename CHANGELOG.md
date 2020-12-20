@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.0.6](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.5...v1.0.6) (2020-12-20)
+
+
+### Bug Fixes
+
+* set default paths to *.md ([963b5d7](https://www.github.com/JustinBeckwith/linkinator-action/commit/963b5d79804e41032f19f4da1104895855456e08))
+
 ### [1.0.5](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.4...v1.0.5) (2020-12-20)
 
 
