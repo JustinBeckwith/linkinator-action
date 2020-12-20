@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.0.5](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.4...v1.0.5) (2020-12-20)
+
+
+### Bug Fixes
+
+* re-generate dist folder ([54efd99](https://www.github.com/JustinBeckwith/linkinator-action/commit/54efd991588d658376d1623989e8cc1029d3112e))
+
 ### [1.0.4](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.3...v1.0.4) (2020-12-20)
 
 
