@@ -9,7 +9,7 @@ async function main () {
       recurse: core.getInput('recurse'),
       linksToSkip: core.getInput('skip'),
       timeout: core.getInput('timeout'),
-      markdown: core.getInput('markdown') ?? true,
+      markdown: typeof core.getInput('markdown') === 'undefined' ? true : core.getInput('markdown'),
       serverRoot: core.getInput('serverRoot')
     };
 
