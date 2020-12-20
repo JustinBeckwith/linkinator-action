@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.0.4](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.3...v1.0.4) (2020-12-20)
+
+
+### Bug Fixes
+
+* do not use ?? because node 12 ([540f6bf](https://www.github.com/JustinBeckwith/linkinator-action/commit/540f6bffdc6df9b2ffba0dcc95808e71f8500f4e))
+
 ### [1.0.3](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.2...v1.0.3) (2020-12-20)
 
 
