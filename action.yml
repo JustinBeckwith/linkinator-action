@@ -21,8 +21,8 @@ inputs:
   serverRoot:
     description: 'When scanning a locally directory, customize the location on disk where the server is started.'
 outputs:
-  time: # id of output
-    description: 'The time we greeted you'
+  results:
+    description: 'The full results of the scan.'
 runs:
-  - using: 'node14'
-    main: 'index.js'
+  using: 'node14'
+  main: 'dist/index.js'
