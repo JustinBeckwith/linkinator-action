@@ -7,7 +7,7 @@
     "test": "c8 mocha",
     "fix": "semistandard --fix",
     "lint": "semistandard",
-    "build": "ncc build src/index.js --license licenses.txt"
+    "build": "ncc build src/index.js --license licenses.txt --source-map"
   },
   "repository": {
     "type": "git",
