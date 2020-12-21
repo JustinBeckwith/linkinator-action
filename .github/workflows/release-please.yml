@@ -10,7 +10,7 @@ jobs:
       - name: Create Release PR
         uses: GoogleCloudPlatform/release-please-action@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
           release-type: node
           package-name: linkinator-action
           command: 'release-pr'
@@ -18,7 +18,7 @@ jobs:
         uses: GoogleCloudPlatform/release-please-action@v2
         id: release
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
           release-type: node
           package-name: linkinator-action
           command: github-release
