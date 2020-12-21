@@ -54,4 +54,35 @@ describe('linkinator action', () => {
     assert.ok(setFailedStub.called);
     assert.ok(setFailedStub.firstCall.firstArg.includes('test.js:'));
   });
+
+  it('should handle linksToSkip', async () => {
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
+    inputStub.withArgs('linksToSkip').returns('http://fake.local,http://fake.local/fake');
+    inputStub.returns('');
+    const setOutputStub = sinon.stub(core, 'setOutput');
+    sinon.stub(core, 'setFailed').callsFake(output => {
+      throw new Error(output);
+    });
+    await action();
+    assert.ok(inputStub.called);
+    assert.ok(setOutputStub.called);
+  });
+
+  it('should handle multiple paths', async () => {
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md, test/fixtures/test2.md');
+    inputStub.returns('');
+    const setOutputStub = sinon.stub(core, 'setOutput');
+    sinon.stub(core, 'setFailed').callsFake(output => {
+      throw new Error(output);
+    });
+    const scope = nock('http://fake.local')
+      .head('/').reply(200)
+      .head('/fake').reply(200);
+    await action();
+    assert.ok(inputStub.called);
+    assert.ok(setOutputStub.called);
+    scope.done();
+  });
 });

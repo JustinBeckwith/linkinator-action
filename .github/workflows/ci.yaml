@@ -10,6 +10,12 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: ./
+      - uses: ./
+        with:
+          paths: test/fixtures/test.md
+          concurrency: 1
+          markdown: true
+          linksToSkip: "http://fake.local, http://fake.local/fake"
   test:
     runs-on: ubuntu-latest
     steps:

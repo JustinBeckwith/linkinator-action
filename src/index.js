@@ -5,15 +5,14 @@ async function main () {
   try {
     // The options returned from `getInput` appear to always be strings.
     const options = {
-      path: qq('paths', '*.md'),
+      path: parseList(qq('paths', '*.md')),
       concurrency: Number(qq('concurrency', 100)),
       recurse: Boolean(qq('recurse', false)),
-      linksToSkip: qq('skip', undefined),
+      linksToSkip: parseList(qq('linksToSkip', '')),
       timeout: Number(qq('timeout', 0)),
       markdown: Boolean(qq('markdown', true)),
       serverRoot: qq('serverRoot', undefined)
     };
-    console.log(options);
 
     const checker = new LinkChecker()
       .on('pagestart', url => {
@@ -41,6 +40,10 @@ function qq (propName, defaultValue, typeFunction) {
   return core.getInput(propName) === ''
     ? defaultValue
     : core.getInput(propName);
+}
+
+function parseList (input) {
+  return input.split(',').map(x => x.trim()).filter(x => !!x);
 }
 
 if (require.main === module) {

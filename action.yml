@@ -1,5 +1,9 @@
 name: 'Linkinator'
+author: 'Justin Beckwith'
 description: 'A GitHub Action that checks your README and other markdown for 404s.'
+branding:
+  icon: 'link'
+  color: 'purple'
 inputs:
   paths:
     description: 'Paths to scan for 404s. Defaults to *.md.'

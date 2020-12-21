@@ -1,5 +1,45 @@
 # linkinator-action
-A GitHub Action that checks your README and other markdown for 404s.
+> A happy little GitHub Action that checks your README.md and other markdown for broken links.  Uses [linkinator](https://github.com/JustinBeckwith/linkinator) under the hood.
+
+## Example usage
+With no arguments, this will scan your `README.md` in the root of the GitHub repository:
+
+```yaml
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+name: ci
+jobs:
+  linkinator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: JustinBeckwith/linkinator-action@v1
+```
+
+Or you can pass many of the same parameters [linkinator](https://github.com/JustinBeckwith/linkinator) provides!
+
+```yaml
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+name: ci
+jobs:
+  linkinator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: JustinBeckwith/linkinator-action@v1
+        with:
+          paths: test/fixtures/test.md
+          concurrency: 1
+          markdown: true
+          linksToSkip: "http://fake.local, http://fake.local/fake"
+```
 
 ## Inputs
 - `paths` - Paths to scan for 404s. Defaults to `*.md`.
@@ -13,10 +53,5 @@ A GitHub Action that checks your README and other markdown for 404s.
 ## Outputs
 - `results` - An object with the results of the run.
 
-## Example usage
-
-uses: linkinator-action@v1
-with:
-  paths: '*.md'
-  concurrency: 10
-
+## License
+[MIT](LICENSE)
