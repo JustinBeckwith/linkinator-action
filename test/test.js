@@ -67,7 +67,7 @@ describe('linkinator action', () => {
     await action();
     assert.ok(inputStub.called);
     assert.ok(setOutputStub.called);
-  })
+  });
 
   it('should handle multiple paths', async () => {
     const inputStub = sinon.stub(core, 'getInput');
@@ -84,5 +84,5 @@ describe('linkinator action', () => {
     assert.ok(inputStub.called);
     assert.ok(setOutputStub.called);
     scope.done();
-  })
+  });
 });

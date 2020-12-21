@@ -35500,7 +35500,7 @@ function qq (propName, defaultValue, typeFunction) {
     : core.getInput(propName);
 }
 
-function parseList(input) {
+function parseList (input) {
   return input.split(',').map(x => x.trim()).filter(x => !!x);
 }
 
