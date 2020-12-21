@@ -33,6 +33,7 @@ jobs:
         with:
           ref: ${{github.event.pull_request.head.ref}}
           repository: ${{github.event.pull_request.head.repo.full_name}}
+          token: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
       - uses: actions/setup-node@v2
         with:
           node-version: 12
@@ -40,12 +41,9 @@ jobs:
       - run: npm run build
       - name: git config
         run: |
-          git config user.name github-actions
-          git config user.email github-actions@users.noreply.github.com
+          git config user.name BeckwithRobot
+          git config user.email justin.beckwith+beckwithrobot@gmail.com
       - name: git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
         run: |
-          git status
-          git commit -a -m 'Follow up with a build'
+          git commit -a -m 'npm run build'
           git push
