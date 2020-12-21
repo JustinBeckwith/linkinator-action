@@ -45,5 +45,6 @@ function qq (propName, defaultValue) {
 if (require.main === module) {
   main();
 } else {
+  // export for tests
   module.exports = main;
 }

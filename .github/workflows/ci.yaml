@@ -1,11 +1,12 @@
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
 name: ci
 jobs:
   test:
+    needs: ncc
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -16,6 +17,7 @@ jobs:
       - run: npm test
       - uses: codecov/codecov-action@v1
   lint:
+    needs: ncc
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -24,3 +26,24 @@ jobs:
           node-version: 12
       - run: npm install
       - run: npm run lint
+  ncc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: ${{github.event.pull_request.head.ref}}
+          repository: ${{github.event.pull_request.head.repo.full_name}}
+          token: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
+      - uses: actions/setup-node@v2
+        with:
+          node-version: 12
+      - run: npm install
+      - run: npm run build
+      - name: git config
+        run: |
+          git config user.name BeckwithRobot
+          git config user.email justin.beckwith+beckwithrobot@gmail.com
+      - name: git push
+        run: |
+          git commit -a -m 'npm run build' || echo 'no changes'
+          git push
