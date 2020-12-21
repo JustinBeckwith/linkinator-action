@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.0.7](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.6...v1.0.7) (2020-12-21)
+
+
+### Bug Fixes
+
+* surface call stack on exceptions in logs ([39886d4](https://www.github.com/JustinBeckwith/linkinator-action/commit/39886d44902e90613ee287761692c5586dbb303e))
+
 ### [1.0.6](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.5...v1.0.6) (2020-12-20)
 
 
