@@ -5,8 +5,12 @@ on:
   pull_request:
 name: ci
 jobs:
+  linkinator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./
   test:
-    needs: ncc
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -17,7 +21,6 @@ jobs:
       - run: npm test
       - uses: codecov/codecov-action@v1
   lint:
-    needs: ncc
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
