@@ -1,4 +1,4 @@
-module.exports =
+require('./sourcemap-register.js');module.exports =
 /******/ (() => { // webpackBootstrap
 /******/ 	var __webpack_modules__ = ({
 
@@ -44151,14 +44151,15 @@ const { LinkChecker } = __webpack_require__(356);
 
 async function main () {
   try {
+    // The options returned from `getInput` appear to always be strings.
     const options = {
       path: qq('paths', '*.md'),
-      concurrency: core.getInput('concurrency'),
-      recurse: core.getInput('recurse'),
-      linksToSkip: core.getInput('skip'),
-      timeout: core.getInput('timeout'),
-      markdown: qq('markdown', true),
-      serverRoot: core.getInput('serverRoot')
+      concurrency: Number(qq('concurrency', 100)),
+      recurse: Boolean(qq('recurse', false)),
+      linksToSkip: qq('skip', undefined),
+      timeout: Number(qq('timeout', 0)),
+      markdown: Boolean(qq('markdown', true)),
+      serverRoot: qq('serverRoot', undefined)
     };
     console.log(options);
 
@@ -44184,8 +44185,8 @@ async function main () {
   }
 }
 
-function qq (propName, defaultValue) {
-  return typeof core.getInput(propName) === 'undefined'
+function qq (propName, defaultValue, typeFunction) {
+  return core.getInput(propName) === ''
     ? defaultValue
     : core.getInput(propName);
 }
@@ -44469,3 +44470,4 @@ module.exports = require("zlib");;
 /******/ 	return __webpack_require__(4351);
 /******/ })()
 ;
+//# sourceMappingURL=index.js.map
