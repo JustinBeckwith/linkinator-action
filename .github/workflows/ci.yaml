@@ -45,5 +45,5 @@ jobs:
           git config user.email justin.beckwith+beckwithrobot@gmail.com
       - name: git push
         run: |
-          git commit -a -m 'npm run build'
+          git commit -a -m 'npm run build' || echo 'no changes'
           git push
