@@ -1,5 +1,13 @@
 # Changelog
 
+### [1.0.9](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.8...v1.0.9) (2020-12-21)
+
+
+### Bug Fixes
+
+* add list parsing, update docs and tests ([#24](https://www.github.com/JustinBeckwith/linkinator-action/issues/24)) ([c35708d](https://www.github.com/JustinBeckwith/linkinator-action/commit/c35708d70fdd6d59f3f19ce1544e42a1bd937174))
+* rebuild with latest version of linkinator ([#22](https://www.github.com/JustinBeckwith/linkinator-action/issues/22)) ([7f1137c](https://www.github.com/JustinBeckwith/linkinator-action/commit/7f1137c52854cfe67b8894ec344ab703824af063))
+
 ### [1.0.8](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.7...v1.0.8) (2020-12-21)
 
 
