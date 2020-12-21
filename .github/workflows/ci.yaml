@@ -8,7 +8,7 @@ jobs:
   linkinator:
     runs-on: ubuntu-latest
     steps:
-      - uses: ../
+      - uses: ./
   test:
     runs-on: ubuntu-latest
     steps:
