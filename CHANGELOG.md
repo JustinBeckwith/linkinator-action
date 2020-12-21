@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.0.8](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.7...v1.0.8) (2020-12-21)
+
+
+### Bug Fixes
+
+* assume inputs are always strings and enable sourcemaps ([#20](https://www.github.com/JustinBeckwith/linkinator-action/issues/20)) ([b3a54c6](https://www.github.com/JustinBeckwith/linkinator-action/commit/b3a54c647dbb35600e635479da0e23b08f9850c2))
+
 ### [1.0.7](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.6...v1.0.7) (2020-12-21)
 
 
