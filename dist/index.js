@@ -44159,7 +44159,7 @@ async function main () {
       linksToSkip: qq('skip', undefined),
       timeout: Number(qq('timeout', 0)),
       markdown: Boolean(qq('markdown', true)),
-      serverRoot: qq('serverRoot', undefined),
+      serverRoot: qq('serverRoot', undefined)
     };
     console.log(options);
 

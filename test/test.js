@@ -16,7 +16,7 @@ describe('linkinator action', () => {
 
   it('should return ok for a valid README', async () => {
     const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md')
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
     inputStub.returns('');
     const setOutputStub = sinon.stub(core, 'setOutput');
     const setFailedStub = sinon.stub(core, 'setFailed');
@@ -32,7 +32,7 @@ describe('linkinator action', () => {
 
   it('should call setFailed on failures', async () => {
     const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md')
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
     inputStub.returns('');
     const setOutputStub = sinon.stub(core, 'setOutput');
     const setFailedStub = sinon.stub(core, 'setFailed');
