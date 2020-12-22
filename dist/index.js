@@ -16897,7 +16897,7 @@ module.exports = isStream;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.check = exports.LinkChecker = exports.headers = exports.LinkState = void 0;
+exports.check = exports.LinkChecker = exports.LinkState = void 0;
 const events_1 = __webpack_require__(8614);
 const gaxios = __webpack_require__(9555);
 const http = __webpack_require__(8605);
@@ -16921,10 +16921,6 @@ var LinkState;
     LinkState["BROKEN"] = "BROKEN";
     LinkState["SKIPPED"] = "SKIPPED";
 })(LinkState = exports.LinkState || (exports.LinkState = {}));
-// Spoof a normal looking User-Agent to keep the servers happy
-exports.headers = {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.117 Safari/537.36',
-};
 /**
  * Instance class used to perform a crawl job.
  */
@@ -17156,7 +17152,9 @@ class LinkChecker extends events_1.EventEmitter {
             res = await gaxios.request({
                 method: opts.crawl ? 'GET' : 'HEAD',
                 url: opts.url.href,
-                headers: exports.headers,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.117 Safari/537.36',
+                },
                 responseType: opts.crawl ? 'text' : 'stream',
                 validateStatus: () => true,
                 timeout: opts.checkOptions.timeout,
@@ -17166,7 +17164,9 @@ class LinkChecker extends events_1.EventEmitter {
                 res = await gaxios.request({
                     method: 'GET',
                     url: opts.url.href,
-                    headers: exports.headers,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.117 Safari/537.36',
+                    },
                     responseType: 'stream',
                     validateStatus: () => true,
                     timeout: opts.checkOptions.timeout,
@@ -17187,7 +17187,6 @@ class LinkChecker extends events_1.EventEmitter {
                     url: opts.url.href,
                     responseType: 'text',
                     validateStatus: () => true,
-                    headers: exports.headers,
                     timeout: opts.checkOptions.timeout,
                 });
             }
