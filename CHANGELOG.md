@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.0.10](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.9...v1.0.10) (2020-12-22)
+
+
+### Bug Fixes
+
+* **deps:** upgrade to linkinator@2.8.2 ([#26](https://www.github.com/JustinBeckwith/linkinator-action/issues/26)) ([e0137d6](https://www.github.com/JustinBeckwith/linkinator-action/commit/e0137d6fd72338066e21245ae709836d6ea07cf4))
+
 ### [1.0.9](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.8...v1.0.9) (2020-12-21)
 
 
