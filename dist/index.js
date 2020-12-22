@@ -919,14 +919,14 @@ function expand(str, isTop) {
 
 /***/ }),
 
-/***/ 8513:
+/***/ 39:
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.groupSelectors = exports.getDocumentRoot = void 0;
-var positionals_1 = __webpack_require__(9159);
+var positionals_1 = __webpack_require__(5595);
 function getDocumentRoot(node) {
     while (node.parent)
         node = node.parent;
@@ -952,7 +952,7 @@ exports.groupSelectors = groupSelectors;
 
 /***/ }),
 
-/***/ 5409:
+/***/ 4225:
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -999,8 +999,8 @@ exports.select = exports.filter = void 0;
 var css_what_1 = __webpack_require__(9218);
 var css_select_1 = __webpack_require__(4508);
 var DomUtils = __importStar(__webpack_require__(1754));
-var helpers_1 = __webpack_require__(8513);
-var positionals_1 = __webpack_require__(9159);
+var helpers_1 = __webpack_require__(39);
+var positionals_1 = __webpack_require__(5595);
 /** Used to indicate a scope should be filtered. Might be ignored when filtering. */
 var SCOPE_PSEUDO = {
     type: "pseudo",
@@ -1202,7 +1202,7 @@ function filterElements(elements, sel, options) {
 
 /***/ }),
 
-/***/ 9159:
+/***/ 5595:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -3029,7 +3029,7 @@ exports.clone = function () {
  * @module cheerio/traversing
  */
 
-var select = __webpack_require__(5409);
+var select = __webpack_require__(4225);
 var utils = __webpack_require__(1183);
 var domEach = utils.domEach;
 var uniqueSort = __webpack_require__(2928).DomUtils.uniqueSort;
@@ -4252,7 +4252,7 @@ var htmlparser2Adapter = __webpack_require__(9759);
 var serialize = __webpack_require__(8621).default;
 var defaultOptions = __webpack_require__(9901)/* .default */ .Z;
 var flattenOptions = __webpack_require__(9901)/* .flatten */ .x;
-var select = __webpack_require__(5409).select;
+var select = __webpack_require__(4225).select;
 var parse5 = __webpack_require__(5598);
 var parse = __webpack_require__(9024);
 
@@ -16897,7 +16897,7 @@ module.exports = isStream;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.check = exports.LinkChecker = exports.LinkState = void 0;
+exports.check = exports.LinkChecker = exports.headers = exports.LinkState = void 0;
 const events_1 = __webpack_require__(8614);
 const gaxios = __webpack_require__(9555);
 const http = __webpack_require__(8605);
@@ -16921,6 +16921,10 @@ var LinkState;
     LinkState["BROKEN"] = "BROKEN";
     LinkState["SKIPPED"] = "SKIPPED";
 })(LinkState = exports.LinkState || (exports.LinkState = {}));
+// Spoof a normal looking User-Agent to keep the servers happy
+exports.headers = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.117 Safari/537.36',
+};
 /**
  * Instance class used to perform a crawl job.
  */
@@ -17152,9 +17156,7 @@ class LinkChecker extends events_1.EventEmitter {
             res = await gaxios.request({
                 method: opts.crawl ? 'GET' : 'HEAD',
                 url: opts.url.href,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.117 Safari/537.36',
-                },
+                headers: exports.headers,
                 responseType: opts.crawl ? 'text' : 'stream',
                 validateStatus: () => true,
                 timeout: opts.checkOptions.timeout,
@@ -17164,9 +17166,7 @@ class LinkChecker extends events_1.EventEmitter {
                 res = await gaxios.request({
                     method: 'GET',
                     url: opts.url.href,
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.117 Safari/537.36',
-                    },
+                    headers: exports.headers,
                     responseType: 'stream',
                     validateStatus: () => true,
                     timeout: opts.checkOptions.timeout,
@@ -17187,6 +17187,7 @@ class LinkChecker extends events_1.EventEmitter {
                     url: opts.url.href,
                     responseType: 'text',
                     validateStatus: () => true,
+                    headers: exports.headers,
                     timeout: opts.checkOptions.timeout,
                 });
             }
@@ -35526,7 +35527,7 @@ module.exports = eval("require")("encoding");
 /***/ ((module) => {
 
 "use strict";
-module.exports = JSON.parse("{\"version\":\"1.0.0-rc.4\"}");
+module.exports = JSON.parse("{\"version\":\"1.0.0-rc.5\"}");
 
 /***/ }),
 
