@@ -8,7 +8,10 @@ async function main () {
       path: parseList(qq('paths', '*.md')),
       concurrency: Number(qq('concurrency', 100)),
       recurse: Boolean(qq('recurse', false)),
-      linksToSkip: parseList(qq('linksToSkip', '')),
+      linksToSkip: parseList(
+        core.getInput('linksToSkip') ||
+        core.getInput('skip' ||
+        '')),
       timeout: Number(qq('timeout', 0)),
       markdown: Boolean(qq('markdown', true)),
       serverRoot: qq('serverRoot', undefined)
@@ -36,14 +39,14 @@ async function main () {
   }
 }
 
-function qq (propName, defaultValue, typeFunction) {
+function qq (propName, defaultValue) {
   return core.getInput(propName) === ''
     ? defaultValue
     : core.getInput(propName);
 }
 
 function parseList (input) {
-  return input.split(',').map(x => x.trim()).filter(x => !!x);
+  return input.split(/[\s,]+/).map(x => x.trim()).filter(x => !!x);
 }
 
 if (require.main === module) {
