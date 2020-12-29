@@ -919,6 +919,173 @@ function expand(str, isTop) {
 
 /***/ }),
 
+/***/ 6966:
+/***/ ((module) => {
+
+"use strict";
+/*!
+ * bytes
+ * Copyright(c) 2012-2014 TJ Holowaychuk
+ * Copyright(c) 2015 Jed Watson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = bytes;
+module.exports.format = format;
+module.exports.parse = parse;
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var formatThousandsRegExp = /\B(?=(\d{3})+(?!\d))/g;
+
+var formatDecimalsRegExp = /(?:\.0*|(\.[^0]+)0+)$/;
+
+var map = {
+  b:  1,
+  kb: 1 << 10,
+  mb: 1 << 20,
+  gb: 1 << 30,
+  tb: ((1 << 30) * 1024)
+};
+
+var parseRegExp = /^((-|\+)?(\d+(?:\.\d+)?)) *(kb|mb|gb|tb)$/i;
+
+/**
+ * Convert the given value in bytes into a string or parse to string to an integer in bytes.
+ *
+ * @param {string|number} value
+ * @param {{
+ *  case: [string],
+ *  decimalPlaces: [number]
+ *  fixedDecimals: [boolean]
+ *  thousandsSeparator: [string]
+ *  unitSeparator: [string]
+ *  }} [options] bytes options.
+ *
+ * @returns {string|number|null}
+ */
+
+function bytes(value, options) {
+  if (typeof value === 'string') {
+    return parse(value);
+  }
+
+  if (typeof value === 'number') {
+    return format(value, options);
+  }
+
+  return null;
+}
+
+/**
+ * Format the given value in bytes into a string.
+ *
+ * If the value is negative, it is kept as such. If it is a float,
+ * it is rounded.
+ *
+ * @param {number} value
+ * @param {object} [options]
+ * @param {number} [options.decimalPlaces=2]
+ * @param {number} [options.fixedDecimals=false]
+ * @param {string} [options.thousandsSeparator=]
+ * @param {string} [options.unit=]
+ * @param {string} [options.unitSeparator=]
+ *
+ * @returns {string|null}
+ * @public
+ */
+
+function format(value, options) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+
+  var mag = Math.abs(value);
+  var thousandsSeparator = (options && options.thousandsSeparator) || '';
+  var unitSeparator = (options && options.unitSeparator) || '';
+  var decimalPlaces = (options && options.decimalPlaces !== undefined) ? options.decimalPlaces : 2;
+  var fixedDecimals = Boolean(options && options.fixedDecimals);
+  var unit = (options && options.unit) || '';
+
+  if (!unit || !map[unit.toLowerCase()]) {
+    if (mag >= map.tb) {
+      unit = 'TB';
+    } else if (mag >= map.gb) {
+      unit = 'GB';
+    } else if (mag >= map.mb) {
+      unit = 'MB';
+    } else if (mag >= map.kb) {
+      unit = 'KB';
+    } else {
+      unit = 'B';
+    }
+  }
+
+  var val = value / map[unit.toLowerCase()];
+  var str = val.toFixed(decimalPlaces);
+
+  if (!fixedDecimals) {
+    str = str.replace(formatDecimalsRegExp, '$1');
+  }
+
+  if (thousandsSeparator) {
+    str = str.replace(formatThousandsRegExp, thousandsSeparator);
+  }
+
+  return str + unitSeparator + unit;
+}
+
+/**
+ * Parse the string value into an integer in bytes.
+ *
+ * If no unit is given, it is assumed the value is in bytes.
+ *
+ * @param {number|string} val
+ *
+ * @returns {number|null}
+ * @public
+ */
+
+function parse(val) {
+  if (typeof val === 'number' && !isNaN(val)) {
+    return val;
+  }
+
+  if (typeof val !== 'string') {
+    return null;
+  }
+
+  // Test if the string passed is valid
+  var results = parseRegExp.exec(val);
+  var floatValue;
+  var unit = 'b';
+
+  if (!results) {
+    // Nothing could be extracted from the given string
+    floatValue = parseInt(val, 10);
+    unit = 'b'
+  } else {
+    // Retrieve the value and the unit
+    floatValue = parseFloat(results[1]);
+    unit = results[4].toLowerCase();
+  }
+
+  return Math.floor(map[unit] * floatValue);
+}
+
+
+/***/ }),
+
 /***/ 39:
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -4682,6 +4849,459 @@ var isArray = Array.isArray || function (xs) {
 
 /***/ }),
 
+/***/ 3921:
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+"use strict";
+/*!
+ * content-disposition
+ * Copyright(c) 2014 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module exports.
+ */
+
+module.exports = contentDisposition
+module.exports.parse = parse
+
+/**
+ * Module dependencies.
+ */
+
+var basename = __webpack_require__(5622).basename
+
+/**
+ * RegExp to match non attr-char, *after* encodeURIComponent (i.e. not including "%")
+ */
+
+var ENCODE_URL_ATTR_CHAR_REGEXP = /[\x00-\x20"'()*,/:;<=>?@[\\\]{}\x7f]/g // eslint-disable-line no-control-regex
+
+/**
+ * RegExp to match percent encoding escape.
+ */
+
+var HEX_ESCAPE_REGEXP = /%[0-9A-Fa-f]{2}/
+var HEX_ESCAPE_REPLACE_REGEXP = /%([0-9A-Fa-f]{2})/g
+
+/**
+ * RegExp to match non-latin1 characters.
+ */
+
+var NON_LATIN1_REGEXP = /[^\x20-\x7e\xa0-\xff]/g
+
+/**
+ * RegExp to match quoted-pair in RFC 2616
+ *
+ * quoted-pair = "\" CHAR
+ * CHAR        = <any US-ASCII character (octets 0 - 127)>
+ */
+
+var QESC_REGEXP = /\\([\u0000-\u007f])/g
+
+/**
+ * RegExp to match chars that must be quoted-pair in RFC 2616
+ */
+
+var QUOTE_REGEXP = /([\\"])/g
+
+/**
+ * RegExp for various RFC 2616 grammar
+ *
+ * parameter     = token "=" ( token | quoted-string )
+ * token         = 1*<any CHAR except CTLs or separators>
+ * separators    = "(" | ")" | "<" | ">" | "@"
+ *               | "," | ";" | ":" | "\" | <">
+ *               | "/" | "[" | "]" | "?" | "="
+ *               | "{" | "}" | SP | HT
+ * quoted-string = ( <"> *(qdtext | quoted-pair ) <"> )
+ * qdtext        = <any TEXT except <">>
+ * quoted-pair   = "\" CHAR
+ * CHAR          = <any US-ASCII character (octets 0 - 127)>
+ * TEXT          = <any OCTET except CTLs, but including LWS>
+ * LWS           = [CRLF] 1*( SP | HT )
+ * CRLF          = CR LF
+ * CR            = <US-ASCII CR, carriage return (13)>
+ * LF            = <US-ASCII LF, linefeed (10)>
+ * SP            = <US-ASCII SP, space (32)>
+ * HT            = <US-ASCII HT, horizontal-tab (9)>
+ * CTL           = <any US-ASCII control character (octets 0 - 31) and DEL (127)>
+ * OCTET         = <any 8-bit sequence of data>
+ */
+
+var PARAM_REGEXP = /;[\x09\x20]*([!#$%&'*+.0-9A-Z^_`a-z|~-]+)[\x09\x20]*=[\x09\x20]*("(?:[\x20!\x23-\x5b\x5d-\x7e\x80-\xff]|\\[\x20-\x7e])*"|[!#$%&'*+.0-9A-Z^_`a-z|~-]+)[\x09\x20]*/g // eslint-disable-line no-control-regex
+var TEXT_REGEXP = /^[\x20-\x7e\x80-\xff]+$/
+var TOKEN_REGEXP = /^[!#$%&'*+.0-9A-Z^_`a-z|~-]+$/
+
+/**
+ * RegExp for various RFC 5987 grammar
+ *
+ * ext-value     = charset  "'" [ language ] "'" value-chars
+ * charset       = "UTF-8" / "ISO-8859-1" / mime-charset
+ * mime-charset  = 1*mime-charsetc
+ * mime-charsetc = ALPHA / DIGIT
+ *               / "!" / "#" / "$" / "%" / "&"
+ *               / "+" / "-" / "^" / "_" / "`"
+ *               / "{" / "}" / "~"
+ * language      = ( 2*3ALPHA [ extlang ] )
+ *               / 4ALPHA
+ *               / 5*8ALPHA
+ * extlang       = *3( "-" 3ALPHA )
+ * value-chars   = *( pct-encoded / attr-char )
+ * pct-encoded   = "%" HEXDIG HEXDIG
+ * attr-char     = ALPHA / DIGIT
+ *               / "!" / "#" / "$" / "&" / "+" / "-" / "."
+ *               / "^" / "_" / "`" / "|" / "~"
+ */
+
+var EXT_VALUE_REGEXP = /^([A-Za-z0-9!#$%&+\-^_`{}~]+)'(?:[A-Za-z]{2,3}(?:-[A-Za-z]{3}){0,3}|[A-Za-z]{4,8}|)'((?:%[0-9A-Fa-f]{2}|[A-Za-z0-9!#$&+.^_`|~-])+)$/
+
+/**
+ * RegExp for various RFC 6266 grammar
+ *
+ * disposition-type = "inline" | "attachment" | disp-ext-type
+ * disp-ext-type    = token
+ * disposition-parm = filename-parm | disp-ext-parm
+ * filename-parm    = "filename" "=" value
+ *                  | "filename*" "=" ext-value
+ * disp-ext-parm    = token "=" value
+ *                  | ext-token "=" ext-value
+ * ext-token        = <the characters in token, followed by "*">
+ */
+
+var DISPOSITION_TYPE_REGEXP = /^([!#$%&'*+.0-9A-Z^_`a-z|~-]+)[\x09\x20]*(?:$|;)/ // eslint-disable-line no-control-regex
+
+/**
+ * Create an attachment Content-Disposition header.
+ *
+ * @param {string} [filename]
+ * @param {object} [options]
+ * @param {string} [options.type=attachment]
+ * @param {string|boolean} [options.fallback=true]
+ * @return {string}
+ * @api public
+ */
+
+function contentDisposition (filename, options) {
+  var opts = options || {}
+
+  // get type
+  var type = opts.type || 'attachment'
+
+  // get parameters
+  var params = createparams(filename, opts.fallback)
+
+  // format into string
+  return format(new ContentDisposition(type, params))
+}
+
+/**
+ * Create parameters object from filename and fallback.
+ *
+ * @param {string} [filename]
+ * @param {string|boolean} [fallback=true]
+ * @return {object}
+ * @api private
+ */
+
+function createparams (filename, fallback) {
+  if (filename === undefined) {
+    return
+  }
+
+  var params = {}
+
+  if (typeof filename !== 'string') {
+    throw new TypeError('filename must be a string')
+  }
+
+  // fallback defaults to true
+  if (fallback === undefined) {
+    fallback = true
+  }
+
+  if (typeof fallback !== 'string' && typeof fallback !== 'boolean') {
+    throw new TypeError('fallback must be a string or boolean')
+  }
+
+  if (typeof fallback === 'string' && NON_LATIN1_REGEXP.test(fallback)) {
+    throw new TypeError('fallback must be ISO-8859-1 string')
+  }
+
+  // restrict to file base name
+  var name = basename(filename)
+
+  // determine if name is suitable for quoted string
+  var isQuotedString = TEXT_REGEXP.test(name)
+
+  // generate fallback name
+  var fallbackName = typeof fallback !== 'string'
+    ? fallback && getlatin1(name)
+    : basename(fallback)
+  var hasFallback = typeof fallbackName === 'string' && fallbackName !== name
+
+  // set extended filename parameter
+  if (hasFallback || !isQuotedString || HEX_ESCAPE_REGEXP.test(name)) {
+    params['filename*'] = name
+  }
+
+  // set filename parameter
+  if (isQuotedString || hasFallback) {
+    params.filename = hasFallback
+      ? fallbackName
+      : name
+  }
+
+  return params
+}
+
+/**
+ * Format object to Content-Disposition header.
+ *
+ * @param {object} obj
+ * @param {string} obj.type
+ * @param {object} [obj.parameters]
+ * @return {string}
+ * @api private
+ */
+
+function format (obj) {
+  var parameters = obj.parameters
+  var type = obj.type
+
+  if (!type || typeof type !== 'string' || !TOKEN_REGEXP.test(type)) {
+    throw new TypeError('invalid type')
+  }
+
+  // start with normalized type
+  var string = String(type).toLowerCase()
+
+  // append parameters
+  if (parameters && typeof parameters === 'object') {
+    var param
+    var params = Object.keys(parameters).sort()
+
+    for (var i = 0; i < params.length; i++) {
+      param = params[i]
+
+      var val = param.substr(-1) === '*'
+        ? ustring(parameters[param])
+        : qstring(parameters[param])
+
+      string += '; ' + param + '=' + val
+    }
+  }
+
+  return string
+}
+
+/**
+ * Decode a RFC 6987 field value (gracefully).
+ *
+ * @param {string} str
+ * @return {string}
+ * @api private
+ */
+
+function decodefield (str) {
+  var match = EXT_VALUE_REGEXP.exec(str)
+
+  if (!match) {
+    throw new TypeError('invalid extended field value')
+  }
+
+  var charset = match[1].toLowerCase()
+  var encoded = match[2]
+  var value
+
+  // to binary string
+  var binary = encoded.replace(HEX_ESCAPE_REPLACE_REGEXP, pdecode)
+
+  switch (charset) {
+    case 'iso-8859-1':
+      value = getlatin1(binary)
+      break
+    case 'utf-8':
+      value = new Buffer(binary, 'binary').toString('utf8')
+      break
+    default:
+      throw new TypeError('unsupported charset in extended field')
+  }
+
+  return value
+}
+
+/**
+ * Get ISO-8859-1 version of string.
+ *
+ * @param {string} val
+ * @return {string}
+ * @api private
+ */
+
+function getlatin1 (val) {
+  // simple Unicode -> ISO-8859-1 transformation
+  return String(val).replace(NON_LATIN1_REGEXP, '?')
+}
+
+/**
+ * Parse Content-Disposition header string.
+ *
+ * @param {string} string
+ * @return {object}
+ * @api private
+ */
+
+function parse (string) {
+  if (!string || typeof string !== 'string') {
+    throw new TypeError('argument string is required')
+  }
+
+  var match = DISPOSITION_TYPE_REGEXP.exec(string)
+
+  if (!match) {
+    throw new TypeError('invalid type format')
+  }
+
+  // normalize type
+  var index = match[0].length
+  var type = match[1].toLowerCase()
+
+  var key
+  var names = []
+  var params = {}
+  var value
+
+  // calculate index to start at
+  index = PARAM_REGEXP.lastIndex = match[0].substr(-1) === ';'
+    ? index - 1
+    : index
+
+  // match parameters
+  while ((match = PARAM_REGEXP.exec(string))) {
+    if (match.index !== index) {
+      throw new TypeError('invalid parameter format')
+    }
+
+    index += match[0].length
+    key = match[1].toLowerCase()
+    value = match[2]
+
+    if (names.indexOf(key) !== -1) {
+      throw new TypeError('invalid duplicate parameter')
+    }
+
+    names.push(key)
+
+    if (key.indexOf('*') + 1 === key.length) {
+      // decode extended value
+      key = key.slice(0, -1)
+      value = decodefield(value)
+
+      // overwrite existing value
+      params[key] = value
+      continue
+    }
+
+    if (typeof params[key] === 'string') {
+      continue
+    }
+
+    if (value[0] === '"') {
+      // remove quotes and escapes
+      value = value
+        .substr(1, value.length - 2)
+        .replace(QESC_REGEXP, '$1')
+    }
+
+    params[key] = value
+  }
+
+  if (index !== -1 && index !== string.length) {
+    throw new TypeError('invalid parameter format')
+  }
+
+  return new ContentDisposition(type, params)
+}
+
+/**
+ * Percent decode a single character.
+ *
+ * @param {string} str
+ * @param {string} hex
+ * @return {string}
+ * @api private
+ */
+
+function pdecode (str, hex) {
+  return String.fromCharCode(parseInt(hex, 16))
+}
+
+/**
+ * Percent encode a single character.
+ *
+ * @param {string} char
+ * @return {string}
+ * @api private
+ */
+
+function pencode (char) {
+  var hex = String(char)
+    .charCodeAt(0)
+    .toString(16)
+    .toUpperCase()
+  return hex.length === 1
+    ? '%0' + hex
+    : '%' + hex
+}
+
+/**
+ * Quote a string for HTTP.
+ *
+ * @param {string} val
+ * @return {string}
+ * @api private
+ */
+
+function qstring (val) {
+  var str = String(val)
+
+  return '"' + str.replace(QUOTE_REGEXP, '\\$1') + '"'
+}
+
+/**
+ * Encode a Unicode string for HTTP (RFC 5987).
+ *
+ * @param {string} val
+ * @return {string}
+ * @api private
+ */
+
+function ustring (val) {
+  var str = String(val)
+
+  // percent encode as UTF-8
+  var encoded = encodeURIComponent(str)
+    .replace(ENCODE_URL_ATTR_CHAR_REGEXP, pencode)
+
+  return 'UTF-8\'\'' + encoded
+}
+
+/**
+ * Class for parsed Content-Disposition header for v8 optimization
+ */
+
+function ContentDisposition (type, parameters) {
+  this.type = type
+  this.parameters = parameters
+}
+
+
+/***/ }),
+
 /***/ 6016:
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -7213,846 +7833,6 @@ formatters.O = function (v) {
 
 /***/ }),
 
-/***/ 8883:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-/*!
- * depd
- * Copyright(c) 2014-2017 Douglas Christopher Wilson
- * MIT Licensed
- */
-
-/**
- * Module dependencies.
- */
-
-var callSiteToString = __webpack_require__(9829).callSiteToString
-var eventListenerCount = __webpack_require__(9829).eventListenerCount
-var relative = __webpack_require__(5622).relative
-
-/**
- * Module exports.
- */
-
-module.exports = depd
-
-/**
- * Get the path to base files on.
- */
-
-var basePath = process.cwd()
-
-/**
- * Determine if namespace is contained in the string.
- */
-
-function containsNamespace (str, namespace) {
-  var vals = str.split(/[ ,]+/)
-  var ns = String(namespace).toLowerCase()
-
-  for (var i = 0; i < vals.length; i++) {
-    var val = vals[i]
-
-    // namespace contained
-    if (val && (val === '*' || val.toLowerCase() === ns)) {
-      return true
-    }
-  }
-
-  return false
-}
-
-/**
- * Convert a data descriptor to accessor descriptor.
- */
-
-function convertDataDescriptorToAccessor (obj, prop, message) {
-  var descriptor = Object.getOwnPropertyDescriptor(obj, prop)
-  var value = descriptor.value
-
-  descriptor.get = function getter () { return value }
-
-  if (descriptor.writable) {
-    descriptor.set = function setter (val) { return (value = val) }
-  }
-
-  delete descriptor.value
-  delete descriptor.writable
-
-  Object.defineProperty(obj, prop, descriptor)
-
-  return descriptor
-}
-
-/**
- * Create arguments string to keep arity.
- */
-
-function createArgumentsString (arity) {
-  var str = ''
-
-  for (var i = 0; i < arity; i++) {
-    str += ', arg' + i
-  }
-
-  return str.substr(2)
-}
-
-/**
- * Create stack string from stack.
- */
-
-function createStackString (stack) {
-  var str = this.name + ': ' + this.namespace
-
-  if (this.message) {
-    str += ' deprecated ' + this.message
-  }
-
-  for (var i = 0; i < stack.length; i++) {
-    str += '\n    at ' + callSiteToString(stack[i])
-  }
-
-  return str
-}
-
-/**
- * Create deprecate for namespace in caller.
- */
-
-function depd (namespace) {
-  if (!namespace) {
-    throw new TypeError('argument namespace is required')
-  }
-
-  var stack = getStack()
-  var site = callSiteLocation(stack[1])
-  var file = site[0]
-
-  function deprecate (message) {
-    // call to self as log
-    log.call(deprecate, message)
-  }
-
-  deprecate._file = file
-  deprecate._ignored = isignored(namespace)
-  deprecate._namespace = namespace
-  deprecate._traced = istraced(namespace)
-  deprecate._warned = Object.create(null)
-
-  deprecate.function = wrapfunction
-  deprecate.property = wrapproperty
-
-  return deprecate
-}
-
-/**
- * Determine if namespace is ignored.
- */
-
-function isignored (namespace) {
-  /* istanbul ignore next: tested in a child processs */
-  if (process.noDeprecation) {
-    // --no-deprecation support
-    return true
-  }
-
-  var str = process.env.NO_DEPRECATION || ''
-
-  // namespace ignored
-  return containsNamespace(str, namespace)
-}
-
-/**
- * Determine if namespace is traced.
- */
-
-function istraced (namespace) {
-  /* istanbul ignore next: tested in a child processs */
-  if (process.traceDeprecation) {
-    // --trace-deprecation support
-    return true
-  }
-
-  var str = process.env.TRACE_DEPRECATION || ''
-
-  // namespace traced
-  return containsNamespace(str, namespace)
-}
-
-/**
- * Display deprecation message.
- */
-
-function log (message, site) {
-  var haslisteners = eventListenerCount(process, 'deprecation') !== 0
-
-  // abort early if no destination
-  if (!haslisteners && this._ignored) {
-    return
-  }
-
-  var caller
-  var callFile
-  var callSite
-  var depSite
-  var i = 0
-  var seen = false
-  var stack = getStack()
-  var file = this._file
-
-  if (site) {
-    // provided site
-    depSite = site
-    callSite = callSiteLocation(stack[1])
-    callSite.name = depSite.name
-    file = callSite[0]
-  } else {
-    // get call site
-    i = 2
-    depSite = callSiteLocation(stack[i])
-    callSite = depSite
-  }
-
-  // get caller of deprecated thing in relation to file
-  for (; i < stack.length; i++) {
-    caller = callSiteLocation(stack[i])
-    callFile = caller[0]
-
-    if (callFile === file) {
-      seen = true
-    } else if (callFile === this._file) {
-      file = this._file
-    } else if (seen) {
-      break
-    }
-  }
-
-  var key = caller
-    ? depSite.join(':') + '__' + caller.join(':')
-    : undefined
-
-  if (key !== undefined && key in this._warned) {
-    // already warned
-    return
-  }
-
-  this._warned[key] = true
-
-  // generate automatic message from call site
-  var msg = message
-  if (!msg) {
-    msg = callSite === depSite || !callSite.name
-      ? defaultMessage(depSite)
-      : defaultMessage(callSite)
-  }
-
-  // emit deprecation if listeners exist
-  if (haslisteners) {
-    var err = DeprecationError(this._namespace, msg, stack.slice(i))
-    process.emit('deprecation', err)
-    return
-  }
-
-  // format and write message
-  var format = process.stderr.isTTY
-    ? formatColor
-    : formatPlain
-  var output = format.call(this, msg, caller, stack.slice(i))
-  process.stderr.write(output + '\n', 'utf8')
-}
-
-/**
- * Get call site location as array.
- */
-
-function callSiteLocation (callSite) {
-  var file = callSite.getFileName() || '<anonymous>'
-  var line = callSite.getLineNumber()
-  var colm = callSite.getColumnNumber()
-
-  if (callSite.isEval()) {
-    file = callSite.getEvalOrigin() + ', ' + file
-  }
-
-  var site = [file, line, colm]
-
-  site.callSite = callSite
-  site.name = callSite.getFunctionName()
-
-  return site
-}
-
-/**
- * Generate a default message from the site.
- */
-
-function defaultMessage (site) {
-  var callSite = site.callSite
-  var funcName = site.name
-
-  // make useful anonymous name
-  if (!funcName) {
-    funcName = '<anonymous@' + formatLocation(site) + '>'
-  }
-
-  var context = callSite.getThis()
-  var typeName = context && callSite.getTypeName()
-
-  // ignore useless type name
-  if (typeName === 'Object') {
-    typeName = undefined
-  }
-
-  // make useful type name
-  if (typeName === 'Function') {
-    typeName = context.name || typeName
-  }
-
-  return typeName && callSite.getMethodName()
-    ? typeName + '.' + funcName
-    : funcName
-}
-
-/**
- * Format deprecation message without color.
- */
-
-function formatPlain (msg, caller, stack) {
-  var timestamp = new Date().toUTCString()
-
-  var formatted = timestamp +
-    ' ' + this._namespace +
-    ' deprecated ' + msg
-
-  // add stack trace
-  if (this._traced) {
-    for (var i = 0; i < stack.length; i++) {
-      formatted += '\n    at ' + callSiteToString(stack[i])
-    }
-
-    return formatted
-  }
-
-  if (caller) {
-    formatted += ' at ' + formatLocation(caller)
-  }
-
-  return formatted
-}
-
-/**
- * Format deprecation message with color.
- */
-
-function formatColor (msg, caller, stack) {
-  var formatted = '\x1b[36;1m' + this._namespace + '\x1b[22;39m' + // bold cyan
-    ' \x1b[33;1mdeprecated\x1b[22;39m' + // bold yellow
-    ' \x1b[0m' + msg + '\x1b[39m' // reset
-
-  // add stack trace
-  if (this._traced) {
-    for (var i = 0; i < stack.length; i++) {
-      formatted += '\n    \x1b[36mat ' + callSiteToString(stack[i]) + '\x1b[39m' // cyan
-    }
-
-    return formatted
-  }
-
-  if (caller) {
-    formatted += ' \x1b[36m' + formatLocation(caller) + '\x1b[39m' // cyan
-  }
-
-  return formatted
-}
-
-/**
- * Format call site location.
- */
-
-function formatLocation (callSite) {
-  return relative(basePath, callSite[0]) +
-    ':' + callSite[1] +
-    ':' + callSite[2]
-}
-
-/**
- * Get the stack as array of call sites.
- */
-
-function getStack () {
-  var limit = Error.stackTraceLimit
-  var obj = {}
-  var prep = Error.prepareStackTrace
-
-  Error.prepareStackTrace = prepareObjectStackTrace
-  Error.stackTraceLimit = Math.max(10, limit)
-
-  // capture the stack
-  Error.captureStackTrace(obj)
-
-  // slice this function off the top
-  var stack = obj.stack.slice(1)
-
-  Error.prepareStackTrace = prep
-  Error.stackTraceLimit = limit
-
-  return stack
-}
-
-/**
- * Capture call site stack from v8.
- */
-
-function prepareObjectStackTrace (obj, stack) {
-  return stack
-}
-
-/**
- * Return a wrapped function in a deprecation message.
- */
-
-function wrapfunction (fn, message) {
-  if (typeof fn !== 'function') {
-    throw new TypeError('argument fn must be a function')
-  }
-
-  var args = createArgumentsString(fn.length)
-  var deprecate = this // eslint-disable-line no-unused-vars
-  var stack = getStack()
-  var site = callSiteLocation(stack[1])
-
-  site.name = fn.name
-
-   // eslint-disable-next-line no-eval
-  var deprecatedfn = eval('(function (' + args + ') {\n' +
-    '"use strict"\n' +
-    'log.call(deprecate, message, site)\n' +
-    'return fn.apply(this, arguments)\n' +
-    '})')
-
-  return deprecatedfn
-}
-
-/**
- * Wrap property in a deprecation message.
- */
-
-function wrapproperty (obj, prop, message) {
-  if (!obj || (typeof obj !== 'object' && typeof obj !== 'function')) {
-    throw new TypeError('argument obj must be object')
-  }
-
-  var descriptor = Object.getOwnPropertyDescriptor(obj, prop)
-
-  if (!descriptor) {
-    throw new TypeError('must call property on owner object')
-  }
-
-  if (!descriptor.configurable) {
-    throw new TypeError('property must be configurable')
-  }
-
-  var deprecate = this
-  var stack = getStack()
-  var site = callSiteLocation(stack[1])
-
-  // set site name
-  site.name = prop
-
-  // convert data descriptor
-  if ('value' in descriptor) {
-    descriptor = convertDataDescriptorToAccessor(obj, prop, message)
-  }
-
-  var get = descriptor.get
-  var set = descriptor.set
-
-  // wrap getter
-  if (typeof get === 'function') {
-    descriptor.get = function getter () {
-      log.call(deprecate, message, site)
-      return get.apply(this, arguments)
-    }
-  }
-
-  // wrap setter
-  if (typeof set === 'function') {
-    descriptor.set = function setter () {
-      log.call(deprecate, message, site)
-      return set.apply(this, arguments)
-    }
-  }
-
-  Object.defineProperty(obj, prop, descriptor)
-}
-
-/**
- * Create DeprecationError for deprecation
- */
-
-function DeprecationError (namespace, message, stack) {
-  var error = new Error()
-  var stackString
-
-  Object.defineProperty(error, 'constructor', {
-    value: DeprecationError
-  })
-
-  Object.defineProperty(error, 'message', {
-    configurable: true,
-    enumerable: false,
-    value: message,
-    writable: true
-  })
-
-  Object.defineProperty(error, 'name', {
-    enumerable: false,
-    configurable: true,
-    value: 'DeprecationError',
-    writable: true
-  })
-
-  Object.defineProperty(error, 'namespace', {
-    configurable: true,
-    enumerable: false,
-    value: namespace,
-    writable: true
-  })
-
-  Object.defineProperty(error, 'stack', {
-    configurable: true,
-    enumerable: false,
-    get: function () {
-      if (stackString !== undefined) {
-        return stackString
-      }
-
-      // prepare stack trace
-      return (stackString = createStackString.call(this, stack))
-    },
-    set: function setter (val) {
-      stackString = val
-    }
-  })
-
-  return error
-}
-
-
-/***/ }),
-
-/***/ 5554:
-/***/ ((module) => {
-
-"use strict";
-/*!
- * depd
- * Copyright(c) 2014 Douglas Christopher Wilson
- * MIT Licensed
- */
-
-
-
-/**
- * Module exports.
- */
-
-module.exports = callSiteToString
-
-/**
- * Format a CallSite file location to a string.
- */
-
-function callSiteFileLocation (callSite) {
-  var fileName
-  var fileLocation = ''
-
-  if (callSite.isNative()) {
-    fileLocation = 'native'
-  } else if (callSite.isEval()) {
-    fileName = callSite.getScriptNameOrSourceURL()
-    if (!fileName) {
-      fileLocation = callSite.getEvalOrigin()
-    }
-  } else {
-    fileName = callSite.getFileName()
-  }
-
-  if (fileName) {
-    fileLocation += fileName
-
-    var lineNumber = callSite.getLineNumber()
-    if (lineNumber != null) {
-      fileLocation += ':' + lineNumber
-
-      var columnNumber = callSite.getColumnNumber()
-      if (columnNumber) {
-        fileLocation += ':' + columnNumber
-      }
-    }
-  }
-
-  return fileLocation || 'unknown source'
-}
-
-/**
- * Format a CallSite to a string.
- */
-
-function callSiteToString (callSite) {
-  var addSuffix = true
-  var fileLocation = callSiteFileLocation(callSite)
-  var functionName = callSite.getFunctionName()
-  var isConstructor = callSite.isConstructor()
-  var isMethodCall = !(callSite.isToplevel() || isConstructor)
-  var line = ''
-
-  if (isMethodCall) {
-    var methodName = callSite.getMethodName()
-    var typeName = getConstructorName(callSite)
-
-    if (functionName) {
-      if (typeName && functionName.indexOf(typeName) !== 0) {
-        line += typeName + '.'
-      }
-
-      line += functionName
-
-      if (methodName && functionName.lastIndexOf('.' + methodName) !== functionName.length - methodName.length - 1) {
-        line += ' [as ' + methodName + ']'
-      }
-    } else {
-      line += typeName + '.' + (methodName || '<anonymous>')
-    }
-  } else if (isConstructor) {
-    line += 'new ' + (functionName || '<anonymous>')
-  } else if (functionName) {
-    line += functionName
-  } else {
-    addSuffix = false
-    line += fileLocation
-  }
-
-  if (addSuffix) {
-    line += ' (' + fileLocation + ')'
-  }
-
-  return line
-}
-
-/**
- * Get constructor name of reviver.
- */
-
-function getConstructorName (obj) {
-  var receiver = obj.receiver
-  return (receiver.constructor && receiver.constructor.name) || null
-}
-
-
-/***/ }),
-
-/***/ 2078:
-/***/ ((module) => {
-
-"use strict";
-/*!
- * depd
- * Copyright(c) 2015 Douglas Christopher Wilson
- * MIT Licensed
- */
-
-
-
-/**
- * Module exports.
- * @public
- */
-
-module.exports = eventListenerCount
-
-/**
- * Get the count of listeners on an event emitter of a specific type.
- */
-
-function eventListenerCount (emitter, type) {
-  return emitter.listeners(type).length
-}
-
-
-/***/ }),
-
-/***/ 9829:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-"use strict";
-/*!
- * depd
- * Copyright(c) 2014-2015 Douglas Christopher Wilson
- * MIT Licensed
- */
-
-
-
-/**
- * Module dependencies.
- * @private
- */
-
-var EventEmitter = __webpack_require__(8614).EventEmitter
-
-/**
- * Module exports.
- * @public
- */
-
-lazyProperty(module.exports, 'callSiteToString', function callSiteToString () {
-  var limit = Error.stackTraceLimit
-  var obj = {}
-  var prep = Error.prepareStackTrace
-
-  function prepareObjectStackTrace (obj, stack) {
-    return stack
-  }
-
-  Error.prepareStackTrace = prepareObjectStackTrace
-  Error.stackTraceLimit = 2
-
-  // capture the stack
-  Error.captureStackTrace(obj)
-
-  // slice the stack
-  var stack = obj.stack.slice()
-
-  Error.prepareStackTrace = prep
-  Error.stackTraceLimit = limit
-
-  return stack[0].toString ? toString : __webpack_require__(5554)
-})
-
-lazyProperty(module.exports, 'eventListenerCount', function eventListenerCount () {
-  return EventEmitter.listenerCount || __webpack_require__(2078)
-})
-
-/**
- * Define a lazy property.
- */
-
-function lazyProperty (obj, prop, getter) {
-  function get () {
-    var val = getter()
-
-    Object.defineProperty(obj, prop, {
-      configurable: true,
-      enumerable: true,
-      value: val
-    })
-
-    return val
-  }
-
-  Object.defineProperty(obj, prop, {
-    configurable: true,
-    enumerable: true,
-    get: get
-  })
-}
-
-/**
- * Call toString() on the obj
- */
-
-function toString (obj) {
-  return obj.toString()
-}
-
-
-/***/ }),
-
-/***/ 3225:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-"use strict";
-/*!
- * destroy
- * Copyright(c) 2014 Jonathan Ong
- * MIT Licensed
- */
-
-
-
-/**
- * Module dependencies.
- * @private
- */
-
-var ReadStream = __webpack_require__(5747).ReadStream
-var Stream = __webpack_require__(2413)
-
-/**
- * Module exports.
- * @public
- */
-
-module.exports = destroy
-
-/**
- * Destroy a stream.
- *
- * @param {object} stream
- * @public
- */
-
-function destroy(stream) {
-  if (stream instanceof ReadStream) {
-    return destroyReadStream(stream)
-  }
-
-  if (!(stream instanceof Stream)) {
-    return stream
-  }
-
-  if (typeof stream.destroy === 'function') {
-    stream.destroy()
-  }
-
-  return stream
-}
-
-/**
- * Destroy a ReadStream.
- *
- * @param {object} stream
- * @private
- */
-
-function destroyReadStream(stream) {
-  stream.destroy()
-
-  if (typeof stream.close === 'function') {
-    // node.js core bug work-around
-    stream.on('open', onOpenClose)
-  }
-
-  return stream
-}
-
-/**
- * On open handler to close stream.
- * @private
- */
-
-function onOpenClose() {
-  if (typeof this.fd === 'number') {
-    // actually close down the fd
-    this.close()
-  }
-}
-
-
-/***/ }),
-
 /***/ 4802:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -9732,177 +9512,6 @@ exports.nextElementSibling = nextElementSibling;
 
 /***/ }),
 
-/***/ 4401:
-/***/ ((module) => {
-
-"use strict";
-/*!
- * ee-first
- * Copyright(c) 2014 Jonathan Ong
- * MIT Licensed
- */
-
-
-
-/**
- * Module exports.
- * @public
- */
-
-module.exports = first
-
-/**
- * Get the first event in a set of event emitters and event pairs.
- *
- * @param {array} stuff
- * @param {function} done
- * @public
- */
-
-function first(stuff, done) {
-  if (!Array.isArray(stuff))
-    throw new TypeError('arg must be an array of [ee, events...] arrays')
-
-  var cleanups = []
-
-  for (var i = 0; i < stuff.length; i++) {
-    var arr = stuff[i]
-
-    if (!Array.isArray(arr) || arr.length < 2)
-      throw new TypeError('each array member must be [ee, events...]')
-
-    var ee = arr[0]
-
-    for (var j = 1; j < arr.length; j++) {
-      var event = arr[j]
-      var fn = listener(event, callback)
-
-      // listen to the event
-      ee.on(event, fn)
-      // push this listener to the list of cleanups
-      cleanups.push({
-        ee: ee,
-        event: event,
-        fn: fn,
-      })
-    }
-  }
-
-  function callback() {
-    cleanup()
-    done.apply(null, arguments)
-  }
-
-  function cleanup() {
-    var x
-    for (var i = 0; i < cleanups.length; i++) {
-      x = cleanups[i]
-      x.ee.removeListener(x.event, x.fn)
-    }
-  }
-
-  function thunk(fn) {
-    done = fn
-  }
-
-  thunk.cancel = cleanup
-
-  return thunk
-}
-
-/**
- * Create the event listener.
- * @private
- */
-
-function listener(event, done) {
-  return function onevent(arg1) {
-    var args = new Array(arguments.length)
-    var ee = this
-    var err = event === 'error'
-      ? arg1
-      : null
-
-    // copy args to prevent arguments escaping scope
-    for (var i = 0; i < args.length; i++) {
-      args[i] = arguments[i]
-    }
-
-    done(err, ee, event, args)
-  }
-}
-
-
-/***/ }),
-
-/***/ 6592:
-/***/ ((module) => {
-
-"use strict";
-/*!
- * encodeurl
- * Copyright(c) 2016 Douglas Christopher Wilson
- * MIT Licensed
- */
-
-
-
-/**
- * Module exports.
- * @public
- */
-
-module.exports = encodeUrl
-
-/**
- * RegExp to match non-URL code points, *after* encoding (i.e. not including "%")
- * and including invalid escape sequences.
- * @private
- */
-
-var ENCODE_CHARS_REGEXP = /(?:[^\x21\x25\x26-\x3B\x3D\x3F-\x5B\x5D\x5F\x61-\x7A\x7E]|%(?:[^0-9A-Fa-f]|[0-9A-Fa-f][^0-9A-Fa-f]|$))+/g
-
-/**
- * RegExp to match unmatched surrogate pair.
- * @private
- */
-
-var UNMATCHED_SURROGATE_PAIR_REGEXP = /(^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]|[\uD800-\uDBFF]([^\uDC00-\uDFFF]|$)/g
-
-/**
- * String to replace unmatched surrogate pair with.
- * @private
- */
-
-var UNMATCHED_SURROGATE_PAIR_REPLACE = '$1\uFFFD$2'
-
-/**
- * Encode a URL to a percent-encoded form, excluding already-encoded sequences.
- *
- * This function will take an already-encoded URL and encode all the non-URL
- * code points. This function will not encode the "%" character unless it is
- * not part of a valid sequence (`%20` will be left as-is, but `%foo` will
- * be encoded as `%25foo`).
- *
- * This encode is meant to be "safe" and does not throw errors. It will try as
- * hard as it can to properly encode the given URL, including replacing any raw,
- * unpaired surrogate pairs with the Unicode replacement character prior to
- * encoding.
- *
- * @param {string} url
- * @return {string}
- * @public
- */
-
-function encodeUrl (url) {
-  return String(url)
-    .replace(UNMATCHED_SURROGATE_PAIR_REGEXP, UNMATCHED_SURROGATE_PAIR_REPLACE)
-    .replace(ENCODE_CHARS_REGEXP, encodeURI)
-}
-
-
-/***/ }),
-
 /***/ 5107:
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
@@ -10134,231 +9743,6 @@ Object.defineProperty(exports, "decodeHTML5", ({ enumerable: true, get: function
 Object.defineProperty(exports, "decodeHTML4Strict", ({ enumerable: true, get: function () { return decode_2.decodeHTMLStrict; } }));
 Object.defineProperty(exports, "decodeHTML5Strict", ({ enumerable: true, get: function () { return decode_2.decodeHTMLStrict; } }));
 Object.defineProperty(exports, "decodeXMLStrict", ({ enumerable: true, get: function () { return decode_2.decodeXML; } }));
-
-
-/***/ }),
-
-/***/ 4070:
-/***/ ((module) => {
-
-"use strict";
-/*!
- * escape-html
- * Copyright(c) 2012-2013 TJ Holowaychuk
- * Copyright(c) 2015 Andreas Lubbe
- * Copyright(c) 2015 Tiancheng "Timothy" Gu
- * MIT Licensed
- */
-
-
-
-/**
- * Module variables.
- * @private
- */
-
-var matchHtmlRegExp = /["'&<>]/;
-
-/**
- * Module exports.
- * @public
- */
-
-module.exports = escapeHtml;
-
-/**
- * Escape special characters in the given string of html.
- *
- * @param  {string} string The string to escape for inserting into HTML
- * @return {string}
- * @public
- */
-
-function escapeHtml(string) {
-  var str = '' + string;
-  var match = matchHtmlRegExp.exec(str);
-
-  if (!match) {
-    return str;
-  }
-
-  var escape;
-  var html = '';
-  var index = 0;
-  var lastIndex = 0;
-
-  for (index = match.index; index < str.length; index++) {
-    switch (str.charCodeAt(index)) {
-      case 34: // "
-        escape = '&quot;';
-        break;
-      case 38: // &
-        escape = '&amp;';
-        break;
-      case 39: // '
-        escape = '&#39;';
-        break;
-      case 60: // <
-        escape = '&lt;';
-        break;
-      case 62: // >
-        escape = '&gt;';
-        break;
-      default:
-        continue;
-    }
-
-    if (lastIndex !== index) {
-      html += str.substring(lastIndex, index);
-    }
-
-    lastIndex = index + 1;
-    html += escape;
-  }
-
-  return lastIndex !== index
-    ? html + str.substring(lastIndex, index)
-    : html;
-}
-
-
-/***/ }),
-
-/***/ 9972:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-"use strict";
-/*!
- * etag
- * Copyright(c) 2014-2016 Douglas Christopher Wilson
- * MIT Licensed
- */
-
-
-
-/**
- * Module exports.
- * @public
- */
-
-module.exports = etag
-
-/**
- * Module dependencies.
- * @private
- */
-
-var crypto = __webpack_require__(6417)
-var Stats = __webpack_require__(5747).Stats
-
-/**
- * Module variables.
- * @private
- */
-
-var toString = Object.prototype.toString
-
-/**
- * Generate an entity tag.
- *
- * @param {Buffer|string} entity
- * @return {string}
- * @private
- */
-
-function entitytag (entity) {
-  if (entity.length === 0) {
-    // fast-path empty
-    return '"0-2jmj7l5rSw0yVb/vlWAYkK/YBwk"'
-  }
-
-  // compute hash of entity
-  var hash = crypto
-    .createHash('sha1')
-    .update(entity, 'utf8')
-    .digest('base64')
-    .substring(0, 27)
-
-  // compute length of entity
-  var len = typeof entity === 'string'
-    ? Buffer.byteLength(entity, 'utf8')
-    : entity.length
-
-  return '"' + len.toString(16) + '-' + hash + '"'
-}
-
-/**
- * Create a simple ETag.
- *
- * @param {string|Buffer|Stats} entity
- * @param {object} [options]
- * @param {boolean} [options.weak]
- * @return {String}
- * @public
- */
-
-function etag (entity, options) {
-  if (entity == null) {
-    throw new TypeError('argument entity is required')
-  }
-
-  // support fs.Stats object
-  var isStats = isstats(entity)
-  var weak = options && typeof options.weak === 'boolean'
-    ? options.weak
-    : isStats
-
-  // validate argument
-  if (!isStats && typeof entity !== 'string' && !Buffer.isBuffer(entity)) {
-    throw new TypeError('argument entity must be string, Buffer, or fs.Stats')
-  }
-
-  // generate entity tag
-  var tag = isStats
-    ? stattag(entity)
-    : entitytag(entity)
-
-  return weak
-    ? 'W/' + tag
-    : tag
-}
-
-/**
- * Determine if object is a Stats object.
- *
- * @param {object} obj
- * @return {boolean}
- * @api private
- */
-
-function isstats (obj) {
-  // genuine fs.Stats
-  if (typeof Stats === 'function' && obj instanceof Stats) {
-    return true
-  }
-
-  // quack quack
-  return obj && typeof obj === 'object' &&
-    'ctime' in obj && toString.call(obj.ctime) === '[object Date]' &&
-    'mtime' in obj && toString.call(obj.mtime) === '[object Date]' &&
-    'ino' in obj && typeof obj.ino === 'number' &&
-    'size' in obj && typeof obj.size === 'number'
-}
-
-/**
- * Generate a tag for a stat.
- *
- * @param {object} stat
- * @return {string}
- * @private
- */
-
-function stattag (stat) {
-  var mtime = stat.mtime.getTime().toString(16)
-  var size = stat.size.toString(16)
-
-  return '"' + size + '-' + mtime + '"'
-}
 
 
 /***/ }),
@@ -10832,1318 +10216,1071 @@ module.exports = function extend() {
 
 /***/ }),
 
-/***/ 810:
+/***/ 4578:
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
-/*!
- * finalhandler
- * Copyright(c) 2014-2017 Douglas Christopher Wilson
- * MIT Licensed
- */
 
+/*
+Copyright (c) 2014 Petka Antonov
 
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-/**
- * Module dependencies.
- * @private
- */
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
 
-var debug = __webpack_require__(5612)('finalhandler')
-var encodeUrl = __webpack_require__(6592)
-var escapeHtml = __webpack_require__(4070)
-var onFinished = __webpack_require__(4694)
-var parseUrl = __webpack_require__(9808)
-var statuses = __webpack_require__(7415)
-var unpipe = __webpack_require__(3124)
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+function Url() {
+    //For more efficient internal representation and laziness.
+    //The non-underscore versions of these properties are accessor functions
+    //defined on the prototype.
+    this._protocol = null;
+    this._href = "";
+    this._port = -1;
+    this._query = null;
 
-/**
- * Module variables.
- * @private
- */
+    this.auth = null;
+    this.slashes = null;
+    this.host = null;
+    this.hostname = null;
+    this.hash = null;
+    this.search = null;
+    this.pathname = null;
 
-var DOUBLE_SPACE_REGEXP = /\x20{2}/g
-var NEWLINE_REGEXP = /\n/g
-
-/* istanbul ignore next */
-var defer = typeof setImmediate === 'function'
-  ? setImmediate
-  : function (fn) { process.nextTick(fn.bind.apply(fn, arguments)) }
-var isFinished = onFinished.isFinished
-
-/**
- * Create a minimal HTML document.
- *
- * @param {string} message
- * @private
- */
-
-function createHtmlDocument (message) {
-  var body = escapeHtml(message)
-    .replace(NEWLINE_REGEXP, '<br>')
-    .replace(DOUBLE_SPACE_REGEXP, ' &nbsp;')
-
-  return '<!DOCTYPE html>\n' +
-    '<html lang="en">\n' +
-    '<head>\n' +
-    '<meta charset="utf-8">\n' +
-    '<title>Error</title>\n' +
-    '</head>\n' +
-    '<body>\n' +
-    '<pre>' + body + '</pre>\n' +
-    '</body>\n' +
-    '</html>\n'
+    this._prependSlash = false;
 }
 
-/**
- * Module exports.
- * @public
- */
+var querystring = __webpack_require__(1191);
 
-module.exports = finalhandler
+Url.queryString = querystring;
 
-/**
- * Create a function to handle the final response.
- *
- * @param {Request} req
- * @param {Response} res
- * @param {Object} [options]
- * @return {Function}
- * @public
- */
+Url.prototype.parse =
+function Url$parse(str, parseQueryString, hostDenotesSlash, disableAutoEscapeChars) {
+    if (typeof str !== "string") {
+        throw new TypeError("Parameter 'url' must be a string, not " +
+            typeof str);
+    }
+    var start = 0;
+    var end = str.length - 1;
 
-function finalhandler (req, res, options) {
-  var opts = options || {}
+    //Trim leading and trailing ws
+    while (str.charCodeAt(start) <= 0x20 /*' '*/) start++;
+    while (str.charCodeAt(end) <= 0x20 /*' '*/) end--;
 
-  // get environment
-  var env = opts.env || process.env.NODE_ENV || 'development'
+    start = this._parseProtocol(str, start, end);
 
-  // get error callback
-  var onerror = opts.onerror
-
-  return function (err) {
-    var headers
-    var msg
-    var status
-
-    // ignore 404 on in-flight response
-    if (!err && headersSent(res)) {
-      debug('cannot 404 after headers sent')
-      return
+    //Javascript doesn't have host
+    if (this._protocol !== "javascript") {
+        start = this._parseHost(str, start, end, hostDenotesSlash);
+        var proto = this._protocol;
+        if (!this.hostname &&
+            (this.slashes || (proto && !slashProtocols[proto]))) {
+            this.hostname = this.host = "";
+        }
     }
 
-    // unhandled error
-    if (err) {
-      // respect status code from error
-      status = getErrorStatusCode(err)
+    if (start <= end) {
+        var ch = str.charCodeAt(start);
 
-      if (status === undefined) {
-        // fallback to status code on response
-        status = getResponseStatusCode(res)
-      } else {
-        // respect headers from error
-        headers = getErrorHeaders(err)
-      }
+        if (ch === 0x2F /*'/'*/ || ch === 0x5C /*'\'*/) {
+            this._parsePath(str, start, end, disableAutoEscapeChars);
+        }
+        else if (ch === 0x3F /*'?'*/) {
+            this._parseQuery(str, start, end, disableAutoEscapeChars);
+        }
+        else if (ch === 0x23 /*'#'*/) {
+          this._parseHash(str, start, end, disableAutoEscapeChars);
+        }
+        else if (this._protocol !== "javascript") {
+            this._parsePath(str, start, end, disableAutoEscapeChars);
+        }
+        else { //For javascript the pathname is just the rest of it
+            this.pathname = str.slice(start, end + 1 );
+        }
 
-      // get error message
-      msg = getErrorMessage(err, status, env)
-    } else {
-      // not found
-      status = 404
-      msg = 'Cannot ' + req.method + ' ' + encodeUrl(getResourceName(req))
     }
 
-    debug('default %s', status)
-
-    // schedule onerror callback
-    if (err && onerror) {
-      defer(onerror, err, req, res)
+    if (!this.pathname && this.hostname &&
+        this._slashProtocols[this._protocol]) {
+        this.pathname = "/";
     }
 
-    // cannot actually respond
-    if (headersSent(res)) {
-      debug('cannot %d after headers sent', status)
-      req.socket.destroy()
-      return
+    if (parseQueryString) {
+        var search = this.search;
+        if (search == null) {
+            search = this.search = "";
+        }
+        if (search.charCodeAt(0) === 0x3F /*'?'*/) {
+            search = search.slice(1);
+        }
+        //This calls a setter function, there is no .query data property
+        this.query = Url.queryString.parse(search);
     }
-
-    // send response
-    send(req, res, status, headers, msg)
-  }
-}
-
-/**
- * Get headers from Error object.
- *
- * @param {Error} err
- * @return {object}
- * @private
- */
-
-function getErrorHeaders (err) {
-  if (!err.headers || typeof err.headers !== 'object') {
-    return undefined
-  }
-
-  var headers = Object.create(null)
-  var keys = Object.keys(err.headers)
-
-  for (var i = 0; i < keys.length; i++) {
-    var key = keys[i]
-    headers[key] = err.headers[key]
-  }
-
-  return headers
-}
-
-/**
- * Get message from Error object, fallback to status message.
- *
- * @param {Error} err
- * @param {number} status
- * @param {string} env
- * @return {string}
- * @private
- */
-
-function getErrorMessage (err, status, env) {
-  var msg
-
-  if (env !== 'production') {
-    // use err.stack, which typically includes err.message
-    msg = err.stack
-
-    // fallback to err.toString() when possible
-    if (!msg && typeof err.toString === 'function') {
-      msg = err.toString()
-    }
-  }
-
-  return msg || statuses[status]
-}
-
-/**
- * Get status code from Error object.
- *
- * @param {Error} err
- * @return {number}
- * @private
- */
-
-function getErrorStatusCode (err) {
-  // check err.status
-  if (typeof err.status === 'number' && err.status >= 400 && err.status < 600) {
-    return err.status
-  }
-
-  // check err.statusCode
-  if (typeof err.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 600) {
-    return err.statusCode
-  }
-
-  return undefined
-}
-
-/**
- * Get resource name for the request.
- *
- * This is typically just the original pathname of the request
- * but will fallback to "resource" is that cannot be determined.
- *
- * @param {IncomingMessage} req
- * @return {string}
- * @private
- */
-
-function getResourceName (req) {
-  try {
-    return parseUrl.original(req).pathname
-  } catch (e) {
-    return 'resource'
-  }
-}
-
-/**
- * Get status code from response.
- *
- * @param {OutgoingMessage} res
- * @return {number}
- * @private
- */
-
-function getResponseStatusCode (res) {
-  var status = res.statusCode
-
-  // default status code to 500 if outside valid range
-  if (typeof status !== 'number' || status < 400 || status > 599) {
-    status = 500
-  }
-
-  return status
-}
-
-/**
- * Determine if the response headers have been sent.
- *
- * @param {object} res
- * @returns {boolean}
- * @private
- */
-
-function headersSent (res) {
-  return typeof res.headersSent !== 'boolean'
-    ? Boolean(res._header)
-    : res.headersSent
-}
-
-/**
- * Send response.
- *
- * @param {IncomingMessage} req
- * @param {OutgoingMessage} res
- * @param {number} status
- * @param {object} headers
- * @param {string} message
- * @private
- */
-
-function send (req, res, status, headers, message) {
-  function write () {
-    // response body
-    var body = createHtmlDocument(message)
-
-    // response status
-    res.statusCode = status
-    res.statusMessage = statuses[status]
-
-    // response headers
-    setHeaders(res, headers)
-
-    // security headers
-    res.setHeader('Content-Security-Policy', "default-src 'none'")
-    res.setHeader('X-Content-Type-Options', 'nosniff')
-
-    // standard headers
-    res.setHeader('Content-Type', 'text/html; charset=utf-8')
-    res.setHeader('Content-Length', Buffer.byteLength(body, 'utf8'))
-
-    if (req.method === 'HEAD') {
-      res.end()
-      return
-    }
-
-    res.end(body, 'utf8')
-  }
-
-  if (isFinished(req)) {
-    write()
-    return
-  }
-
-  // unpipe everything from the request
-  unpipe(req)
-
-  // flush the request
-  onFinished(req, write)
-  req.resume()
-}
-
-/**
- * Set response headers from an object.
- *
- * @param {OutgoingMessage} res
- * @param {object} headers
- * @private
- */
-
-function setHeaders (res, headers) {
-  if (!headers) {
-    return
-  }
-
-  var keys = Object.keys(headers)
-  for (var i = 0; i < keys.length; i++) {
-    var key = keys[i]
-    res.setHeader(key, headers[key])
-  }
-}
-
-
-/***/ }),
-
-/***/ 6401:
-/***/ ((module, exports, __webpack_require__) => {
-
-/**
- * This is the web browser implementation of `debug()`.
- *
- * Expose `debug()` as the module.
- */
-
-exports = module.exports = __webpack_require__(545);
-exports.log = log;
-exports.formatArgs = formatArgs;
-exports.save = save;
-exports.load = load;
-exports.useColors = useColors;
-exports.storage = 'undefined' != typeof chrome
-               && 'undefined' != typeof chrome.storage
-                  ? chrome.storage.local
-                  : localstorage();
-
-/**
- * Colors.
- */
-
-exports.colors = [
-  'lightseagreen',
-  'forestgreen',
-  'goldenrod',
-  'dodgerblue',
-  'darkorchid',
-  'crimson'
-];
-
-/**
- * Currently only WebKit-based Web Inspectors, Firefox >= v31,
- * and the Firebug extension (any Firefox version) are known
- * to support "%c" CSS customizations.
- *
- * TODO: add a `localStorage` variable to explicitly enable/disable colors
- */
-
-function useColors() {
-  // NB: In an Electron preload script, document will be defined but not fully
-  // initialized. Since we know we're in Chrome, we'll just detect this case
-  // explicitly
-  if (typeof window !== 'undefined' && window.process && window.process.type === 'renderer') {
-    return true;
-  }
-
-  // is webkit? http://stackoverflow.com/a/16459606/376773
-  // document is undefined in react-native: https://github.com/facebook/react-native/pull/1632
-  return (typeof document !== 'undefined' && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance) ||
-    // is firebug? http://stackoverflow.com/a/398120/376773
-    (typeof window !== 'undefined' && window.console && (window.console.firebug || (window.console.exception && window.console.table))) ||
-    // is firefox >= v31?
-    // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
-    (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/) && parseInt(RegExp.$1, 10) >= 31) ||
-    // double check webkit in userAgent just in case we are in a worker
-    (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/));
-}
-
-/**
- * Map %j to `JSON.stringify()`, since no Web Inspectors do that by default.
- */
-
-exports.formatters.j = function(v) {
-  try {
-    return JSON.stringify(v);
-  } catch (err) {
-    return '[UnexpectedJSONParseError]: ' + err.message;
-  }
 };
 
+Url.prototype.resolve = function Url$resolve(relative) {
+    return this.resolveObject(Url.parse(relative, false, true)).format();
+};
 
-/**
- * Colorize log arguments if enabled.
- *
- * @api public
- */
+Url.prototype.format = function Url$format() {
+    var auth = this.auth || "";
 
-function formatArgs(args) {
-  var useColors = this.useColors;
-
-  args[0] = (useColors ? '%c' : '')
-    + this.namespace
-    + (useColors ? ' %c' : ' ')
-    + args[0]
-    + (useColors ? '%c ' : ' ')
-    + '+' + exports.humanize(this.diff);
-
-  if (!useColors) return;
-
-  var c = 'color: ' + this.color;
-  args.splice(1, 0, c, 'color: inherit')
-
-  // the final "%c" is somewhat tricky, because there could be other
-  // arguments passed either before or after the %c, so we need to
-  // figure out the correct index to insert the CSS into
-  var index = 0;
-  var lastC = 0;
-  args[0].replace(/%[a-zA-Z%]/g, function(match) {
-    if ('%%' === match) return;
-    index++;
-    if ('%c' === match) {
-      // we only are interested in the *last* %c
-      // (the user may have provided their own)
-      lastC = index;
-    }
-  });
-
-  args.splice(lastC, 0, c);
-}
-
-/**
- * Invokes `console.log()` when available.
- * No-op when `console.log` is not a "function".
- *
- * @api public
- */
-
-function log() {
-  // this hackery is required for IE8/9, where
-  // the `console.log` function doesn't have 'apply'
-  return 'object' === typeof console
-    && console.log
-    && Function.prototype.apply.call(console.log, console, arguments);
-}
-
-/**
- * Save `namespaces`.
- *
- * @param {String} namespaces
- * @api private
- */
-
-function save(namespaces) {
-  try {
-    if (null == namespaces) {
-      exports.storage.removeItem('debug');
-    } else {
-      exports.storage.debug = namespaces;
-    }
-  } catch(e) {}
-}
-
-/**
- * Load `namespaces`.
- *
- * @return {String} returns the previously persisted debug modes
- * @api private
- */
-
-function load() {
-  var r;
-  try {
-    r = exports.storage.debug;
-  } catch(e) {}
-
-  // If debug isn't set in LS, and we're in Electron, try to load $DEBUG
-  if (!r && typeof process !== 'undefined' && 'env' in process) {
-    r = process.env.DEBUG;
-  }
-
-  return r;
-}
-
-/**
- * Enable namespaces listed in `localStorage.debug` initially.
- */
-
-exports.enable(load());
-
-/**
- * Localstorage attempts to return the localstorage.
- *
- * This is necessary because safari throws
- * when a user disables cookies/localstorage
- * and you attempt to access it.
- *
- * @return {LocalStorage}
- * @api private
- */
-
-function localstorage() {
-  try {
-    return window.localStorage;
-  } catch (e) {}
-}
-
-
-/***/ }),
-
-/***/ 545:
-/***/ ((module, exports, __webpack_require__) => {
-
-
-/**
- * This is the common logic for both the Node.js and web browser
- * implementations of `debug()`.
- *
- * Expose `debug()` as the module.
- */
-
-exports = module.exports = createDebug.debug = createDebug['default'] = createDebug;
-exports.coerce = coerce;
-exports.disable = disable;
-exports.enable = enable;
-exports.enabled = enabled;
-exports.humanize = __webpack_require__(761);
-
-/**
- * The currently active debug mode names, and names to skip.
- */
-
-exports.names = [];
-exports.skips = [];
-
-/**
- * Map of special "%n" handling functions, for the debug "format" argument.
- *
- * Valid key names are a single, lower or upper-case letter, i.e. "n" and "N".
- */
-
-exports.formatters = {};
-
-/**
- * Previous log timestamp.
- */
-
-var prevTime;
-
-/**
- * Select a color.
- * @param {String} namespace
- * @return {Number}
- * @api private
- */
-
-function selectColor(namespace) {
-  var hash = 0, i;
-
-  for (i in namespace) {
-    hash  = ((hash << 5) - hash) + namespace.charCodeAt(i);
-    hash |= 0; // Convert to 32bit integer
-  }
-
-  return exports.colors[Math.abs(hash) % exports.colors.length];
-}
-
-/**
- * Create a debugger with the given `namespace`.
- *
- * @param {String} namespace
- * @return {Function}
- * @api public
- */
-
-function createDebug(namespace) {
-
-  function debug() {
-    // disabled?
-    if (!debug.enabled) return;
-
-    var self = debug;
-
-    // set `diff` timestamp
-    var curr = +new Date();
-    var ms = curr - (prevTime || curr);
-    self.diff = ms;
-    self.prev = prevTime;
-    self.curr = curr;
-    prevTime = curr;
-
-    // turn the `arguments` into a proper Array
-    var args = new Array(arguments.length);
-    for (var i = 0; i < args.length; i++) {
-      args[i] = arguments[i];
+    if (auth) {
+        auth = encodeURIComponent(auth);
+        auth = auth.replace(/%3A/i, ":");
+        auth += "@";
     }
 
-    args[0] = exports.coerce(args[0]);
+    var protocol = this.protocol || "";
+    var pathname = this.pathname || "";
+    var hash = this.hash || "";
+    var search = this.search || "";
+    var query = "";
+    var hostname = this.hostname || "";
+    var port = this.port || "";
+    var host = false;
+    var scheme = "";
 
-    if ('string' !== typeof args[0]) {
-      // anything else let's inspect with %O
-      args.unshift('%O');
+    //Cache the result of the getter function
+    var q = this.query;
+    if (q && typeof q === "object") {
+        query = Url.queryString.stringify(q);
     }
 
-    // apply any `formatters` transformations
-    var index = 0;
-    args[0] = args[0].replace(/%([a-zA-Z%])/g, function(match, format) {
-      // if we encounter an escaped % then don't increase the array index
-      if (match === '%%') return match;
-      index++;
-      var formatter = exports.formatters[format];
-      if ('function' === typeof formatter) {
-        var val = args[index];
-        match = formatter.call(self, val);
+    if (!search) {
+        search = query ? "?" + query : "";
+    }
 
-        // now we need to remove `args[index]` since it's inlined in the `format`
-        args.splice(index, 1);
-        index--;
-      }
-      return match;
+    if (protocol && protocol.charCodeAt(protocol.length - 1) !== 0x3A /*':'*/)
+        protocol += ":";
+
+    if (this.host) {
+        host = auth + this.host;
+    }
+    else if (hostname) {
+        var ip6 = hostname.indexOf(":") > -1;
+        if (ip6) hostname = "[" + hostname + "]";
+        host = auth + hostname + (port ? ":" + port : "");
+    }
+
+    var slashes = this.slashes ||
+        ((!protocol ||
+        slashProtocols[protocol]) && host !== false);
+
+
+    if (protocol) scheme = protocol + (slashes ? "//" : "");
+    else if (slashes) scheme = "//";
+
+    if (slashes && pathname && pathname.charCodeAt(0) !== 0x2F /*'/'*/) {
+        pathname = "/" + pathname;
+    }
+    if (search && search.charCodeAt(0) !== 0x3F /*'?'*/)
+        search = "?" + search;
+    if (hash && hash.charCodeAt(0) !== 0x23 /*'#'*/)
+        hash = "#" + hash;
+
+    pathname = escapePathName(pathname);
+    search = escapeSearch(search);
+
+    return scheme + (host === false ? "" : host) + pathname + search + hash;
+};
+
+Url.prototype.resolveObject = function Url$resolveObject(relative) {
+    if (typeof relative === "string")
+        relative = Url.parse(relative, false, true);
+
+    var result = this._clone();
+
+    // hash is always overridden, no matter what.
+    // even href="" will remove it.
+    result.hash = relative.hash;
+
+    // if the relative url is empty, then there"s nothing left to do here.
+    if (!relative.href) {
+        result._href = "";
+        return result;
+    }
+
+    // hrefs like //foo/bar always cut to the protocol.
+    if (relative.slashes && !relative._protocol) {
+        relative._copyPropsTo(result, true);
+
+        if (slashProtocols[result._protocol] &&
+            result.hostname && !result.pathname) {
+            result.pathname = "/";
+        }
+        result._href = "";
+        return result;
+    }
+
+    if (relative._protocol && relative._protocol !== result._protocol) {
+        // if it"s a known url protocol, then changing
+        // the protocol does weird things
+        // first, if it"s not file:, then we MUST have a host,
+        // and if there was a path
+        // to begin with, then we MUST have a path.
+        // if it is file:, then the host is dropped,
+        // because that"s known to be hostless.
+        // anything else is assumed to be absolute.
+        if (!slashProtocols[relative._protocol]) {
+            relative._copyPropsTo(result, false);
+            result._href = "";
+            return result;
+        }
+
+        result._protocol = relative._protocol;
+        if (!relative.host && relative._protocol !== "javascript") {
+            var relPath = (relative.pathname || "").split("/");
+            while (relPath.length && !(relative.host = relPath.shift()));
+            if (!relative.host) relative.host = "";
+            if (!relative.hostname) relative.hostname = "";
+            if (relPath[0] !== "") relPath.unshift("");
+            if (relPath.length < 2) relPath.unshift("");
+            result.pathname = relPath.join("/");
+        } else {
+            result.pathname = relative.pathname;
+        }
+
+        result.search = relative.search;
+        result.host = relative.host || "";
+        result.auth = relative.auth;
+        result.hostname = relative.hostname || relative.host;
+        result._port = relative._port;
+        result.slashes = result.slashes || relative.slashes;
+        result._href = "";
+        return result;
+    }
+
+    var isSourceAbs =
+        (result.pathname && result.pathname.charCodeAt(0) === 0x2F /*'/'*/);
+    var isRelAbs = (
+            relative.host ||
+            (relative.pathname &&
+            relative.pathname.charCodeAt(0) === 0x2F /*'/'*/)
+        );
+    var mustEndAbs = (isRelAbs || isSourceAbs ||
+                        (result.host && relative.pathname));
+
+    var removeAllDots = mustEndAbs;
+
+    var srcPath = result.pathname && result.pathname.split("/") || [];
+    var relPath = relative.pathname && relative.pathname.split("/") || [];
+    var psychotic = result._protocol && !slashProtocols[result._protocol];
+
+    // if the url is a non-slashed url, then relative
+    // links like ../.. should be able
+    // to crawl up to the hostname, as well.  This is strange.
+    // result.protocol has already been set by now.
+    // Later on, put the first path part into the host field.
+    if (psychotic) {
+        result.hostname = "";
+        result._port = -1;
+        if (result.host) {
+            if (srcPath[0] === "") srcPath[0] = result.host;
+            else srcPath.unshift(result.host);
+        }
+        result.host = "";
+        if (relative._protocol) {
+            relative.hostname = "";
+            relative._port = -1;
+            if (relative.host) {
+                if (relPath[0] === "") relPath[0] = relative.host;
+                else relPath.unshift(relative.host);
+            }
+            relative.host = "";
+        }
+        mustEndAbs = mustEndAbs && (relPath[0] === "" || srcPath[0] === "");
+    }
+
+    if (isRelAbs) {
+        // it"s absolute.
+        result.host = relative.host ?
+            relative.host : result.host;
+        result.hostname = relative.hostname ?
+            relative.hostname : result.hostname;
+        result.search = relative.search;
+        srcPath = relPath;
+        // fall through to the dot-handling below.
+    } else if (relPath.length) {
+        // it"s relative
+        // throw away the existing file, and take the new path instead.
+        if (!srcPath) srcPath = [];
+        srcPath.pop();
+        srcPath = srcPath.concat(relPath);
+        result.search = relative.search;
+    } else if (relative.search) {
+        // just pull out the search.
+        // like href="?foo".
+        // Put this after the other two cases because it simplifies the booleans
+        if (psychotic) {
+            result.hostname = result.host = srcPath.shift();
+            //occationaly the auth can get stuck only in host
+            //this especialy happens in cases like
+            //url.resolveObject("mailto:local1@domain1", "local2@domain2")
+            var authInHost = result.host && result.host.indexOf("@") > 0 ?
+                result.host.split("@") : false;
+            if (authInHost) {
+                result.auth = authInHost.shift();
+                result.host = result.hostname = authInHost.shift();
+            }
+        }
+        result.search = relative.search;
+        result._href = "";
+        return result;
+    }
+
+    if (!srcPath.length) {
+        // no path at all.  easy.
+        // we"ve already handled the other stuff above.
+        result.pathname = null;
+        result._href = "";
+        return result;
+    }
+
+    // if a url ENDs in . or .., then it must get a trailing slash.
+    // however, if it ends in anything else non-slashy,
+    // then it must NOT get a trailing slash.
+    var last = srcPath.slice(-1)[0];
+    var hasTrailingSlash = (
+        (result.host || relative.host) && (last === "." || last === "..") ||
+        last === "");
+
+    // strip single dots, resolve double dots to parent dir
+    // if the path tries to go above the root, `up` ends up > 0
+    var up = 0;
+    for (var i = srcPath.length; i >= 0; i--) {
+        last = srcPath[i];
+        if (last === ".") {
+            srcPath.splice(i, 1);
+        } else if (last === "..") {
+            srcPath.splice(i, 1);
+            up++;
+        } else if (up) {
+            srcPath.splice(i, 1);
+            up--;
+        }
+    }
+
+    // if the path is allowed to go above the root, restore leading ..s
+    if (!mustEndAbs && !removeAllDots) {
+        for (; up--; up) {
+            srcPath.unshift("..");
+        }
+    }
+
+    if (mustEndAbs && srcPath[0] !== "" &&
+        (!srcPath[0] || srcPath[0].charCodeAt(0) !== 0x2F /*'/'*/)) {
+        srcPath.unshift("");
+    }
+
+    if (hasTrailingSlash && (srcPath.join("/").substr(-1) !== "/")) {
+        srcPath.push("");
+    }
+
+    var isAbsolute = srcPath[0] === "" ||
+        (srcPath[0] && srcPath[0].charCodeAt(0) === 0x2F /*'/'*/);
+
+    // put the host back
+    if (psychotic) {
+        result.hostname = result.host = isAbsolute ? "" :
+            srcPath.length ? srcPath.shift() : "";
+        //occationaly the auth can get stuck only in host
+        //this especialy happens in cases like
+        //url.resolveObject("mailto:local1@domain1", "local2@domain2")
+        var authInHost = result.host && result.host.indexOf("@") > 0 ?
+            result.host.split("@") : false;
+        if (authInHost) {
+            result.auth = authInHost.shift();
+            result.host = result.hostname = authInHost.shift();
+        }
+    }
+
+    mustEndAbs = mustEndAbs || (result.host && srcPath.length);
+
+    if (mustEndAbs && !isAbsolute) {
+        srcPath.unshift("");
+    }
+
+    result.pathname = srcPath.length === 0 ? null : srcPath.join("/");
+    result.auth = relative.auth || result.auth;
+    result.slashes = result.slashes || relative.slashes;
+    result._href = "";
+    return result;
+};
+
+var punycode = __webpack_require__(4213);
+Url.prototype._hostIdna = function Url$_hostIdna(hostname) {
+    // IDNA Support: Returns a punycoded representation of "domain".
+    // It only converts parts of the domain name that
+    // have non-ASCII characters, i.e. it doesn't matter if
+    // you call it with a domain that already is ASCII-only.
+    return punycode.toASCII(hostname);
+};
+
+var escapePathName = Url.prototype._escapePathName =
+function Url$_escapePathName(pathname) {
+    if (!containsCharacter2(pathname, 0x23 /*'#'*/, 0x3F /*'?'*/)) {
+        return pathname;
+    }
+    //Avoid closure creation to keep this inlinable
+    return _escapePath(pathname);
+};
+
+var escapeSearch = Url.prototype._escapeSearch =
+function Url$_escapeSearch(search) {
+    if (!containsCharacter2(search, 0x23 /*'#'*/, -1)) return search;
+    //Avoid closure creation to keep this inlinable
+    return _escapeSearch(search);
+};
+
+Url.prototype._parseProtocol = function Url$_parseProtocol(str, start, end) {
+    var doLowerCase = false;
+    var protocolCharacters = this._protocolCharacters;
+
+    for (var i = start; i <= end; ++i) {
+        var ch = str.charCodeAt(i);
+
+        if (ch === 0x3A /*':'*/) {
+            var protocol = str.slice(start, i);
+            if (doLowerCase) protocol = protocol.toLowerCase();
+            this._protocol = protocol;
+            return i + 1;
+        }
+        else if (protocolCharacters[ch] === 1) {
+            if (ch < 0x61 /*'a'*/)
+                doLowerCase = true;
+        }
+        else {
+            return start;
+        }
+
+    }
+    return start;
+};
+
+Url.prototype._parseAuth = function Url$_parseAuth(str, start, end, decode) {
+    var auth = str.slice(start, end + 1);
+    if (decode) {
+        auth = decodeURIComponent(auth);
+    }
+    this.auth = auth;
+};
+
+Url.prototype._parsePort = function Url$_parsePort(str, start, end) {
+    //Internal format is integer for more efficient parsing
+    //and for efficient trimming of leading zeros
+    var port = 0;
+    //Distinguish between :0 and : (no port number at all)
+    var hadChars = false;
+    var validPort = true;
+
+    for (var i = start; i <= end; ++i) {
+        var ch = str.charCodeAt(i);
+
+        if (0x30 /*'0'*/ <= ch && ch <= 0x39 /*'9'*/) {
+            port = (10 * port) + (ch - 0x30 /*'0'*/);
+            hadChars = true;
+        }
+        else {
+            validPort = false;
+            if (ch === 0x5C/*'\'*/ || ch === 0x2F/*'/'*/) {
+                validPort = true;
+            }
+            break;
+        }
+
+    }
+    if ((port === 0 && !hadChars) || !validPort) {
+        if (!validPort) {
+            this._port = -2;
+        }
+        return 0;
+    }
+
+    this._port = port;
+    return i - start;
+};
+
+Url.prototype._parseHost =
+function Url$_parseHost(str, start, end, slashesDenoteHost) {
+    var hostEndingCharacters = this._hostEndingCharacters;
+    var first = str.charCodeAt(start);
+    var second = str.charCodeAt(start + 1);
+    if ((first === 0x2F /*'/'*/ || first === 0x5C /*'\'*/) &&
+        (second === 0x2F /*'/'*/ || second === 0x5C /*'\'*/)) {
+        this.slashes = true;
+
+        //The string starts with //
+        if (start === 0) {
+            //The string is just "//"
+            if (end < 2) return start;
+            //If slashes do not denote host and there is no auth,
+            //there is no host when the string starts with //
+            var hasAuth =
+                containsCharacter(str, 0x40 /*'@'*/, 2, hostEndingCharacters);
+            if (!hasAuth && !slashesDenoteHost) {
+                this.slashes = null;
+                return start;
+            }
+        }
+        //There is a host that starts after the //
+        start += 2;
+    }
+    //If there is no slashes, there is no hostname if
+    //1. there was no protocol at all
+    else if (!this._protocol ||
+        //2. there was a protocol that requires slashes
+        //e.g. in 'http:asd' 'asd' is not a hostname
+        slashProtocols[this._protocol]
+    ) {
+        return start;
+    }
+
+    var doLowerCase = false;
+    var idna = false;
+    var hostNameStart = start;
+    var hostNameEnd = end;
+    var lastCh = -1;
+    var portLength = 0;
+    var charsAfterDot = 0;
+    var authNeedsDecoding = false;
+
+    var j = -1;
+
+    //Find the last occurrence of an @-sign until hostending character is met
+    //also mark if decoding is needed for the auth portion
+    for (var i = start; i <= end; ++i) {
+        var ch = str.charCodeAt(i);
+
+        if (ch === 0x40 /*'@'*/) {
+            j = i;
+        }
+        //This check is very, very cheap. Unneeded decodeURIComponent is very
+        //very expensive
+        else if (ch === 0x25 /*'%'*/) {
+            authNeedsDecoding = true;
+        }
+        else if (hostEndingCharacters[ch] === 1) {
+            break;
+        }
+    }
+
+    //@-sign was found at index j, everything to the left from it
+    //is auth part
+    if (j > -1) {
+        this._parseAuth(str, start, j - 1, authNeedsDecoding);
+        //hostname starts after the last @-sign
+        start = hostNameStart = j + 1;
+    }
+
+    //Host name is starting with a [
+    if (str.charCodeAt(start) === 0x5B /*'['*/) {
+        for (var i = start + 1; i <= end; ++i) {
+            var ch = str.charCodeAt(i);
+
+            //Assume valid IP6 is between the brackets
+            if (ch === 0x5D /*']'*/) {
+                if (str.charCodeAt(i + 1) === 0x3A /*':'*/) {
+                    portLength = this._parsePort(str, i + 2, end) + 1;
+                }
+                var hostname = str.slice(start + 1, i).toLowerCase();
+                this.hostname = hostname;
+                this.host = this._port > 0 ?
+                    "[" + hostname + "]:" + this._port :
+                    "[" + hostname + "]";
+                this.pathname = "/";
+                return i + portLength + 1;
+            }
+        }
+        //Empty hostname, [ starts a path
+        return start;
+    }
+
+    for (var i = start; i <= end; ++i) {
+        if (charsAfterDot > 62) {
+            this.hostname = this.host = str.slice(start, i);
+            return i;
+        }
+        var ch = str.charCodeAt(i);
+
+        if (ch === 0x3A /*':'*/) {
+            portLength = this._parsePort(str, i + 1, end) + 1;
+            hostNameEnd = i - 1;
+            break;
+        }
+        else if (ch < 0x61 /*'a'*/) {
+            if (ch === 0x2E /*'.'*/) {
+                //Node.js ignores this error
+                /*
+                if (lastCh === DOT || lastCh === -1) {
+                    this.hostname = this.host = "";
+                    return start;
+                }
+                */
+                charsAfterDot = -1;
+            }
+            else if (0x41 /*'A'*/ <= ch && ch <= 0x5A /*'Z'*/) {
+                doLowerCase = true;
+            }
+            //Valid characters other than ASCII letters -, _, +, 0-9
+            else if (!(ch === 0x2D /*'-'*/ ||
+                       ch === 0x5F /*'_'*/ ||
+                       ch === 0x2B /*'+'*/ ||
+                       (0x30 /*'0'*/ <= ch && ch <= 0x39 /*'9'*/))
+                ) {
+                if (hostEndingCharacters[ch] === 0 &&
+                    this._noPrependSlashHostEnders[ch] === 0) {
+                    this._prependSlash = true;
+                }
+                hostNameEnd = i - 1;
+                break;
+            }
+        }
+        else if (ch >= 0x7B /*'{'*/) {
+            if (ch <= 0x7E /*'~'*/) {
+                if (this._noPrependSlashHostEnders[ch] === 0) {
+                    this._prependSlash = true;
+                }
+                hostNameEnd = i - 1;
+                break;
+            }
+            idna = true;
+        }
+        lastCh = ch;
+        charsAfterDot++;
+    }
+
+    //Node.js ignores this error
+    /*
+    if (lastCh === DOT) {
+        hostNameEnd--;
+    }
+    */
+
+    if (hostNameEnd + 1 !== start &&
+        hostNameEnd - hostNameStart <= 256) {
+        var hostname = str.slice(hostNameStart, hostNameEnd + 1);
+        if (doLowerCase) hostname = hostname.toLowerCase();
+        if (idna) hostname = this._hostIdna(hostname);
+        this.hostname = hostname;
+        this.host = this._port > 0 ? hostname + ":" + this._port : hostname;
+    }
+
+    return hostNameEnd + 1 + portLength;
+
+};
+
+Url.prototype._copyPropsTo = function Url$_copyPropsTo(input, noProtocol) {
+    if (!noProtocol) {
+        input._protocol = this._protocol;
+    }
+    input._href = this._href;
+    input._port = this._port;
+    input._prependSlash = this._prependSlash;
+    input.auth = this.auth;
+    input.slashes = this.slashes;
+    input.host = this.host;
+    input.hostname = this.hostname;
+    input.hash = this.hash;
+    input.search = this.search;
+    input.pathname = this.pathname;
+};
+
+Url.prototype._clone = function Url$_clone() {
+    var ret = new Url();
+    ret._protocol = this._protocol;
+    ret._href = this._href;
+    ret._port = this._port;
+    ret._prependSlash = this._prependSlash;
+    ret.auth = this.auth;
+    ret.slashes = this.slashes;
+    ret.host = this.host;
+    ret.hostname = this.hostname;
+    ret.hash = this.hash;
+    ret.search = this.search;
+    ret.pathname = this.pathname;
+    return ret;
+};
+
+Url.prototype._getComponentEscaped =
+function Url$_getComponentEscaped(str, start, end, isAfterQuery) {
+    var cur = start;
+    var i = start;
+    var ret = "";
+    var autoEscapeMap = isAfterQuery ?
+        this._afterQueryAutoEscapeMap : this._autoEscapeMap;
+    for (; i <= end; ++i) {
+        var ch = str.charCodeAt(i);
+        var escaped = autoEscapeMap[ch];
+
+        if (escaped !== "" && escaped !== undefined) {
+            if (cur < i) ret += str.slice(cur, i);
+            ret += escaped;
+            cur = i + 1;
+        }
+    }
+    if (cur < i + 1) ret += str.slice(cur, i);
+    return ret;
+};
+
+Url.prototype._parsePath =
+function Url$_parsePath(str, start, end, disableAutoEscapeChars) {
+    var pathStart = start;
+    var pathEnd = end;
+    var escape = false;
+    var autoEscapeCharacters = this._autoEscapeCharacters;
+    var prePath = this._port === -2 ? "/:" : "";
+
+    for (var i = start; i <= end; ++i) {
+        var ch = str.charCodeAt(i);
+        if (ch === 0x23 /*'#'*/) {
+          this._parseHash(str, i, end, disableAutoEscapeChars);
+            pathEnd = i - 1;
+            break;
+        }
+        else if (ch === 0x3F /*'?'*/) {
+            this._parseQuery(str, i, end, disableAutoEscapeChars);
+            pathEnd = i - 1;
+            break;
+        }
+        else if (!disableAutoEscapeChars && !escape && autoEscapeCharacters[ch] === 1) {
+            escape = true;
+        }
+    }
+
+    if (pathStart > pathEnd) {
+        this.pathname = prePath === "" ? "/" : prePath;
+        return;
+    }
+
+    var path;
+    if (escape) {
+        path = this._getComponentEscaped(str, pathStart, pathEnd, false);
+    }
+    else {
+        path = str.slice(pathStart, pathEnd + 1);
+    }
+    this.pathname = prePath === ""
+        ? (this._prependSlash ? "/" + path : path)
+        : prePath + path;
+};
+
+Url.prototype._parseQuery = function Url$_parseQuery(str, start, end, disableAutoEscapeChars) {
+    var queryStart = start;
+    var queryEnd = end;
+    var escape = false;
+    var autoEscapeCharacters = this._autoEscapeCharacters;
+
+    for (var i = start; i <= end; ++i) {
+        var ch = str.charCodeAt(i);
+
+        if (ch === 0x23 /*'#'*/) {
+            this._parseHash(str, i, end, disableAutoEscapeChars);
+            queryEnd = i - 1;
+            break;
+        }
+        else if (!disableAutoEscapeChars && !escape && autoEscapeCharacters[ch] === 1) {
+            escape = true;
+        }
+    }
+
+    if (queryStart > queryEnd) {
+        this.search = "";
+        return;
+    }
+
+    var query;
+    if (escape) {
+        query = this._getComponentEscaped(str, queryStart, queryEnd, true);
+    }
+    else {
+        query = str.slice(queryStart, queryEnd + 1);
+    }
+    this.search = query;
+};
+
+Url.prototype._parseHash = function Url$_parseHash(str, start, end, disableAutoEscapeChars) {
+    if (start > end) {
+        this.hash = "";
+        return;
+    }
+
+    this.hash = disableAutoEscapeChars ?
+        str.slice(start, end + 1) : this._getComponentEscaped(str, start, end, true);
+};
+
+Object.defineProperty(Url.prototype, "port", {
+    get: function() {
+        if (this._port >= 0) {
+            return ("" + this._port);
+        }
+        return null;
+    },
+    set: function(v) {
+        if (v == null) {
+            this._port = -1;
+        }
+        else {
+            this._port = parseInt(v, 10);
+        }
+    }
+});
+
+Object.defineProperty(Url.prototype, "query", {
+    get: function() {
+        var query = this._query;
+        if (query != null) {
+            return query;
+        }
+        var search = this.search;
+
+        if (search) {
+            if (search.charCodeAt(0) === 0x3F /*'?'*/) {
+                search = search.slice(1);
+            }
+            if (search !== "") {
+                this._query = search;
+                return search;
+            }
+        }
+        return search;
+    },
+    set: function(v) {
+        this._query = v;
+    }
+});
+
+Object.defineProperty(Url.prototype, "path", {
+    get: function() {
+        var p = this.pathname || "";
+        var s = this.search || "";
+        if (p || s) {
+            return p + s;
+        }
+        return (p == null && s) ? ("/" + s) : null;
+    },
+    set: function() {}
+});
+
+Object.defineProperty(Url.prototype, "protocol", {
+    get: function() {
+        var proto = this._protocol;
+        return proto ? proto + ":" : proto;
+    },
+    set: function(v) {
+        if (typeof v === "string") {
+            var end = v.length - 1;
+            if (v.charCodeAt(end) === 0x3A /*':'*/) {
+                this._protocol = v.slice(0, end);
+            }
+            else {
+                this._protocol = v;
+            }
+        }
+        else if (v == null) {
+            this._protocol = null;
+        }
+    }
+});
+
+Object.defineProperty(Url.prototype, "href", {
+    get: function() {
+        var href = this._href;
+        if (!href) {
+            href = this._href = this.format();
+        }
+        return href;
+    },
+    set: function(v) {
+        this._href = v;
+    }
+});
+
+Url.parse = function Url$Parse(str, parseQueryString, hostDenotesSlash, disableAutoEscapeChars) {
+    if (str instanceof Url) return str;
+    var ret = new Url();
+    ret.parse(str, !!parseQueryString, !!hostDenotesSlash, !!disableAutoEscapeChars);
+    return ret;
+};
+
+Url.format = function Url$Format(obj) {
+    if (typeof obj === "string") {
+        obj = Url.parse(obj);
+    }
+    if (!(obj instanceof Url)) {
+        return Url.prototype.format.call(obj);
+    }
+    return obj.format();
+};
+
+Url.resolve = function Url$Resolve(source, relative) {
+    return Url.parse(source, false, true).resolve(relative);
+};
+
+Url.resolveObject = function Url$ResolveObject(source, relative) {
+    if (!source) return relative;
+    return Url.parse(source, false, true).resolveObject(relative);
+};
+
+function _escapePath(pathname) {
+    return pathname.replace(/[?#]/g, function(match) {
+        return encodeURIComponent(match);
+    });
+}
+
+function _escapeSearch(search) {
+    return search.replace(/#/g, function(match) {
+        return encodeURIComponent(match);
+    });
+}
+
+//Search `char1` (integer code for a character) in `string`
+//starting from `fromIndex` and ending at `string.length - 1`
+//or when a stop character is found
+function containsCharacter(string, char1, fromIndex, stopCharacterTable) {
+    var len = string.length;
+    for (var i = fromIndex; i < len; ++i) {
+        var ch = string.charCodeAt(i);
+
+        if (ch === char1) {
+            return true;
+        }
+        else if (stopCharacterTable[ch] === 1) {
+            return false;
+        }
+    }
+    return false;
+}
+
+//See if `char1` or `char2` (integer codes for characters)
+//is contained in `string`
+function containsCharacter2(string, char1, char2) {
+    for (var i = 0, len = string.length; i < len; ++i) {
+        var ch = string.charCodeAt(i);
+        if (ch === char1 || ch === char2) return true;
+    }
+    return false;
+}
+
+//Makes an array of 128 uint8's which represent boolean values.
+//Spec is an array of ascii code points or ascii code point ranges
+//ranges are expressed as [start, end]
+
+//Create a table with the characters 0x30-0x39 (decimals '0' - '9') and
+//0x7A (lowercaseletter 'z') as `true`:
+//
+//var a = makeAsciiTable([[0x30, 0x39], 0x7A]);
+//a[0x30]; //1
+//a[0x15]; //0
+//a[0x35]; //1
+function makeAsciiTable(spec) {
+    var ret = new Uint8Array(128);
+    spec.forEach(function(item){
+        if (typeof item === "number") {
+            ret[item] = 1;
+        }
+        else {
+            var start = item[0];
+            var end = item[1];
+            for (var j = start; j <= end; ++j) {
+                ret[j] = 1;
+            }
+        }
     });
 
-    // apply env-specific formatting (colors, etc.)
-    exports.formatArgs.call(self, args);
-
-    var logFn = debug.log || exports.log || console.log.bind(console);
-    logFn.apply(self, args);
-  }
-
-  debug.namespace = namespace;
-  debug.enabled = exports.enabled(namespace);
-  debug.useColors = exports.useColors();
-  debug.color = selectColor(namespace);
-
-  // env-specific initialization logic for debug instances
-  if ('function' === typeof exports.init) {
-    exports.init(debug);
-  }
-
-  return debug;
+    return ret;
 }
 
-/**
- * Enables a debug mode by namespaces. This can include modes
- * separated by a colon and wildcards.
- *
- * @param {String} namespaces
- * @api public
- */
 
-function enable(namespaces) {
-  exports.save(namespaces);
+var autoEscape = ["<", ">", "\"", "`", " ", "\r", "\n",
+    "\t", "{", "}", "|", "\\", "^", "`", "'"];
 
-  exports.names = [];
-  exports.skips = [];
+var autoEscapeMap = new Array(128);
 
-  var split = (typeof namespaces === 'string' ? namespaces : '').split(/[\s,]+/);
-  var len = split.length;
 
-  for (var i = 0; i < len; i++) {
-    if (!split[i]) continue; // ignore empty strings
-    namespaces = split[i].replace(/\*/g, '.*?');
-    if (namespaces[0] === '-') {
-      exports.skips.push(new RegExp('^' + namespaces.substr(1) + '$'));
-    } else {
-      exports.names.push(new RegExp('^' + namespaces + '$'));
+
+for (var i = 0, len = autoEscapeMap.length; i < len; ++i) {
+    autoEscapeMap[i] = "";
+}
+
+for (var i = 0, len = autoEscape.length; i < len; ++i) {
+    var c = autoEscape[i];
+    var esc = encodeURIComponent(c);
+    if (esc === c) {
+        esc = escape(c);
     }
-  }
+    autoEscapeMap[c.charCodeAt(0)] = esc;
 }
+var afterQueryAutoEscapeMap = autoEscapeMap.slice();
+autoEscapeMap[0x5C /*'\'*/] = "/";
 
-/**
- * Disable debug output.
- *
- * @api public
- */
+var slashProtocols = Url.prototype._slashProtocols = {
+    http: true,
+    https: true,
+    gopher: true,
+    file: true,
+    ftp: true,
 
-function disable() {
-  exports.enable('');
-}
-
-/**
- * Returns true if the given mode name is enabled, false otherwise.
- *
- * @param {String} name
- * @return {Boolean}
- * @api public
- */
-
-function enabled(name) {
-  var i, len;
-  for (i = 0, len = exports.skips.length; i < len; i++) {
-    if (exports.skips[i].test(name)) {
-      return false;
-    }
-  }
-  for (i = 0, len = exports.names.length; i < len; i++) {
-    if (exports.names[i].test(name)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Coerce `val`.
- *
- * @param {Mixed} val
- * @return {Mixed}
- * @api private
- */
-
-function coerce(val) {
-  if (val instanceof Error) return val.stack || val.message;
-  return val;
-}
-
-
-/***/ }),
-
-/***/ 5612:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-/**
- * Detect Electron renderer process, which is node, but we should
- * treat as a browser.
- */
-
-if (typeof process !== 'undefined' && process.type === 'renderer') {
-  module.exports = __webpack_require__(6401);
-} else {
-  module.exports = __webpack_require__(4706);
-}
-
-
-/***/ }),
-
-/***/ 4706:
-/***/ ((module, exports, __webpack_require__) => {
-
-/**
- * Module dependencies.
- */
-
-var tty = __webpack_require__(3867);
-var util = __webpack_require__(1669);
-
-/**
- * This is the Node.js implementation of `debug()`.
- *
- * Expose `debug()` as the module.
- */
-
-exports = module.exports = __webpack_require__(545);
-exports.init = init;
-exports.log = log;
-exports.formatArgs = formatArgs;
-exports.save = save;
-exports.load = load;
-exports.useColors = useColors;
-
-/**
- * Colors.
- */
-
-exports.colors = [6, 2, 3, 4, 5, 1];
-
-/**
- * Build up the default `inspectOpts` object from the environment variables.
- *
- *   $ DEBUG_COLORS=no DEBUG_DEPTH=10 DEBUG_SHOW_HIDDEN=enabled node script.js
- */
-
-exports.inspectOpts = Object.keys(process.env).filter(function (key) {
-  return /^debug_/i.test(key);
-}).reduce(function (obj, key) {
-  // camel-case
-  var prop = key
-    .substring(6)
-    .toLowerCase()
-    .replace(/_([a-z])/g, function (_, k) { return k.toUpperCase() });
-
-  // coerce string value into JS value
-  var val = process.env[key];
-  if (/^(yes|on|true|enabled)$/i.test(val)) val = true;
-  else if (/^(no|off|false|disabled)$/i.test(val)) val = false;
-  else if (val === 'null') val = null;
-  else val = Number(val);
-
-  obj[prop] = val;
-  return obj;
-}, {});
-
-/**
- * The file descriptor to write the `debug()` calls to.
- * Set the `DEBUG_FD` env variable to override with another value. i.e.:
- *
- *   $ DEBUG_FD=3 node script.js 3>debug.log
- */
-
-var fd = parseInt(process.env.DEBUG_FD, 10) || 2;
-
-if (1 !== fd && 2 !== fd) {
-  util.deprecate(function(){}, 'except for stderr(2) and stdout(1), any other usage of DEBUG_FD is deprecated. Override debug.log if you want to use a different log function (https://git.io/debug_fd)')()
-}
-
-var stream = 1 === fd ? process.stdout :
-             2 === fd ? process.stderr :
-             createWritableStdioStream(fd);
-
-/**
- * Is stdout a TTY? Colored output is enabled when `true`.
- */
-
-function useColors() {
-  return 'colors' in exports.inspectOpts
-    ? Boolean(exports.inspectOpts.colors)
-    : tty.isatty(fd);
-}
-
-/**
- * Map %o to `util.inspect()`, all on a single line.
- */
-
-exports.formatters.o = function(v) {
-  this.inspectOpts.colors = this.useColors;
-  return util.inspect(v, this.inspectOpts)
-    .split('\n').map(function(str) {
-      return str.trim()
-    }).join(' ');
+    "http:": true,
+    "https:": true,
+    "gopher:": true,
+    "file:": true,
+    "ftp:": true
 };
 
-/**
- * Map %o to `util.inspect()`, allowing multiple lines if needed.
- */
+//Optimize back from normalized object caused by non-identifier keys
+function f(){}
+f.prototype = slashProtocols;
 
-exports.formatters.O = function(v) {
-  this.inspectOpts.colors = this.useColors;
-  return util.inspect(v, this.inspectOpts);
+Url.prototype._protocolCharacters = makeAsciiTable([
+    [0x61 /*'a'*/, 0x7A /*'z'*/],
+    [0x41 /*'A'*/, 0x5A /*'Z'*/],
+    0x2E /*'.'*/, 0x2B /*'+'*/, 0x2D /*'-'*/
+]);
+
+Url.prototype._hostEndingCharacters = makeAsciiTable([
+    0x23 /*'#'*/, 0x3F /*'?'*/, 0x2F /*'/'*/, 0x5C /*'\'*/
+]);
+
+Url.prototype._autoEscapeCharacters = makeAsciiTable(
+    autoEscape.map(function(v) {
+        return v.charCodeAt(0);
+    })
+);
+
+//If these characters end a host name, the path will not be prepended a /
+Url.prototype._noPrependSlashHostEnders = makeAsciiTable(
+    [
+        "<", ">", "'", "`", " ", "\r",
+        "\n", "\t", "{", "}", "|",
+        "^", "`", "\"", "%", ";"
+    ].map(function(v) {
+        return v.charCodeAt(0);
+    })
+);
+
+Url.prototype._autoEscapeMap = autoEscapeMap;
+Url.prototype._afterQueryAutoEscapeMap = afterQueryAutoEscapeMap;
+
+module.exports = Url;
+
+Url.replace = function Url$Replace() {
+    require.cache.url = {
+        exports: Url
+    };
 };
-
-/**
- * Adds ANSI color escape codes if enabled.
- *
- * @api public
- */
-
-function formatArgs(args) {
-  var name = this.namespace;
-  var useColors = this.useColors;
-
-  if (useColors) {
-    var c = this.color;
-    var prefix = '  \u001b[3' + c + ';1m' + name + ' ' + '\u001b[0m';
-
-    args[0] = prefix + args[0].split('\n').join('\n' + prefix);
-    args.push('\u001b[3' + c + 'm+' + exports.humanize(this.diff) + '\u001b[0m');
-  } else {
-    args[0] = new Date().toUTCString()
-      + ' ' + name + ' ' + args[0];
-  }
-}
-
-/**
- * Invokes `util.format()` with the specified arguments and writes to `stream`.
- */
-
-function log() {
-  return stream.write(util.format.apply(util, arguments) + '\n');
-}
-
-/**
- * Save `namespaces`.
- *
- * @param {String} namespaces
- * @api private
- */
-
-function save(namespaces) {
-  if (null == namespaces) {
-    // If you set a process.env field to null or undefined, it gets cast to the
-    // string 'null' or 'undefined'. Just delete instead.
-    delete process.env.DEBUG;
-  } else {
-    process.env.DEBUG = namespaces;
-  }
-}
-
-/**
- * Load `namespaces`.
- *
- * @return {String} returns the previously persisted debug modes
- * @api private
- */
-
-function load() {
-  return process.env.DEBUG;
-}
-
-/**
- * Copied from `node/src/node.js`.
- *
- * XXX: It's lame that node doesn't expose this API out-of-the-box. It also
- * relies on the undocumented `tty_wrap.guessHandleType()` which is also lame.
- */
-
-function createWritableStdioStream (fd) {
-  var stream;
-  var tty_wrap = process.binding('tty_wrap');
-
-  // Note stream._type is used for test-module-load-list.js
-
-  switch (tty_wrap.guessHandleType(fd)) {
-    case 'TTY':
-      stream = new tty.WriteStream(fd);
-      stream._type = 'tty';
-
-      // Hack to have stream not keep the event loop alive.
-      // See https://github.com/joyent/node/issues/1726
-      if (stream._handle && stream._handle.unref) {
-        stream._handle.unref();
-      }
-      break;
-
-    case 'FILE':
-      var fs = __webpack_require__(5747);
-      stream = new fs.SyncWriteStream(fd, { autoClose: false });
-      stream._type = 'fs';
-      break;
-
-    case 'PIPE':
-    case 'TCP':
-      var net = __webpack_require__(1631);
-      stream = new net.Socket({
-        fd: fd,
-        readable: false,
-        writable: true
-      });
-
-      // FIXME Should probably have an option in net.Socket to create a
-      // stream from an existing fd which is writable only. But for now
-      // we'll just add this hack and set the `readable` member to false.
-      // Test: ./node test/fixtures/echo.js < /etc/passwd
-      stream.readable = false;
-      stream.read = null;
-      stream._type = 'pipe';
-
-      // FIXME Hack to have stream not keep the event loop alive.
-      // See https://github.com/joyent/node/issues/1726
-      if (stream._handle && stream._handle.unref) {
-        stream._handle.unref();
-      }
-      break;
-
-    default:
-      // Probably an error on in uv_guess_handle()
-      throw new Error('Implement me. Unknown stream file type!');
-  }
-
-  // For supporting legacy API we put the FD here.
-  stream.fd = fd;
-
-  stream._isStdio = true;
-
-  return stream;
-}
-
-/**
- * Init logic for `debug` instances.
- *
- * Create a new `inspectOpts` object in case `useColors` is set
- * differently for a particular `debug` instance.
- */
-
-function init (debug) {
-  debug.inspectOpts = {};
-
-  var keys = Object.keys(exports.inspectOpts);
-  for (var i = 0; i < keys.length; i++) {
-    debug.inspectOpts[keys[i]] = exports.inspectOpts[keys[i]];
-  }
-}
-
-/**
- * Enable namespaces listed in `process.env.DEBUG` initially.
- */
-
-exports.enable(load());
-
-
-/***/ }),
-
-/***/ 761:
-/***/ ((module) => {
-
-/**
- * Helpers.
- */
-
-var s = 1000;
-var m = s * 60;
-var h = m * 60;
-var d = h * 24;
-var y = d * 365.25;
-
-/**
- * Parse or format the given `val`.
- *
- * Options:
- *
- *  - `long` verbose formatting [false]
- *
- * @param {String|Number} val
- * @param {Object} [options]
- * @throws {Error} throw an error if val is not a non-empty string or a number
- * @return {String|Number}
- * @api public
- */
-
-module.exports = function(val, options) {
-  options = options || {};
-  var type = typeof val;
-  if (type === 'string' && val.length > 0) {
-    return parse(val);
-  } else if (type === 'number' && isNaN(val) === false) {
-    return options.long ? fmtLong(val) : fmtShort(val);
-  }
-  throw new Error(
-    'val is not a non-empty string or a valid number. val=' +
-      JSON.stringify(val)
-  );
-};
-
-/**
- * Parse the given `str` and return milliseconds.
- *
- * @param {String} str
- * @return {Number}
- * @api private
- */
-
-function parse(str) {
-  str = String(str);
-  if (str.length > 100) {
-    return;
-  }
-  var match = /^((?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|years?|yrs?|y)?$/i.exec(
-    str
-  );
-  if (!match) {
-    return;
-  }
-  var n = parseFloat(match[1]);
-  var type = (match[2] || 'ms').toLowerCase();
-  switch (type) {
-    case 'years':
-    case 'year':
-    case 'yrs':
-    case 'yr':
-    case 'y':
-      return n * y;
-    case 'days':
-    case 'day':
-    case 'd':
-      return n * d;
-    case 'hours':
-    case 'hour':
-    case 'hrs':
-    case 'hr':
-    case 'h':
-      return n * h;
-    case 'minutes':
-    case 'minute':
-    case 'mins':
-    case 'min':
-    case 'm':
-      return n * m;
-    case 'seconds':
-    case 'second':
-    case 'secs':
-    case 'sec':
-    case 's':
-      return n * s;
-    case 'milliseconds':
-    case 'millisecond':
-    case 'msecs':
-    case 'msec':
-    case 'ms':
-      return n;
-    default:
-      return undefined;
-  }
-}
-
-/**
- * Short format for `ms`.
- *
- * @param {Number} ms
- * @return {String}
- * @api private
- */
-
-function fmtShort(ms) {
-  if (ms >= d) {
-    return Math.round(ms / d) + 'd';
-  }
-  if (ms >= h) {
-    return Math.round(ms / h) + 'h';
-  }
-  if (ms >= m) {
-    return Math.round(ms / m) + 'm';
-  }
-  if (ms >= s) {
-    return Math.round(ms / s) + 's';
-  }
-  return ms + 'ms';
-}
-
-/**
- * Long format for `ms`.
- *
- * @param {Number} ms
- * @return {String}
- * @api private
- */
-
-function fmtLong(ms) {
-  return plural(ms, d, 'day') ||
-    plural(ms, h, 'hour') ||
-    plural(ms, m, 'minute') ||
-    plural(ms, s, 'second') ||
-    ms + ' ms';
-}
-
-/**
- * Pluralization helper.
- */
-
-function plural(ms, n, name) {
-  if (ms < n) {
-    return;
-  }
-  if (ms < n * 1.5) {
-    return Math.floor(ms / n) + ' ' + name;
-  }
-  return Math.ceil(ms / n) + ' ' + name + 's';
-}
-
-
-/***/ }),
-
-/***/ 3136:
-/***/ ((module) => {
-
-"use strict";
-/*!
- * fresh
- * Copyright(c) 2012 TJ Holowaychuk
- * Copyright(c) 2016-2017 Douglas Christopher Wilson
- * MIT Licensed
- */
-
-
-
-/**
- * RegExp to check for no-cache token in Cache-Control.
- * @private
- */
-
-var CACHE_CONTROL_NO_CACHE_REGEXP = /(?:^|,)\s*?no-cache\s*?(?:,|$)/
-
-/**
- * Module exports.
- * @public
- */
-
-module.exports = fresh
-
-/**
- * Check freshness of the response using request and response headers.
- *
- * @param {Object} reqHeaders
- * @param {Object} resHeaders
- * @return {Boolean}
- * @public
- */
-
-function fresh (reqHeaders, resHeaders) {
-  // fields
-  var modifiedSince = reqHeaders['if-modified-since']
-  var noneMatch = reqHeaders['if-none-match']
-
-  // unconditional request
-  if (!modifiedSince && !noneMatch) {
-    return false
-  }
-
-  // Always return stale when Cache-Control: no-cache
-  // to support end-to-end reload requests
-  // https://tools.ietf.org/html/rfc2616#section-14.9.4
-  var cacheControl = reqHeaders['cache-control']
-  if (cacheControl && CACHE_CONTROL_NO_CACHE_REGEXP.test(cacheControl)) {
-    return false
-  }
-
-  // if-none-match
-  if (noneMatch && noneMatch !== '*') {
-    var etag = resHeaders['etag']
-
-    if (!etag) {
-      return false
-    }
-
-    var etagStale = true
-    var matches = parseTokenList(noneMatch)
-    for (var i = 0; i < matches.length; i++) {
-      var match = matches[i]
-      if (match === etag || match === 'W/' + etag || 'W/' + match === etag) {
-        etagStale = false
-        break
-      }
-    }
-
-    if (etagStale) {
-      return false
-    }
-  }
-
-  // if-modified-since
-  if (modifiedSince) {
-    var lastModified = resHeaders['last-modified']
-    var modifiedStale = !lastModified || !(parseHttpDate(lastModified) <= parseHttpDate(modifiedSince))
-
-    if (modifiedStale) {
-      return false
-    }
-  }
-
-  return true
-}
-
-/**
- * Parse an HTTP Date into a number.
- *
- * @param {string} date
- * @private
- */
-
-function parseHttpDate (date) {
-  var timestamp = date && Date.parse(date)
-
-  // istanbul ignore next: guard against date.js Date.parse patching
-  return typeof timestamp === 'number'
-    ? timestamp
-    : NaN
-}
-
-/**
- * Parse a HTTP token list.
- *
- * @param {string} str
- * @private
- */
-
-function parseTokenList (str) {
-  var end = 0
-  var list = []
-  var start = 0
-
-  // gather tokens
-  for (var i = 0, len = str.length; i < len; i++) {
-    switch (str.charCodeAt(i)) {
-      case 0x20: /*   */
-        if (start === end) {
-          start = end = i + 1
-        }
-        break
-      case 0x2c: /* , */
-        list.push(str.substring(start, end))
-        start = end = i + 1
-        break
-      default:
-        end = i + 1
-        break
-    }
-  }
-
-  // final token
-  list.push(str.substring(start, end))
-
-  return list
-}
 
 
 /***/ }),
@@ -16188,280 +15325,6 @@ Object.defineProperty(exports, "RssHandler", ({ enumerable: true, get: function 
 
 /***/ }),
 
-/***/ 5193:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-"use strict";
-/*!
- * http-errors
- * Copyright(c) 2014 Jonathan Ong
- * Copyright(c) 2016 Douglas Christopher Wilson
- * MIT Licensed
- */
-
-
-
-/**
- * Module dependencies.
- * @private
- */
-
-var deprecate = __webpack_require__(8883)('http-errors')
-var setPrototypeOf = __webpack_require__(414)
-var statuses = __webpack_require__(7415)
-var inherits = __webpack_require__(4124)
-var toIdentifier = __webpack_require__(6399)
-
-/**
- * Module exports.
- * @public
- */
-
-module.exports = createError
-module.exports.HttpError = createHttpErrorConstructor()
-
-// Populate exports for all constructors
-populateConstructorExports(module.exports, statuses.codes, module.exports.HttpError)
-
-/**
- * Get the code class of a status code.
- * @private
- */
-
-function codeClass (status) {
-  return Number(String(status).charAt(0) + '00')
-}
-
-/**
- * Create a new HTTP Error.
- *
- * @returns {Error}
- * @public
- */
-
-function createError () {
-  // so much arity going on ~_~
-  var err
-  var msg
-  var status = 500
-  var props = {}
-  for (var i = 0; i < arguments.length; i++) {
-    var arg = arguments[i]
-    if (arg instanceof Error) {
-      err = arg
-      status = err.status || err.statusCode || status
-      continue
-    }
-    switch (typeof arg) {
-      case 'string':
-        msg = arg
-        break
-      case 'number':
-        status = arg
-        if (i !== 0) {
-          deprecate('non-first-argument status code; replace with createError(' + arg + ', ...)')
-        }
-        break
-      case 'object':
-        props = arg
-        break
-    }
-  }
-
-  if (typeof status === 'number' && (status < 400 || status >= 600)) {
-    deprecate('non-error status code; use only 4xx or 5xx status codes')
-  }
-
-  if (typeof status !== 'number' ||
-    (!statuses[status] && (status < 400 || status >= 600))) {
-    status = 500
-  }
-
-  // constructor
-  var HttpError = createError[status] || createError[codeClass(status)]
-
-  if (!err) {
-    // create error
-    err = HttpError
-      ? new HttpError(msg)
-      : new Error(msg || statuses[status])
-    Error.captureStackTrace(err, createError)
-  }
-
-  if (!HttpError || !(err instanceof HttpError) || err.status !== status) {
-    // add properties to generic error
-    err.expose = status < 500
-    err.status = err.statusCode = status
-  }
-
-  for (var key in props) {
-    if (key !== 'status' && key !== 'statusCode') {
-      err[key] = props[key]
-    }
-  }
-
-  return err
-}
-
-/**
- * Create HTTP error abstract base class.
- * @private
- */
-
-function createHttpErrorConstructor () {
-  function HttpError () {
-    throw new TypeError('cannot construct abstract class')
-  }
-
-  inherits(HttpError, Error)
-
-  return HttpError
-}
-
-/**
- * Create a constructor for a client error.
- * @private
- */
-
-function createClientErrorConstructor (HttpError, name, code) {
-  var className = name.match(/Error$/) ? name : name + 'Error'
-
-  function ClientError (message) {
-    // create the error object
-    var msg = message != null ? message : statuses[code]
-    var err = new Error(msg)
-
-    // capture a stack trace to the construction point
-    Error.captureStackTrace(err, ClientError)
-
-    // adjust the [[Prototype]]
-    setPrototypeOf(err, ClientError.prototype)
-
-    // redefine the error message
-    Object.defineProperty(err, 'message', {
-      enumerable: true,
-      configurable: true,
-      value: msg,
-      writable: true
-    })
-
-    // redefine the error name
-    Object.defineProperty(err, 'name', {
-      enumerable: false,
-      configurable: true,
-      value: className,
-      writable: true
-    })
-
-    return err
-  }
-
-  inherits(ClientError, HttpError)
-  nameFunc(ClientError, className)
-
-  ClientError.prototype.status = code
-  ClientError.prototype.statusCode = code
-  ClientError.prototype.expose = true
-
-  return ClientError
-}
-
-/**
- * Create a constructor for a server error.
- * @private
- */
-
-function createServerErrorConstructor (HttpError, name, code) {
-  var className = name.match(/Error$/) ? name : name + 'Error'
-
-  function ServerError (message) {
-    // create the error object
-    var msg = message != null ? message : statuses[code]
-    var err = new Error(msg)
-
-    // capture a stack trace to the construction point
-    Error.captureStackTrace(err, ServerError)
-
-    // adjust the [[Prototype]]
-    setPrototypeOf(err, ServerError.prototype)
-
-    // redefine the error message
-    Object.defineProperty(err, 'message', {
-      enumerable: true,
-      configurable: true,
-      value: msg,
-      writable: true
-    })
-
-    // redefine the error name
-    Object.defineProperty(err, 'name', {
-      enumerable: false,
-      configurable: true,
-      value: className,
-      writable: true
-    })
-
-    return err
-  }
-
-  inherits(ServerError, HttpError)
-  nameFunc(ServerError, className)
-
-  ServerError.prototype.status = code
-  ServerError.prototype.statusCode = code
-  ServerError.prototype.expose = false
-
-  return ServerError
-}
-
-/**
- * Set the name of a function, if possible.
- * @private
- */
-
-function nameFunc (func, name) {
-  var desc = Object.getOwnPropertyDescriptor(func, 'name')
-
-  if (desc && desc.configurable) {
-    desc.value = name
-    Object.defineProperty(func, 'name', desc)
-  }
-}
-
-/**
- * Populate the exports object with constructors for every error class.
- * @private
- */
-
-function populateConstructorExports (exports, codes, HttpError) {
-  codes.forEach(function forEachCode (code) {
-    var CodeError
-    var name = toIdentifier(statuses[code])
-
-    switch (codeClass(code)) {
-      case 400:
-        CodeError = createClientErrorConstructor(HttpError, name, code)
-        break
-      case 500:
-        CodeError = createServerErrorConstructor(HttpError, name, code)
-        break
-    }
-
-    if (CodeError) {
-      // export the constructor
-      exports[code] = CodeError
-      exports[name] = CodeError
-    }
-  })
-
-  // backwards-compatibility
-  exports["I'mateapot"] = deprecate.function(exports.ImATeapot,
-    '"I\'mateapot"; use "ImATeapot" instead')
-}
-
-
-/***/ }),
-
 /***/ 5098:
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
@@ -16899,21 +15762,16 @@ module.exports = isStream;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.check = exports.LinkChecker = exports.headers = exports.LinkState = void 0;
 const events_1 = __webpack_require__(8614);
-const gaxios = __webpack_require__(9555);
-const http = __webpack_require__(8605);
-const enableDestroy = __webpack_require__(9247);
-const finalhandler = __webpack_require__(810);
-const serveStatic = __webpack_require__(3146);
+const url_1 = __webpack_require__(8835);
 const fs = __webpack_require__(5747);
 const util = __webpack_require__(1669);
 const path = __webpack_require__(5622);
-const marked = __webpack_require__(4223);
+const gaxios_1 = __webpack_require__(9555);
 const p_queue_1 = __webpack_require__(8983);
 const globby = __webpack_require__(1957);
 const links_1 = __webpack_require__(4024);
-const url_1 = __webpack_require__(8835);
+const server_1 = __webpack_require__(8277);
 const stat = util.promisify(fs.stat);
-const readFile = util.promisify(fs.readFile);
 const glob = util.promisify(globby);
 var LinkState;
 (function (LinkState) {
@@ -16944,8 +15802,12 @@ class LinkChecker extends events_1.EventEmitter {
         const hasHttpPaths = options.path.find(x => x.startsWith('http'));
         if (!hasHttpPaths) {
             const port = options.port || 5000 + Math.round(Math.random() * 1000);
-            server = await this.startWebServer(options.serverRoot, port, options.markdown);
-            enableDestroy(server);
+            server = await server_1.startWebServer({
+                root: options.serverRoot,
+                port,
+                markdown: options.markdown,
+                directoryListing: options.directoryListing,
+            });
             for (let i = 0; i < options.path.length; i++) {
                 if (options.path[i].startsWith('/')) {
                     options.path[i] = options.path[i].slice(1);
@@ -17000,6 +15862,10 @@ class LinkChecker extends events_1.EventEmitter {
         if (!Array.isArray(options.path)) {
             options.path = [options.path];
         }
+        // disable directory listings by default
+        if (options.directoryListing === undefined) {
+            options.directoryListing = false;
+        }
         // Ensure we do not mix http:// and file system paths.  The paths passed in
         // must all be filesystem paths, or HTTP paths.
         let isUrlType = undefined;
@@ -17016,15 +15882,38 @@ class LinkChecker extends events_1.EventEmitter {
         if (options.serverRoot && isUrlType) {
             throw new Error("'serverRoot' cannot be defined when the 'path' points to an HTTP endpoint.");
         }
+        if (options.serverRoot) {
+            options.serverRoot = path.normalize(options.serverRoot);
+        }
         // expand globs into paths
         if (!isUrlType) {
             const paths = [];
-            for (const path of options.path) {
-                const expandedPaths = await glob(path);
+            for (const filePath of options.path) {
+                // The glob path provided is relative to the serverRoot. For example,
+                // if the serverRoot is test/fixtures/nested, and the glob is "*/*.html",
+                // The glob needs to be calculated from the serverRoot directory.
+                const fullPath = options.serverRoot
+                    ? path.join(options.serverRoot, filePath)
+                    : filePath;
+                const expandedPaths = await glob(fullPath);
                 if (expandedPaths.length === 0) {
-                    throw new Error(`The provided glob "${path}" returned 0 results. The current working directory is "${process.cwd()}".`);
+                    throw new Error(`The provided glob "${filePath}" returned 0 results. The current working directory is "${process.cwd()}".`);
                 }
-                paths.push(...expandedPaths);
+                // After resolving the globs, the paths need to be returned to their
+                // original form, without the serverRoot included in the path.
+                for (let p of expandedPaths) {
+                    p = path.normalize(p);
+                    if (options.serverRoot) {
+                        const contractedPath = p
+                            .split(path.sep)
+                            .slice(options.serverRoot.split(path.sep).length)
+                            .join(path.sep);
+                        paths.push(contractedPath);
+                    }
+                    else {
+                        paths.push(p);
+                    }
+                }
             }
             options.path = paths;
         }
@@ -17061,39 +15950,6 @@ class LinkChecker extends events_1.EventEmitter {
             }
         }
         return options;
-    }
-    /**
-     * Spin up a local HTTP server to serve static requests from disk
-     * @param root The local path that should be mounted as a static web server
-     * @param port The port on which to start the local web server
-     * @param markdown If markdown should be automatically compiled and served
-     * @private
-     * @returns Promise that resolves with the instance of the HTTP server
-     */
-    async startWebServer(root, port, markdown) {
-        return new Promise((resolve, reject) => {
-            const serve = serveStatic(root);
-            const server = http
-                .createServer(async (req, res) => {
-                const pathParts = req.url.split('/').filter(x => !!x);
-                if (pathParts.length > 0) {
-                    const ext = path.extname(pathParts[pathParts.length - 1]);
-                    if (markdown && ext.toLowerCase() === '.md') {
-                        const filePath = path.join(path.resolve(root), req.url);
-                        const data = await readFile(filePath, { encoding: 'utf-8' });
-                        const result = marked(data, { gfm: true });
-                        res.writeHead(200, {
-                            'content-type': 'text/html',
-                        });
-                        res.end(result);
-                        return;
-                    }
-                }
-                return serve(req, res, finalhandler(req, res));
-            })
-                .listen(port, () => resolve(server))
-                .on('error', reject);
-        });
     }
     /**
      * Crawl a given url with the provided options.
@@ -17152,8 +16008,9 @@ class LinkChecker extends events_1.EventEmitter {
         let data = '';
         let shouldRecurse = false;
         let res = undefined;
+        const failures = [];
         try {
-            res = await gaxios.request({
+            res = await gaxios_1.request({
                 method: opts.crawl ? 'GET' : 'HEAD',
                 url: opts.url.href,
                 headers: exports.headers,
@@ -17163,7 +16020,7 @@ class LinkChecker extends events_1.EventEmitter {
             });
             // If we got an HTTP 405, the server may not like HEAD. GET instead!
             if (res.status === 405) {
-                res = await gaxios.request({
+                res = await gaxios_1.request({
                     method: 'GET',
                     url: opts.url.href,
                     headers: exports.headers,
@@ -17177,12 +16034,13 @@ class LinkChecker extends events_1.EventEmitter {
             // request failure: invalid domain name, etc.
             // this also occasionally catches too many redirects, but is still valid (e.g. https://www.ebay.com)
             // for this reason, we also try doing a GET below to see if the link is valid
+            failures.push(err);
         }
         try {
             //some sites don't respond to a stream response type correctly, especially with a HEAD. Try a GET with a text response type
             if ((res === undefined || res.status < 200 || res.status >= 300) &&
                 !opts.crawl) {
-                res = await gaxios.request({
+                res = await gaxios_1.request({
                     method: 'GET',
                     url: opts.url.href,
                     responseType: 'text',
@@ -17193,6 +16051,7 @@ class LinkChecker extends events_1.EventEmitter {
             }
         }
         catch (ex) {
+            failures.push(ex);
             // catch the next failure
         }
         if (res !== undefined) {
@@ -17204,11 +16063,15 @@ class LinkChecker extends events_1.EventEmitter {
         if (status >= 200 && status < 300) {
             state = LinkState.OK;
         }
+        else {
+            failures.push(res);
+        }
         const result = {
             url: opts.url.href,
             status,
             state,
             parent: opts.parent,
+            failureDetails: failures,
         };
         opts.results.push(result);
         this.emit('link', result);
@@ -17304,6 +16167,7 @@ const linksAttr = {
     icon: ['command'],
     longdesc: ['frame', 'iframe'],
     manifest: ['html'],
+    content: ['meta'],
     poster: ['video'],
     pluginspage: ['embed'],
     pluginurl: ['embed'],
@@ -17341,6 +16205,16 @@ function getLinks(source, baseUrl) {
             if (element.tagName === 'link' &&
                 relValuesToIgnore.includes(element.attribs['rel'])) {
                 return;
+            }
+            // Only for <meta content=""> tags, only validate the url if
+            // the content actually looks like a url
+            if (element.tagName === 'meta' && element.attribs['content']) {
+                try {
+                    new url_1.URL(element.attribs['content']);
+                }
+                catch (e) {
+                    return;
+                }
             }
             for (const v of values) {
                 if (v) {
@@ -17391,6 +16265,59 @@ function parseLink(link, baseUrl) {
     }
 }
 //# sourceMappingURL=links.js.map
+
+/***/ }),
+
+/***/ 8277:
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.startWebServer = void 0;
+const http = __webpack_require__(8605);
+const path = __webpack_require__(5622);
+const util = __webpack_require__(1669);
+const fs = __webpack_require__(5747);
+const marked = __webpack_require__(4223);
+const serve = __webpack_require__(8765);
+const enableDestroy = __webpack_require__(9247);
+const readFile = util.promisify(fs.readFile);
+/**
+ * Spin up a local HTTP server to serve static requests from disk
+ * @private
+ * @returns Promise that resolves with the instance of the HTTP server
+ */
+async function startWebServer(options) {
+    return new Promise((resolve, reject) => {
+        const server = http
+            .createServer(async (req, res) => {
+            const pathParts = req.url.split('/').filter(x => !!x);
+            if (pathParts.length > 0) {
+                const ext = path.extname(pathParts[pathParts.length - 1]);
+                if (options.markdown && ext.toLowerCase() === '.md') {
+                    const filePath = path.join(path.resolve(options.root), req.url);
+                    const data = await readFile(filePath, { encoding: 'utf-8' });
+                    const result = marked(data, { gfm: true });
+                    res.writeHead(200, {
+                        'content-type': 'text/html',
+                    });
+                    res.end(result);
+                    return;
+                }
+            }
+            return serve(req, res, {
+                public: options.root,
+                directoryListing: options.directoryListing,
+            });
+        })
+            .listen(options.port, () => resolve(server))
+            .on('error', reject);
+        enableDestroy(server);
+    });
+}
+exports.startWebServer = startWebServer;
+//# sourceMappingURL=server.js.map
 
 /***/ }),
 
@@ -20064,117 +18991,216 @@ module.exports = {
 
 /***/ }),
 
-/***/ 5018:
+/***/ 7426:
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
-var path = __webpack_require__(5622);
-var fs = __webpack_require__(5747);
+/*!
+ * mime-db
+ * Copyright(c) 2014 Jonathan Ong
+ * MIT Licensed
+ */
 
-function Mime() {
-  // Map of extension -> mime type
-  this.types = Object.create(null);
+/**
+ * Module exports.
+ */
 
-  // Map of mime type -> extension
-  this.extensions = Object.create(null);
+module.exports = __webpack_require__(3313)
+
+
+/***/ }),
+
+/***/ 3583:
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+/*!
+ * mime-types
+ * Copyright(c) 2014 Jonathan Ong
+ * Copyright(c) 2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var db = __webpack_require__(7426)
+var extname = __webpack_require__(5622).extname
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var EXTRACT_TYPE_REGEXP = /^\s*([^;\s]*)(?:;|\s|$)/
+var TEXT_TYPE_REGEXP = /^text\//i
+
+/**
+ * Module exports.
+ * @public
+ */
+
+exports.charset = charset
+exports.charsets = { lookup: charset }
+exports.contentType = contentType
+exports.extension = extension
+exports.extensions = Object.create(null)
+exports.lookup = lookup
+exports.types = Object.create(null)
+
+// Populate the extensions/types maps
+populateMaps(exports.extensions, exports.types)
+
+/**
+ * Get the default charset for a MIME type.
+ *
+ * @param {string} type
+ * @return {boolean|string}
+ */
+
+function charset (type) {
+  if (!type || typeof type !== 'string') {
+    return false
+  }
+
+  // TODO: use media-typer
+  var match = EXTRACT_TYPE_REGEXP.exec(type)
+  var mime = match && db[match[1].toLowerCase()]
+
+  if (mime && mime.charset) {
+    return mime.charset
+  }
+
+  // default text/* to utf-8
+  if (match && TEXT_TYPE_REGEXP.test(match[1])) {
+    return 'UTF-8'
+  }
+
+  return false
 }
 
 /**
- * Define mimetype -> extension mappings.  Each key is a mime-type that maps
- * to an array of extensions associated with the type.  The first extension is
- * used as the default extension for the type.
+ * Create a full Content-Type header given a MIME type or extension.
  *
- * e.g. mime.define({'audio/ogg', ['oga', 'ogg', 'spx']});
- *
- * @param map (Object) type definitions
+ * @param {string} str
+ * @return {boolean|string}
  */
-Mime.prototype.define = function (map) {
-  for (var type in map) {
-    var exts = map[type];
+
+function contentType (str) {
+  // TODO: should this even be in this module?
+  if (!str || typeof str !== 'string') {
+    return false
+  }
+
+  var mime = str.indexOf('/') === -1
+    ? exports.lookup(str)
+    : str
+
+  if (!mime) {
+    return false
+  }
+
+  // TODO: use content-type or other module
+  if (mime.indexOf('charset') === -1) {
+    var charset = exports.charset(mime)
+    if (charset) mime += '; charset=' + charset.toLowerCase()
+  }
+
+  return mime
+}
+
+/**
+ * Get the default extension for a MIME type.
+ *
+ * @param {string} type
+ * @return {boolean|string}
+ */
+
+function extension (type) {
+  if (!type || typeof type !== 'string') {
+    return false
+  }
+
+  // TODO: use media-typer
+  var match = EXTRACT_TYPE_REGEXP.exec(type)
+
+  // get extensions
+  var exts = match && exports.extensions[match[1].toLowerCase()]
+
+  if (!exts || !exts.length) {
+    return false
+  }
+
+  return exts[0]
+}
+
+/**
+ * Lookup the MIME type for a file path/extension.
+ *
+ * @param {string} path
+ * @return {boolean|string}
+ */
+
+function lookup (path) {
+  if (!path || typeof path !== 'string') {
+    return false
+  }
+
+  // get the extension ("ext" or ".ext" or full path)
+  var extension = extname('x.' + path)
+    .toLowerCase()
+    .substr(1)
+
+  if (!extension) {
+    return false
+  }
+
+  return exports.types[extension] || false
+}
+
+/**
+ * Populate the extensions and types maps.
+ * @private
+ */
+
+function populateMaps (extensions, types) {
+  // source preference (least -> most)
+  var preference = ['nginx', 'apache', undefined, 'iana']
+
+  Object.keys(db).forEach(function forEachMimeType (type) {
+    var mime = db[type]
+    var exts = mime.extensions
+
+    if (!exts || !exts.length) {
+      return
+    }
+
+    // mime -> extensions
+    extensions[type] = exts
+
+    // extension -> mime
     for (var i = 0; i < exts.length; i++) {
-      if (process.env.DEBUG_MIME && this.types[exts[i]]) {
-        console.warn((this._loading || "define()").replace(/.*\//, ''), 'changes "' + exts[i] + '" extension type from ' +
-          this.types[exts[i]] + ' to ' + type);
+      var extension = exts[i]
+
+      if (types[extension]) {
+        var from = preference.indexOf(db[types[extension]].source)
+        var to = preference.indexOf(mime.source)
+
+        if (types[extension] !== 'application/octet-stream' &&
+          (from > to || (from === to && types[extension].substr(0, 12) === 'application/'))) {
+          // skip the remapping
+          continue
+        }
       }
 
-      this.types[exts[i]] = type;
+      // set the extension -> mime
+      types[extension] = type
     }
-
-    // Default extension is the first one we encounter
-    if (!this.extensions[type]) {
-      this.extensions[type] = exts[0];
-    }
-  }
-};
-
-/**
- * Load an Apache2-style ".types" file
- *
- * This may be called multiple times (it's expected).  Where files declare
- * overlapping types/extensions, the last file wins.
- *
- * @param file (String) path of file to load.
- */
-Mime.prototype.load = function(file) {
-  this._loading = file;
-  // Read file and split into lines
-  var map = {},
-      content = fs.readFileSync(file, 'ascii'),
-      lines = content.split(/[\r\n]+/);
-
-  lines.forEach(function(line) {
-    // Clean up whitespace/comments, and split into fields
-    var fields = line.replace(/\s*#.*|^\s*|\s*$/g, '').split(/\s+/);
-    map[fields.shift()] = fields;
-  });
-
-  this.define(map);
-
-  this._loading = null;
-};
-
-/**
- * Lookup a mime type based on extension
- */
-Mime.prototype.lookup = function(path, fallback) {
-  var ext = path.replace(/^.*[\.\/\\]/, '').toLowerCase();
-
-  return this.types[ext] || fallback || this.default_type;
-};
-
-/**
- * Return file extension associated with a mime type
- */
-Mime.prototype.extension = function(mimeType) {
-  var type = mimeType.match(/^\s*([^;\s]*)(?:;|\s|$)/)[1].toLowerCase();
-  return this.extensions[type];
-};
-
-// Default instance
-var mime = new Mime();
-
-// Define built-in types
-mime.define(__webpack_require__(2274));
-
-// Default type
-mime.default_type = mime.lookup('bin');
-
-//
-// Additional API specific to the default instance
-//
-
-mime.Mime = Mime;
-
-/**
- * Lookup a charset based on mime type.
- */
-mime.charsets = {
-  lookup: function(mimeType, fallback) {
-    // Assume text types are utf8
-    return (/^text\/|^application\/(javascript|json)/).test(mimeType) ? 'UTF-8' : fallback;
-  }
-};
-
-module.exports = mime;
+  })
+}
 
 
 /***/ }),
@@ -23083,210 +22109,6 @@ function parse(formula) {
     return [a, b];
 }
 exports.parse = parse;
-
-
-/***/ }),
-
-/***/ 4694:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-"use strict";
-/*!
- * on-finished
- * Copyright(c) 2013 Jonathan Ong
- * Copyright(c) 2014 Douglas Christopher Wilson
- * MIT Licensed
- */
-
-
-
-/**
- * Module exports.
- * @public
- */
-
-module.exports = onFinished
-module.exports.isFinished = isFinished
-
-/**
- * Module dependencies.
- * @private
- */
-
-var first = __webpack_require__(4401)
-
-/**
- * Variables.
- * @private
- */
-
-/* istanbul ignore next */
-var defer = typeof setImmediate === 'function'
-  ? setImmediate
-  : function(fn){ process.nextTick(fn.bind.apply(fn, arguments)) }
-
-/**
- * Invoke callback when the response has finished, useful for
- * cleaning up resources afterwards.
- *
- * @param {object} msg
- * @param {function} listener
- * @return {object}
- * @public
- */
-
-function onFinished(msg, listener) {
-  if (isFinished(msg) !== false) {
-    defer(listener, null, msg)
-    return msg
-  }
-
-  // attach the listener to the message
-  attachListener(msg, listener)
-
-  return msg
-}
-
-/**
- * Determine if message is already finished.
- *
- * @param {object} msg
- * @return {boolean}
- * @public
- */
-
-function isFinished(msg) {
-  var socket = msg.socket
-
-  if (typeof msg.finished === 'boolean') {
-    // OutgoingMessage
-    return Boolean(msg.finished || (socket && !socket.writable))
-  }
-
-  if (typeof msg.complete === 'boolean') {
-    // IncomingMessage
-    return Boolean(msg.upgrade || !socket || !socket.readable || (msg.complete && !msg.readable))
-  }
-
-  // don't know
-  return undefined
-}
-
-/**
- * Attach a finished listener to the message.
- *
- * @param {object} msg
- * @param {function} callback
- * @private
- */
-
-function attachFinishedListener(msg, callback) {
-  var eeMsg
-  var eeSocket
-  var finished = false
-
-  function onFinish(error) {
-    eeMsg.cancel()
-    eeSocket.cancel()
-
-    finished = true
-    callback(error)
-  }
-
-  // finished on first message event
-  eeMsg = eeSocket = first([[msg, 'end', 'finish']], onFinish)
-
-  function onSocket(socket) {
-    // remove listener
-    msg.removeListener('socket', onSocket)
-
-    if (finished) return
-    if (eeMsg !== eeSocket) return
-
-    // finished on first socket event
-    eeSocket = first([[socket, 'error', 'close']], onFinish)
-  }
-
-  if (msg.socket) {
-    // socket already assigned
-    onSocket(msg.socket)
-    return
-  }
-
-  // wait for socket to be assigned
-  msg.on('socket', onSocket)
-
-  if (msg.socket === undefined) {
-    // node.js 0.8 patch
-    patchAssignSocket(msg, onSocket)
-  }
-}
-
-/**
- * Attach the listener to the message.
- *
- * @param {object} msg
- * @return {function}
- * @private
- */
-
-function attachListener(msg, listener) {
-  var attached = msg.__onFinished
-
-  // create a private single listener with queue
-  if (!attached || !attached.queue) {
-    attached = msg.__onFinished = createListener(msg)
-    attachFinishedListener(msg, attached)
-  }
-
-  attached.queue.push(listener)
-}
-
-/**
- * Create listener on message.
- *
- * @param {object} msg
- * @return {function}
- * @private
- */
-
-function createListener(msg) {
-  function listener(err) {
-    if (msg.__onFinished === listener) msg.__onFinished = null
-    if (!listener.queue) return
-
-    var queue = listener.queue
-    listener.queue = null
-
-    for (var i = 0; i < queue.length; i++) {
-      queue[i](err, msg)
-    }
-  }
-
-  listener.queue = []
-
-  return listener
-}
-
-/**
- * Patch ServerResponse.prototype.assignSocket for node.js 0.8.
- *
- * @param {ServerResponse} res
- * @param {function} callback
- * @private
- */
-
-function patchAssignSocket(res, callback) {
-  var assignSocket = res.assignSocket
-
-  if (typeof assignSocket !== 'function') return
-
-  // res.on('socket', callback) is broken in 0.8
-  res.assignSocket = function _assignSocket(socket) {
-    assignSocket.call(this, socket)
-    callback(socket)
-  }
-}
 
 
 /***/ }),
@@ -32265,172 +31087,6 @@ module.exports = Mixin;
 
 /***/ }),
 
-/***/ 9808:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-"use strict";
-/*!
- * parseurl
- * Copyright(c) 2014 Jonathan Ong
- * Copyright(c) 2014-2017 Douglas Christopher Wilson
- * MIT Licensed
- */
-
-
-
-/**
- * Module dependencies.
- * @private
- */
-
-var url = __webpack_require__(8835)
-var parse = url.parse
-var Url = url.Url
-
-/**
- * Module exports.
- * @public
- */
-
-module.exports = parseurl
-module.exports.original = originalurl
-
-/**
- * Parse the `req` url with memoization.
- *
- * @param {ServerRequest} req
- * @return {Object}
- * @public
- */
-
-function parseurl (req) {
-  var url = req.url
-
-  if (url === undefined) {
-    // URL is undefined
-    return undefined
-  }
-
-  var parsed = req._parsedUrl
-
-  if (fresh(url, parsed)) {
-    // Return cached URL parse
-    return parsed
-  }
-
-  // Parse the URL
-  parsed = fastparse(url)
-  parsed._raw = url
-
-  return (req._parsedUrl = parsed)
-};
-
-/**
- * Parse the `req` original url with fallback and memoization.
- *
- * @param {ServerRequest} req
- * @return {Object}
- * @public
- */
-
-function originalurl (req) {
-  var url = req.originalUrl
-
-  if (typeof url !== 'string') {
-    // Fallback
-    return parseurl(req)
-  }
-
-  var parsed = req._parsedOriginalUrl
-
-  if (fresh(url, parsed)) {
-    // Return cached URL parse
-    return parsed
-  }
-
-  // Parse the URL
-  parsed = fastparse(url)
-  parsed._raw = url
-
-  return (req._parsedOriginalUrl = parsed)
-};
-
-/**
- * Parse the `str` url with fast-path short-cut.
- *
- * @param {string} str
- * @return {Object}
- * @private
- */
-
-function fastparse (str) {
-  if (typeof str !== 'string' || str.charCodeAt(0) !== 0x2f /* / */) {
-    return parse(str)
-  }
-
-  var pathname = str
-  var query = null
-  var search = null
-
-  // This takes the regexp from https://github.com/joyent/node/pull/7878
-  // Which is /^(\/[^?#\s]*)(\?[^#\s]*)?$/
-  // And unrolls it into a for loop
-  for (var i = 1; i < str.length; i++) {
-    switch (str.charCodeAt(i)) {
-      case 0x3f: /* ?  */
-        if (search === null) {
-          pathname = str.substring(0, i)
-          query = str.substring(i + 1)
-          search = str.substring(i)
-        }
-        break
-      case 0x09: /* \t */
-      case 0x0a: /* \n */
-      case 0x0c: /* \f */
-      case 0x0d: /* \r */
-      case 0x20: /*    */
-      case 0x23: /* #  */
-      case 0xa0:
-      case 0xfeff:
-        return parse(str)
-    }
-  }
-
-  var url = Url !== undefined
-    ? new Url()
-    : {}
-
-  url.path = str
-  url.href = str
-  url.pathname = pathname
-
-  if (search !== null) {
-    url.query = query
-    url.search = search
-  }
-
-  return url
-}
-
-/**
- * Determine if parsed is still fresh for url.
- *
- * @param {string} url
- * @param {object} parsedUrl
- * @return {boolean}
- * @private
- */
-
-function fresh (url, parsedUrl) {
-  return typeof parsedUrl === 'object' &&
-    parsedUrl !== null &&
-    (Url === undefined || parsedUrl instanceof Url) &&
-    parsedUrl._raw === url
-}
-
-
-/***/ }),
-
 /***/ 8714:
 /***/ ((module) => {
 
@@ -32455,6 +31111,42 @@ function win32(path) {
 module.exports = process.platform === 'win32' ? win32 : posix;
 module.exports.posix = posix;
 module.exports.win32 = win32;
+
+
+/***/ }),
+
+/***/ 6849:
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+"use strict";
+
+
+var path = __webpack_require__(5622);
+
+module.exports = function (thePath, potentialParent) {
+    // For inside-directory checking, we want to allow trailing slashes, so normalize.
+    thePath = stripTrailingSep(thePath);
+    potentialParent = stripTrailingSep(potentialParent);
+
+    // Node treats only Windows as case-insensitive in its path module; we follow those conventions.
+    if (process.platform === "win32") {
+        thePath = thePath.toLowerCase();
+        potentialParent = potentialParent.toLowerCase();
+    }
+
+    return thePath.lastIndexOf(potentialParent, 0) === 0 &&
+		(
+			thePath[potentialParent.length] === path.sep ||
+			thePath[potentialParent.length] === undefined
+		);
+};
+
+function stripTrailingSep(thePath) {
+    if (thePath[thePath.length - 1] === path.sep) {
+        return thePath.slice(0, -1);
+    }
+    return thePath;
+}
 
 
 /***/ }),
@@ -32490,10 +31182,6 @@ module.exports = rangeParser
  */
 
 function rangeParser (size, str, options) {
-  if (typeof str !== 'string') {
-    throw new TypeError('argument str must be a string')
-  }
-
   var index = str.indexOf('=')
 
   if (index === -1) {
@@ -32629,2358 +31317,1197 @@ function sortByRangeStart (a, b) {
 
 /***/ }),
 
-/***/ 5287:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-"use strict";
-/*!
- * send
- * Copyright(c) 2012 TJ Holowaychuk
- * Copyright(c) 2014-2016 Douglas Christopher Wilson
- * MIT Licensed
- */
-
-
+/***/ 6420:
+/***/ ((module) => {
 
 /**
- * Module dependencies.
- * @private
+ * Expose `pathToRegexp`.
  */
-
-var createError = __webpack_require__(5193)
-var debug = __webpack_require__(1619)('send')
-var deprecate = __webpack_require__(8883)('send')
-var destroy = __webpack_require__(3225)
-var encodeUrl = __webpack_require__(6592)
-var escapeHtml = __webpack_require__(4070)
-var etag = __webpack_require__(9972)
-var fresh = __webpack_require__(3136)
-var fs = __webpack_require__(5747)
-var mime = __webpack_require__(5018)
-var ms = __webpack_require__(987)
-var onFinished = __webpack_require__(4694)
-var parseRange = __webpack_require__(6435)
-var path = __webpack_require__(5622)
-var statuses = __webpack_require__(7415)
-var Stream = __webpack_require__(2413)
-var util = __webpack_require__(1669)
+module.exports = pathToRegexp
+module.exports.parse = parse
+module.exports.compile = compile
+module.exports.tokensToFunction = tokensToFunction
+module.exports.tokensToRegExp = tokensToRegExp
 
 /**
- * Path function references.
- * @private
+ * Default configs.
  */
-
-var extname = path.extname
-var join = path.join
-var normalize = path.normalize
-var resolve = path.resolve
-var sep = path.sep
+var DEFAULT_DELIMITER = '/'
+var DEFAULT_DELIMITERS = './'
 
 /**
- * Regular expression for identifying a bytes Range header.
- * @private
- */
-
-var BYTES_RANGE_REGEXP = /^ *bytes=/
-
-/**
- * Maximum value allowed for the max age.
- * @private
- */
-
-var MAX_MAXAGE = 60 * 60 * 24 * 365 * 1000 // 1 year
-
-/**
- * Regular expression to match a path with a directory up component.
- * @private
- */
-
-var UP_PATH_REGEXP = /(?:^|[\\/])\.\.(?:[\\/]|$)/
-
-/**
- * Module exports.
- * @public
- */
-
-module.exports = send
-module.exports.mime = mime
-
-/**
- * Return a `SendStream` for `req` and `path`.
+ * The main path matching regexp utility.
  *
- * @param {object} req
- * @param {string} path
- * @param {object} [options]
- * @return {SendStream}
- * @public
+ * @type {RegExp}
  */
-
-function send (req, path, options) {
-  return new SendStream(req, path, options)
-}
+var PATH_REGEXP = new RegExp([
+  // Match escaped characters that would otherwise appear in future matches.
+  // This allows the user to escape special characters that won't transform.
+  '(\\\\.)',
+  // Match Express-style parameters and un-named parameters with a prefix
+  // and optional suffixes. Matches appear as:
+  //
+  // "/:test(\\d+)?" => ["/", "test", "\d+", undefined, "?"]
+  // "/route(\\d+)"  => [undefined, undefined, undefined, "\d+", undefined]
+  '(?:\\:(\\w+)(?:\\(((?:\\\\.|[^\\\\()])+)\\))?|\\(((?:\\\\.|[^\\\\()])+)\\))([+*?])?'
+].join('|'), 'g')
 
 /**
- * Initialize a `SendStream` with the given `path`.
+ * Parse a string for the raw tokens.
  *
- * @param {Request} req
- * @param {String} path
- * @param {object} [options]
- * @private
+ * @param  {string}  str
+ * @param  {Object=} options
+ * @return {!Array}
  */
+function parse (str, options) {
+  var tokens = []
+  var key = 0
+  var index = 0
+  var path = ''
+  var defaultDelimiter = (options && options.delimiter) || DEFAULT_DELIMITER
+  var delimiters = (options && options.delimiters) || DEFAULT_DELIMITERS
+  var pathEscaped = false
+  var res
 
-function SendStream (req, path, options) {
-  Stream.call(this)
+  while ((res = PATH_REGEXP.exec(str)) !== null) {
+    var m = res[0]
+    var escaped = res[1]
+    var offset = res.index
+    path += str.slice(index, offset)
+    index = offset + m.length
 
-  var opts = options || {}
-
-  this.options = opts
-  this.path = path
-  this.req = req
-
-  this._acceptRanges = opts.acceptRanges !== undefined
-    ? Boolean(opts.acceptRanges)
-    : true
-
-  this._cacheControl = opts.cacheControl !== undefined
-    ? Boolean(opts.cacheControl)
-    : true
-
-  this._etag = opts.etag !== undefined
-    ? Boolean(opts.etag)
-    : true
-
-  this._dotfiles = opts.dotfiles !== undefined
-    ? opts.dotfiles
-    : 'ignore'
-
-  if (this._dotfiles !== 'ignore' && this._dotfiles !== 'allow' && this._dotfiles !== 'deny') {
-    throw new TypeError('dotfiles option must be "allow", "deny", or "ignore"')
-  }
-
-  this._hidden = Boolean(opts.hidden)
-
-  if (opts.hidden !== undefined) {
-    deprecate('hidden: use dotfiles: \'' + (this._hidden ? 'allow' : 'ignore') + '\' instead')
-  }
-
-  // legacy support
-  if (opts.dotfiles === undefined) {
-    this._dotfiles = undefined
-  }
-
-  this._extensions = opts.extensions !== undefined
-    ? normalizeList(opts.extensions, 'extensions option')
-    : []
-
-  this._immutable = opts.immutable !== undefined
-    ? Boolean(opts.immutable)
-    : false
-
-  this._index = opts.index !== undefined
-    ? normalizeList(opts.index, 'index option')
-    : ['index.html']
-
-  this._lastModified = opts.lastModified !== undefined
-    ? Boolean(opts.lastModified)
-    : true
-
-  this._maxage = opts.maxAge || opts.maxage
-  this._maxage = typeof this._maxage === 'string'
-    ? ms(this._maxage)
-    : Number(this._maxage)
-  this._maxage = !isNaN(this._maxage)
-    ? Math.min(Math.max(0, this._maxage), MAX_MAXAGE)
-    : 0
-
-  this._root = opts.root
-    ? resolve(opts.root)
-    : null
-
-  if (!this._root && opts.from) {
-    this.from(opts.from)
-  }
-}
-
-/**
- * Inherits from `Stream`.
- */
-
-util.inherits(SendStream, Stream)
-
-/**
- * Enable or disable etag generation.
- *
- * @param {Boolean} val
- * @return {SendStream}
- * @api public
- */
-
-SendStream.prototype.etag = deprecate.function(function etag (val) {
-  this._etag = Boolean(val)
-  debug('etag %s', this._etag)
-  return this
-}, 'send.etag: pass etag as option')
-
-/**
- * Enable or disable "hidden" (dot) files.
- *
- * @param {Boolean} path
- * @return {SendStream}
- * @api public
- */
-
-SendStream.prototype.hidden = deprecate.function(function hidden (val) {
-  this._hidden = Boolean(val)
-  this._dotfiles = undefined
-  debug('hidden %s', this._hidden)
-  return this
-}, 'send.hidden: use dotfiles option')
-
-/**
- * Set index `paths`, set to a falsy
- * value to disable index support.
- *
- * @param {String|Boolean|Array} paths
- * @return {SendStream}
- * @api public
- */
-
-SendStream.prototype.index = deprecate.function(function index (paths) {
-  var index = !paths ? [] : normalizeList(paths, 'paths argument')
-  debug('index %o', paths)
-  this._index = index
-  return this
-}, 'send.index: pass index as option')
-
-/**
- * Set root `path`.
- *
- * @param {String} path
- * @return {SendStream}
- * @api public
- */
-
-SendStream.prototype.root = function root (path) {
-  this._root = resolve(String(path))
-  debug('root %s', this._root)
-  return this
-}
-
-SendStream.prototype.from = deprecate.function(SendStream.prototype.root,
-  'send.from: pass root as option')
-
-SendStream.prototype.root = deprecate.function(SendStream.prototype.root,
-  'send.root: pass root as option')
-
-/**
- * Set max-age to `maxAge`.
- *
- * @param {Number} maxAge
- * @return {SendStream}
- * @api public
- */
-
-SendStream.prototype.maxage = deprecate.function(function maxage (maxAge) {
-  this._maxage = typeof maxAge === 'string'
-    ? ms(maxAge)
-    : Number(maxAge)
-  this._maxage = !isNaN(this._maxage)
-    ? Math.min(Math.max(0, this._maxage), MAX_MAXAGE)
-    : 0
-  debug('max-age %d', this._maxage)
-  return this
-}, 'send.maxage: pass maxAge as option')
-
-/**
- * Emit error with `status`.
- *
- * @param {number} status
- * @param {Error} [err]
- * @private
- */
-
-SendStream.prototype.error = function error (status, err) {
-  // emit if listeners instead of responding
-  if (hasListeners(this, 'error')) {
-    return this.emit('error', createError(status, err, {
-      expose: false
-    }))
-  }
-
-  var res = this.res
-  var msg = statuses[status] || String(status)
-  var doc = createHtmlDocument('Error', escapeHtml(msg))
-
-  // clear existing headers
-  clearHeaders(res)
-
-  // add error headers
-  if (err && err.headers) {
-    setHeaders(res, err.headers)
-  }
-
-  // send basic response
-  res.statusCode = status
-  res.setHeader('Content-Type', 'text/html; charset=UTF-8')
-  res.setHeader('Content-Length', Buffer.byteLength(doc))
-  res.setHeader('Content-Security-Policy', "default-src 'none'")
-  res.setHeader('X-Content-Type-Options', 'nosniff')
-  res.end(doc)
-}
-
-/**
- * Check if the pathname ends with "/".
- *
- * @return {boolean}
- * @private
- */
-
-SendStream.prototype.hasTrailingSlash = function hasTrailingSlash () {
-  return this.path[this.path.length - 1] === '/'
-}
-
-/**
- * Check if this is a conditional GET request.
- *
- * @return {Boolean}
- * @api private
- */
-
-SendStream.prototype.isConditionalGET = function isConditionalGET () {
-  return this.req.headers['if-match'] ||
-    this.req.headers['if-unmodified-since'] ||
-    this.req.headers['if-none-match'] ||
-    this.req.headers['if-modified-since']
-}
-
-/**
- * Check if the request preconditions failed.
- *
- * @return {boolean}
- * @private
- */
-
-SendStream.prototype.isPreconditionFailure = function isPreconditionFailure () {
-  var req = this.req
-  var res = this.res
-
-  // if-match
-  var match = req.headers['if-match']
-  if (match) {
-    var etag = res.getHeader('ETag')
-    return !etag || (match !== '*' && parseTokenList(match).every(function (match) {
-      return match !== etag && match !== 'W/' + etag && 'W/' + match !== etag
-    }))
-  }
-
-  // if-unmodified-since
-  var unmodifiedSince = parseHttpDate(req.headers['if-unmodified-since'])
-  if (!isNaN(unmodifiedSince)) {
-    var lastModified = parseHttpDate(res.getHeader('Last-Modified'))
-    return isNaN(lastModified) || lastModified > unmodifiedSince
-  }
-
-  return false
-}
-
-/**
- * Strip content-* header fields.
- *
- * @private
- */
-
-SendStream.prototype.removeContentHeaderFields = function removeContentHeaderFields () {
-  var res = this.res
-  var headers = getHeaderNames(res)
-
-  for (var i = 0; i < headers.length; i++) {
-    var header = headers[i]
-    if (header.substr(0, 8) === 'content-' && header !== 'content-location') {
-      res.removeHeader(header)
+    // Ignore already escaped sequences.
+    if (escaped) {
+      path += escaped[1]
+      pathEscaped = true
+      continue
     }
-  }
-}
 
-/**
- * Respond with 304 not modified.
- *
- * @api private
- */
+    var prev = ''
+    var next = str[index]
+    var name = res[2]
+    var capture = res[3]
+    var group = res[4]
+    var modifier = res[5]
 
-SendStream.prototype.notModified = function notModified () {
-  var res = this.res
-  debug('not modified')
-  this.removeContentHeaderFields()
-  res.statusCode = 304
-  res.end()
-}
+    if (!pathEscaped && path.length) {
+      var k = path.length - 1
 
-/**
- * Raise error that headers already sent.
- *
- * @api private
- */
+      if (delimiters.indexOf(path[k]) > -1) {
+        prev = path[k]
+        path = path.slice(0, k)
+      }
+    }
 
-SendStream.prototype.headersAlreadySent = function headersAlreadySent () {
-  var err = new Error('Can\'t set headers after they are sent.')
-  debug('headers already sent')
-  this.error(500, err)
-}
-
-/**
- * Check if the request is cacheable, aka
- * responded with 2xx or 304 (see RFC 2616 section 14.2{5,6}).
- *
- * @return {Boolean}
- * @api private
- */
-
-SendStream.prototype.isCachable = function isCachable () {
-  var statusCode = this.res.statusCode
-  return (statusCode >= 200 && statusCode < 300) ||
-    statusCode === 304
-}
-
-/**
- * Handle stat() error.
- *
- * @param {Error} error
- * @private
- */
-
-SendStream.prototype.onStatError = function onStatError (error) {
-  switch (error.code) {
-    case 'ENAMETOOLONG':
-    case 'ENOENT':
-    case 'ENOTDIR':
-      this.error(404, error)
-      break
-    default:
-      this.error(500, error)
-      break
-  }
-}
-
-/**
- * Check if the cache is fresh.
- *
- * @return {Boolean}
- * @api private
- */
-
-SendStream.prototype.isFresh = function isFresh () {
-  return fresh(this.req.headers, {
-    'etag': this.res.getHeader('ETag'),
-    'last-modified': this.res.getHeader('Last-Modified')
-  })
-}
-
-/**
- * Check if the range is fresh.
- *
- * @return {Boolean}
- * @api private
- */
-
-SendStream.prototype.isRangeFresh = function isRangeFresh () {
-  var ifRange = this.req.headers['if-range']
-
-  if (!ifRange) {
-    return true
-  }
-
-  // if-range as etag
-  if (ifRange.indexOf('"') !== -1) {
-    var etag = this.res.getHeader('ETag')
-    return Boolean(etag && ifRange.indexOf(etag) !== -1)
-  }
-
-  // if-range as modified date
-  var lastModified = this.res.getHeader('Last-Modified')
-  return parseHttpDate(lastModified) <= parseHttpDate(ifRange)
-}
-
-/**
- * Redirect to path.
- *
- * @param {string} path
- * @private
- */
-
-SendStream.prototype.redirect = function redirect (path) {
-  var res = this.res
-
-  if (hasListeners(this, 'directory')) {
-    this.emit('directory', res, path)
-    return
-  }
-
-  if (this.hasTrailingSlash()) {
-    this.error(403)
-    return
-  }
-
-  var loc = encodeUrl(collapseLeadingSlashes(this.path + '/'))
-  var doc = createHtmlDocument('Redirecting', 'Redirecting to <a href="' + escapeHtml(loc) + '">' +
-    escapeHtml(loc) + '</a>')
-
-  // redirect
-  res.statusCode = 301
-  res.setHeader('Content-Type', 'text/html; charset=UTF-8')
-  res.setHeader('Content-Length', Buffer.byteLength(doc))
-  res.setHeader('Content-Security-Policy', "default-src 'none'")
-  res.setHeader('X-Content-Type-Options', 'nosniff')
-  res.setHeader('Location', loc)
-  res.end(doc)
-}
-
-/**
- * Pipe to `res.
- *
- * @param {Stream} res
- * @return {Stream} res
- * @api public
- */
-
-SendStream.prototype.pipe = function pipe (res) {
-  // root path
-  var root = this._root
-
-  // references
-  this.res = res
-
-  // decode the path
-  var path = decode(this.path)
-  if (path === -1) {
-    this.error(400)
-    return res
-  }
-
-  // null byte(s)
-  if (~path.indexOf('\0')) {
-    this.error(400)
-    return res
-  }
-
-  var parts
-  if (root !== null) {
-    // normalize
+    // Push the current path onto the tokens.
     if (path) {
-      path = normalize('.' + sep + path)
-    }
-
-    // malicious path
-    if (UP_PATH_REGEXP.test(path)) {
-      debug('malicious path "%s"', path)
-      this.error(403)
-      return res
-    }
-
-    // explode path parts
-    parts = path.split(sep)
-
-    // join / normalize from optional root dir
-    path = normalize(join(root, path))
-  } else {
-    // ".." is malicious without "root"
-    if (UP_PATH_REGEXP.test(path)) {
-      debug('malicious path "%s"', path)
-      this.error(403)
-      return res
-    }
-
-    // explode path parts
-    parts = normalize(path).split(sep)
-
-    // resolve the path
-    path = resolve(path)
-  }
-
-  // dotfile handling
-  if (containsDotFile(parts)) {
-    var access = this._dotfiles
-
-    // legacy support
-    if (access === undefined) {
-      access = parts[parts.length - 1][0] === '.'
-        ? (this._hidden ? 'allow' : 'ignore')
-        : 'allow'
-    }
-
-    debug('%s dotfile "%s"', access, path)
-    switch (access) {
-      case 'allow':
-        break
-      case 'deny':
-        this.error(403)
-        return res
-      case 'ignore':
-      default:
-        this.error(404)
-        return res
-    }
-  }
-
-  // index file support
-  if (this._index.length && this.hasTrailingSlash()) {
-    this.sendIndex(path)
-    return res
-  }
-
-  this.sendFile(path)
-  return res
-}
-
-/**
- * Transfer `path`.
- *
- * @param {String} path
- * @api public
- */
-
-SendStream.prototype.send = function send (path, stat) {
-  var len = stat.size
-  var options = this.options
-  var opts = {}
-  var res = this.res
-  var req = this.req
-  var ranges = req.headers.range
-  var offset = options.start || 0
-
-  if (headersSent(res)) {
-    // impossible to send now
-    this.headersAlreadySent()
-    return
-  }
-
-  debug('pipe "%s"', path)
-
-  // set header fields
-  this.setHeader(path, stat)
-
-  // set content-type
-  this.type(path)
-
-  // conditional GET support
-  if (this.isConditionalGET()) {
-    if (this.isPreconditionFailure()) {
-      this.error(412)
-      return
-    }
-
-    if (this.isCachable() && this.isFresh()) {
-      this.notModified()
-      return
-    }
-  }
-
-  // adjust len to start/end options
-  len = Math.max(0, len - offset)
-  if (options.end !== undefined) {
-    var bytes = options.end - offset + 1
-    if (len > bytes) len = bytes
-  }
-
-  // Range support
-  if (this._acceptRanges && BYTES_RANGE_REGEXP.test(ranges)) {
-    // parse
-    ranges = parseRange(len, ranges, {
-      combine: true
-    })
-
-    // If-Range support
-    if (!this.isRangeFresh()) {
-      debug('range stale')
-      ranges = -2
-    }
-
-    // unsatisfiable
-    if (ranges === -1) {
-      debug('range unsatisfiable')
-
-      // Content-Range
-      res.setHeader('Content-Range', contentRange('bytes', len))
-
-      // 416 Requested Range Not Satisfiable
-      return this.error(416, {
-        headers: { 'Content-Range': res.getHeader('Content-Range') }
-      })
-    }
-
-    // valid (syntactically invalid/multiple ranges are treated as a regular response)
-    if (ranges !== -2 && ranges.length === 1) {
-      debug('range %j', ranges)
-
-      // Content-Range
-      res.statusCode = 206
-      res.setHeader('Content-Range', contentRange('bytes', len, ranges[0]))
-
-      // adjust for requested range
-      offset += ranges[0].start
-      len = ranges[0].end - ranges[0].start + 1
-    }
-  }
-
-  // clone options
-  for (var prop in options) {
-    opts[prop] = options[prop]
-  }
-
-  // set read options
-  opts.start = offset
-  opts.end = Math.max(offset, offset + len - 1)
-
-  // content-length
-  res.setHeader('Content-Length', len)
-
-  // HEAD support
-  if (req.method === 'HEAD') {
-    res.end()
-    return
-  }
-
-  this.stream(path, opts)
-}
-
-/**
- * Transfer file for `path`.
- *
- * @param {String} path
- * @api private
- */
-SendStream.prototype.sendFile = function sendFile (path) {
-  var i = 0
-  var self = this
-
-  debug('stat "%s"', path)
-  fs.stat(path, function onstat (err, stat) {
-    if (err && err.code === 'ENOENT' && !extname(path) && path[path.length - 1] !== sep) {
-      // not found, check extensions
-      return next(err)
-    }
-    if (err) return self.onStatError(err)
-    if (stat.isDirectory()) return self.redirect(path)
-    self.emit('file', path, stat)
-    self.send(path, stat)
-  })
-
-  function next (err) {
-    if (self._extensions.length <= i) {
-      return err
-        ? self.onStatError(err)
-        : self.error(404)
-    }
-
-    var p = path + '.' + self._extensions[i++]
-
-    debug('stat "%s"', p)
-    fs.stat(p, function (err, stat) {
-      if (err) return next(err)
-      if (stat.isDirectory()) return next()
-      self.emit('file', p, stat)
-      self.send(p, stat)
-    })
-  }
-}
-
-/**
- * Transfer index for `path`.
- *
- * @param {String} path
- * @api private
- */
-SendStream.prototype.sendIndex = function sendIndex (path) {
-  var i = -1
-  var self = this
-
-  function next (err) {
-    if (++i >= self._index.length) {
-      if (err) return self.onStatError(err)
-      return self.error(404)
-    }
-
-    var p = join(path, self._index[i])
-
-    debug('stat "%s"', p)
-    fs.stat(p, function (err, stat) {
-      if (err) return next(err)
-      if (stat.isDirectory()) return next()
-      self.emit('file', p, stat)
-      self.send(p, stat)
-    })
-  }
-
-  next()
-}
-
-/**
- * Stream `path` to the response.
- *
- * @param {String} path
- * @param {Object} options
- * @api private
- */
-
-SendStream.prototype.stream = function stream (path, options) {
-  // TODO: this is all lame, refactor meeee
-  var finished = false
-  var self = this
-  var res = this.res
-
-  // pipe
-  var stream = fs.createReadStream(path, options)
-  this.emit('stream', stream)
-  stream.pipe(res)
-
-  // response finished, done with the fd
-  onFinished(res, function onfinished () {
-    finished = true
-    destroy(stream)
-  })
-
-  // error handling code-smell
-  stream.on('error', function onerror (err) {
-    // request already finished
-    if (finished) return
-
-    // clean up stream
-    finished = true
-    destroy(stream)
-
-    // error
-    self.onStatError(err)
-  })
-
-  // end
-  stream.on('end', function onend () {
-    self.emit('end')
-  })
-}
-
-/**
- * Set content-type based on `path`
- * if it hasn't been explicitly set.
- *
- * @param {String} path
- * @api private
- */
-
-SendStream.prototype.type = function type (path) {
-  var res = this.res
-
-  if (res.getHeader('Content-Type')) return
-
-  var type = mime.lookup(path)
-
-  if (!type) {
-    debug('no content-type')
-    return
-  }
-
-  var charset = mime.charsets.lookup(type)
-
-  debug('content-type %s', type)
-  res.setHeader('Content-Type', type + (charset ? '; charset=' + charset : ''))
-}
-
-/**
- * Set response header fields, most
- * fields may be pre-defined.
- *
- * @param {String} path
- * @param {Object} stat
- * @api private
- */
-
-SendStream.prototype.setHeader = function setHeader (path, stat) {
-  var res = this.res
-
-  this.emit('headers', res, path, stat)
-
-  if (this._acceptRanges && !res.getHeader('Accept-Ranges')) {
-    debug('accept ranges')
-    res.setHeader('Accept-Ranges', 'bytes')
-  }
-
-  if (this._cacheControl && !res.getHeader('Cache-Control')) {
-    var cacheControl = 'public, max-age=' + Math.floor(this._maxage / 1000)
-
-    if (this._immutable) {
-      cacheControl += ', immutable'
-    }
-
-    debug('cache-control %s', cacheControl)
-    res.setHeader('Cache-Control', cacheControl)
-  }
-
-  if (this._lastModified && !res.getHeader('Last-Modified')) {
-    var modified = stat.mtime.toUTCString()
-    debug('modified %s', modified)
-    res.setHeader('Last-Modified', modified)
-  }
-
-  if (this._etag && !res.getHeader('ETag')) {
-    var val = etag(stat)
-    debug('etag %s', val)
-    res.setHeader('ETag', val)
-  }
-}
-
-/**
- * Clear all headers from a response.
- *
- * @param {object} res
- * @private
- */
-
-function clearHeaders (res) {
-  var headers = getHeaderNames(res)
-
-  for (var i = 0; i < headers.length; i++) {
-    res.removeHeader(headers[i])
-  }
-}
-
-/**
- * Collapse all leading slashes into a single slash
- *
- * @param {string} str
- * @private
- */
-function collapseLeadingSlashes (str) {
-  for (var i = 0; i < str.length; i++) {
-    if (str[i] !== '/') {
-      break
-    }
-  }
-
-  return i > 1
-    ? '/' + str.substr(i)
-    : str
-}
-
-/**
- * Determine if path parts contain a dotfile.
- *
- * @api private
- */
-
-function containsDotFile (parts) {
-  for (var i = 0; i < parts.length; i++) {
-    var part = parts[i]
-    if (part.length > 1 && part[0] === '.') {
-      return true
-    }
-  }
-
-  return false
-}
-
-/**
- * Create a Content-Range header.
- *
- * @param {string} type
- * @param {number} size
- * @param {array} [range]
- */
-
-function contentRange (type, size, range) {
-  return type + ' ' + (range ? range.start + '-' + range.end : '*') + '/' + size
-}
-
-/**
- * Create a minimal HTML document.
- *
- * @param {string} title
- * @param {string} body
- * @private
- */
-
-function createHtmlDocument (title, body) {
-  return '<!DOCTYPE html>\n' +
-    '<html lang="en">\n' +
-    '<head>\n' +
-    '<meta charset="utf-8">\n' +
-    '<title>' + title + '</title>\n' +
-    '</head>\n' +
-    '<body>\n' +
-    '<pre>' + body + '</pre>\n' +
-    '</body>\n' +
-    '</html>\n'
-}
-
-/**
- * decodeURIComponent.
- *
- * Allows V8 to only deoptimize this fn instead of all
- * of send().
- *
- * @param {String} path
- * @api private
- */
-
-function decode (path) {
-  try {
-    return decodeURIComponent(path)
-  } catch (err) {
-    return -1
-  }
-}
-
-/**
- * Get the header names on a respnse.
- *
- * @param {object} res
- * @returns {array[string]}
- * @private
- */
-
-function getHeaderNames (res) {
-  return typeof res.getHeaderNames !== 'function'
-    ? Object.keys(res._headers || {})
-    : res.getHeaderNames()
-}
-
-/**
- * Determine if emitter has listeners of a given type.
- *
- * The way to do this check is done three different ways in Node.js >= 0.8
- * so this consolidates them into a minimal set using instance methods.
- *
- * @param {EventEmitter} emitter
- * @param {string} type
- * @returns {boolean}
- * @private
- */
-
-function hasListeners (emitter, type) {
-  var count = typeof emitter.listenerCount !== 'function'
-    ? emitter.listeners(type).length
-    : emitter.listenerCount(type)
-
-  return count > 0
-}
-
-/**
- * Determine if the response headers have been sent.
- *
- * @param {object} res
- * @returns {boolean}
- * @private
- */
-
-function headersSent (res) {
-  return typeof res.headersSent !== 'boolean'
-    ? Boolean(res._header)
-    : res.headersSent
-}
-
-/**
- * Normalize the index option into an array.
- *
- * @param {boolean|string|array} val
- * @param {string} name
- * @private
- */
-
-function normalizeList (val, name) {
-  var list = [].concat(val || [])
-
-  for (var i = 0; i < list.length; i++) {
-    if (typeof list[i] !== 'string') {
-      throw new TypeError(name + ' must be array of strings or false')
-    }
-  }
-
-  return list
-}
-
-/**
- * Parse an HTTP Date into a number.
- *
- * @param {string} date
- * @private
- */
-
-function parseHttpDate (date) {
-  var timestamp = date && Date.parse(date)
-
-  return typeof timestamp === 'number'
-    ? timestamp
-    : NaN
-}
-
-/**
- * Parse a HTTP token list.
- *
- * @param {string} str
- * @private
- */
-
-function parseTokenList (str) {
-  var end = 0
-  var list = []
-  var start = 0
-
-  // gather tokens
-  for (var i = 0, len = str.length; i < len; i++) {
-    switch (str.charCodeAt(i)) {
-      case 0x20: /*   */
-        if (start === end) {
-          start = end = i + 1
-        }
-        break
-      case 0x2c: /* , */
-        list.push(str.substring(start, end))
-        start = end = i + 1
-        break
-      default:
-        end = i + 1
-        break
-    }
-  }
-
-  // final token
-  list.push(str.substring(start, end))
-
-  return list
-}
-
-/**
- * Set an object of headers on a response.
- *
- * @param {object} res
- * @param {object} headers
- * @private
- */
-
-function setHeaders (res, headers) {
-  var keys = Object.keys(headers)
-
-  for (var i = 0; i < keys.length; i++) {
-    var key = keys[i]
-    res.setHeader(key, headers[key])
-  }
-}
-
-
-/***/ }),
-
-/***/ 3961:
-/***/ ((module) => {
-
-/**
- * Helpers.
- */
-
-var s = 1000;
-var m = s * 60;
-var h = m * 60;
-var d = h * 24;
-var y = d * 365.25;
-
-/**
- * Parse or format the given `val`.
- *
- * Options:
- *
- *  - `long` verbose formatting [false]
- *
- * @param {String|Number} val
- * @param {Object} [options]
- * @throws {Error} throw an error if val is not a non-empty string or a number
- * @return {String|Number}
- * @api public
- */
-
-module.exports = function(val, options) {
-  options = options || {};
-  var type = typeof val;
-  if (type === 'string' && val.length > 0) {
-    return parse(val);
-  } else if (type === 'number' && isNaN(val) === false) {
-    return options.long ? fmtLong(val) : fmtShort(val);
-  }
-  throw new Error(
-    'val is not a non-empty string or a valid number. val=' +
-      JSON.stringify(val)
-  );
-};
-
-/**
- * Parse the given `str` and return milliseconds.
- *
- * @param {String} str
- * @return {Number}
- * @api private
- */
-
-function parse(str) {
-  str = String(str);
-  if (str.length > 100) {
-    return;
-  }
-  var match = /^((?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|years?|yrs?|y)?$/i.exec(
-    str
-  );
-  if (!match) {
-    return;
-  }
-  var n = parseFloat(match[1]);
-  var type = (match[2] || 'ms').toLowerCase();
-  switch (type) {
-    case 'years':
-    case 'year':
-    case 'yrs':
-    case 'yr':
-    case 'y':
-      return n * y;
-    case 'days':
-    case 'day':
-    case 'd':
-      return n * d;
-    case 'hours':
-    case 'hour':
-    case 'hrs':
-    case 'hr':
-    case 'h':
-      return n * h;
-    case 'minutes':
-    case 'minute':
-    case 'mins':
-    case 'min':
-    case 'm':
-      return n * m;
-    case 'seconds':
-    case 'second':
-    case 'secs':
-    case 'sec':
-    case 's':
-      return n * s;
-    case 'milliseconds':
-    case 'millisecond':
-    case 'msecs':
-    case 'msec':
-    case 'ms':
-      return n;
-    default:
-      return undefined;
-  }
-}
-
-/**
- * Short format for `ms`.
- *
- * @param {Number} ms
- * @return {String}
- * @api private
- */
-
-function fmtShort(ms) {
-  if (ms >= d) {
-    return Math.round(ms / d) + 'd';
-  }
-  if (ms >= h) {
-    return Math.round(ms / h) + 'h';
-  }
-  if (ms >= m) {
-    return Math.round(ms / m) + 'm';
-  }
-  if (ms >= s) {
-    return Math.round(ms / s) + 's';
-  }
-  return ms + 'ms';
-}
-
-/**
- * Long format for `ms`.
- *
- * @param {Number} ms
- * @return {String}
- * @api private
- */
-
-function fmtLong(ms) {
-  return plural(ms, d, 'day') ||
-    plural(ms, h, 'hour') ||
-    plural(ms, m, 'minute') ||
-    plural(ms, s, 'second') ||
-    ms + ' ms';
-}
-
-/**
- * Pluralization helper.
- */
-
-function plural(ms, n, name) {
-  if (ms < n) {
-    return;
-  }
-  if (ms < n * 1.5) {
-    return Math.floor(ms / n) + ' ' + name;
-  }
-  return Math.ceil(ms / n) + ' ' + name + 's';
-}
-
-
-/***/ }),
-
-/***/ 4877:
-/***/ ((module, exports, __webpack_require__) => {
-
-/**
- * This is the web browser implementation of `debug()`.
- *
- * Expose `debug()` as the module.
- */
-
-exports = module.exports = __webpack_require__(5710);
-exports.log = log;
-exports.formatArgs = formatArgs;
-exports.save = save;
-exports.load = load;
-exports.useColors = useColors;
-exports.storage = 'undefined' != typeof chrome
-               && 'undefined' != typeof chrome.storage
-                  ? chrome.storage.local
-                  : localstorage();
-
-/**
- * Colors.
- */
-
-exports.colors = [
-  'lightseagreen',
-  'forestgreen',
-  'goldenrod',
-  'dodgerblue',
-  'darkorchid',
-  'crimson'
-];
-
-/**
- * Currently only WebKit-based Web Inspectors, Firefox >= v31,
- * and the Firebug extension (any Firefox version) are known
- * to support "%c" CSS customizations.
- *
- * TODO: add a `localStorage` variable to explicitly enable/disable colors
- */
-
-function useColors() {
-  // NB: In an Electron preload script, document will be defined but not fully
-  // initialized. Since we know we're in Chrome, we'll just detect this case
-  // explicitly
-  if (typeof window !== 'undefined' && window.process && window.process.type === 'renderer') {
-    return true;
-  }
-
-  // is webkit? http://stackoverflow.com/a/16459606/376773
-  // document is undefined in react-native: https://github.com/facebook/react-native/pull/1632
-  return (typeof document !== 'undefined' && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance) ||
-    // is firebug? http://stackoverflow.com/a/398120/376773
-    (typeof window !== 'undefined' && window.console && (window.console.firebug || (window.console.exception && window.console.table))) ||
-    // is firefox >= v31?
-    // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
-    (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/) && parseInt(RegExp.$1, 10) >= 31) ||
-    // double check webkit in userAgent just in case we are in a worker
-    (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/));
-}
-
-/**
- * Map %j to `JSON.stringify()`, since no Web Inspectors do that by default.
- */
-
-exports.formatters.j = function(v) {
-  try {
-    return JSON.stringify(v);
-  } catch (err) {
-    return '[UnexpectedJSONParseError]: ' + err.message;
-  }
-};
-
-
-/**
- * Colorize log arguments if enabled.
- *
- * @api public
- */
-
-function formatArgs(args) {
-  var useColors = this.useColors;
-
-  args[0] = (useColors ? '%c' : '')
-    + this.namespace
-    + (useColors ? ' %c' : ' ')
-    + args[0]
-    + (useColors ? '%c ' : ' ')
-    + '+' + exports.humanize(this.diff);
-
-  if (!useColors) return;
-
-  var c = 'color: ' + this.color;
-  args.splice(1, 0, c, 'color: inherit')
-
-  // the final "%c" is somewhat tricky, because there could be other
-  // arguments passed either before or after the %c, so we need to
-  // figure out the correct index to insert the CSS into
-  var index = 0;
-  var lastC = 0;
-  args[0].replace(/%[a-zA-Z%]/g, function(match) {
-    if ('%%' === match) return;
-    index++;
-    if ('%c' === match) {
-      // we only are interested in the *last* %c
-      // (the user may have provided their own)
-      lastC = index;
-    }
-  });
-
-  args.splice(lastC, 0, c);
-}
-
-/**
- * Invokes `console.log()` when available.
- * No-op when `console.log` is not a "function".
- *
- * @api public
- */
-
-function log() {
-  // this hackery is required for IE8/9, where
-  // the `console.log` function doesn't have 'apply'
-  return 'object' === typeof console
-    && console.log
-    && Function.prototype.apply.call(console.log, console, arguments);
-}
-
-/**
- * Save `namespaces`.
- *
- * @param {String} namespaces
- * @api private
- */
-
-function save(namespaces) {
-  try {
-    if (null == namespaces) {
-      exports.storage.removeItem('debug');
-    } else {
-      exports.storage.debug = namespaces;
-    }
-  } catch(e) {}
-}
-
-/**
- * Load `namespaces`.
- *
- * @return {String} returns the previously persisted debug modes
- * @api private
- */
-
-function load() {
-  var r;
-  try {
-    r = exports.storage.debug;
-  } catch(e) {}
-
-  // If debug isn't set in LS, and we're in Electron, try to load $DEBUG
-  if (!r && typeof process !== 'undefined' && 'env' in process) {
-    r = process.env.DEBUG;
-  }
-
-  return r;
-}
-
-/**
- * Enable namespaces listed in `localStorage.debug` initially.
- */
-
-exports.enable(load());
-
-/**
- * Localstorage attempts to return the localstorage.
- *
- * This is necessary because safari throws
- * when a user disables cookies/localstorage
- * and you attempt to access it.
- *
- * @return {LocalStorage}
- * @api private
- */
-
-function localstorage() {
-  try {
-    return window.localStorage;
-  } catch (e) {}
-}
-
-
-/***/ }),
-
-/***/ 5710:
-/***/ ((module, exports, __webpack_require__) => {
-
-
-/**
- * This is the common logic for both the Node.js and web browser
- * implementations of `debug()`.
- *
- * Expose `debug()` as the module.
- */
-
-exports = module.exports = createDebug.debug = createDebug['default'] = createDebug;
-exports.coerce = coerce;
-exports.disable = disable;
-exports.enable = enable;
-exports.enabled = enabled;
-exports.humanize = __webpack_require__(3961);
-
-/**
- * The currently active debug mode names, and names to skip.
- */
-
-exports.names = [];
-exports.skips = [];
-
-/**
- * Map of special "%n" handling functions, for the debug "format" argument.
- *
- * Valid key names are a single, lower or upper-case letter, i.e. "n" and "N".
- */
-
-exports.formatters = {};
-
-/**
- * Previous log timestamp.
- */
-
-var prevTime;
-
-/**
- * Select a color.
- * @param {String} namespace
- * @return {Number}
- * @api private
- */
-
-function selectColor(namespace) {
-  var hash = 0, i;
-
-  for (i in namespace) {
-    hash  = ((hash << 5) - hash) + namespace.charCodeAt(i);
-    hash |= 0; // Convert to 32bit integer
-  }
-
-  return exports.colors[Math.abs(hash) % exports.colors.length];
-}
-
-/**
- * Create a debugger with the given `namespace`.
- *
- * @param {String} namespace
- * @return {Function}
- * @api public
- */
-
-function createDebug(namespace) {
-
-  function debug() {
-    // disabled?
-    if (!debug.enabled) return;
-
-    var self = debug;
-
-    // set `diff` timestamp
-    var curr = +new Date();
-    var ms = curr - (prevTime || curr);
-    self.diff = ms;
-    self.prev = prevTime;
-    self.curr = curr;
-    prevTime = curr;
-
-    // turn the `arguments` into a proper Array
-    var args = new Array(arguments.length);
-    for (var i = 0; i < args.length; i++) {
-      args[i] = arguments[i];
-    }
-
-    args[0] = exports.coerce(args[0]);
-
-    if ('string' !== typeof args[0]) {
-      // anything else let's inspect with %O
-      args.unshift('%O');
-    }
-
-    // apply any `formatters` transformations
-    var index = 0;
-    args[0] = args[0].replace(/%([a-zA-Z%])/g, function(match, format) {
-      // if we encounter an escaped % then don't increase the array index
-      if (match === '%%') return match;
-      index++;
-      var formatter = exports.formatters[format];
-      if ('function' === typeof formatter) {
-        var val = args[index];
-        match = formatter.call(self, val);
-
-        // now we need to remove `args[index]` since it's inlined in the `format`
-        args.splice(index, 1);
-        index--;
-      }
-      return match;
-    });
-
-    // apply env-specific formatting (colors, etc.)
-    exports.formatArgs.call(self, args);
-
-    var logFn = debug.log || exports.log || console.log.bind(console);
-    logFn.apply(self, args);
-  }
-
-  debug.namespace = namespace;
-  debug.enabled = exports.enabled(namespace);
-  debug.useColors = exports.useColors();
-  debug.color = selectColor(namespace);
-
-  // env-specific initialization logic for debug instances
-  if ('function' === typeof exports.init) {
-    exports.init(debug);
-  }
-
-  return debug;
-}
-
-/**
- * Enables a debug mode by namespaces. This can include modes
- * separated by a colon and wildcards.
- *
- * @param {String} namespaces
- * @api public
- */
-
-function enable(namespaces) {
-  exports.save(namespaces);
-
-  exports.names = [];
-  exports.skips = [];
-
-  var split = (typeof namespaces === 'string' ? namespaces : '').split(/[\s,]+/);
-  var len = split.length;
-
-  for (var i = 0; i < len; i++) {
-    if (!split[i]) continue; // ignore empty strings
-    namespaces = split[i].replace(/\*/g, '.*?');
-    if (namespaces[0] === '-') {
-      exports.skips.push(new RegExp('^' + namespaces.substr(1) + '$'));
-    } else {
-      exports.names.push(new RegExp('^' + namespaces + '$'));
-    }
-  }
-}
-
-/**
- * Disable debug output.
- *
- * @api public
- */
-
-function disable() {
-  exports.enable('');
-}
-
-/**
- * Returns true if the given mode name is enabled, false otherwise.
- *
- * @param {String} name
- * @return {Boolean}
- * @api public
- */
-
-function enabled(name) {
-  var i, len;
-  for (i = 0, len = exports.skips.length; i < len; i++) {
-    if (exports.skips[i].test(name)) {
-      return false;
-    }
-  }
-  for (i = 0, len = exports.names.length; i < len; i++) {
-    if (exports.names[i].test(name)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Coerce `val`.
- *
- * @param {Mixed} val
- * @return {Mixed}
- * @api private
- */
-
-function coerce(val) {
-  if (val instanceof Error) return val.stack || val.message;
-  return val;
-}
-
-
-/***/ }),
-
-/***/ 1619:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-/**
- * Detect Electron renderer process, which is node, but we should
- * treat as a browser.
- */
-
-if (typeof process !== 'undefined' && process.type === 'renderer') {
-  module.exports = __webpack_require__(4877);
-} else {
-  module.exports = __webpack_require__(5125);
-}
-
-
-/***/ }),
-
-/***/ 5125:
-/***/ ((module, exports, __webpack_require__) => {
-
-/**
- * Module dependencies.
- */
-
-var tty = __webpack_require__(3867);
-var util = __webpack_require__(1669);
-
-/**
- * This is the Node.js implementation of `debug()`.
- *
- * Expose `debug()` as the module.
- */
-
-exports = module.exports = __webpack_require__(5710);
-exports.init = init;
-exports.log = log;
-exports.formatArgs = formatArgs;
-exports.save = save;
-exports.load = load;
-exports.useColors = useColors;
-
-/**
- * Colors.
- */
-
-exports.colors = [6, 2, 3, 4, 5, 1];
-
-/**
- * Build up the default `inspectOpts` object from the environment variables.
- *
- *   $ DEBUG_COLORS=no DEBUG_DEPTH=10 DEBUG_SHOW_HIDDEN=enabled node script.js
- */
-
-exports.inspectOpts = Object.keys(process.env).filter(function (key) {
-  return /^debug_/i.test(key);
-}).reduce(function (obj, key) {
-  // camel-case
-  var prop = key
-    .substring(6)
-    .toLowerCase()
-    .replace(/_([a-z])/g, function (_, k) { return k.toUpperCase() });
-
-  // coerce string value into JS value
-  var val = process.env[key];
-  if (/^(yes|on|true|enabled)$/i.test(val)) val = true;
-  else if (/^(no|off|false|disabled)$/i.test(val)) val = false;
-  else if (val === 'null') val = null;
-  else val = Number(val);
-
-  obj[prop] = val;
-  return obj;
-}, {});
-
-/**
- * The file descriptor to write the `debug()` calls to.
- * Set the `DEBUG_FD` env variable to override with another value. i.e.:
- *
- *   $ DEBUG_FD=3 node script.js 3>debug.log
- */
-
-var fd = parseInt(process.env.DEBUG_FD, 10) || 2;
-
-if (1 !== fd && 2 !== fd) {
-  util.deprecate(function(){}, 'except for stderr(2) and stdout(1), any other usage of DEBUG_FD is deprecated. Override debug.log if you want to use a different log function (https://git.io/debug_fd)')()
-}
-
-var stream = 1 === fd ? process.stdout :
-             2 === fd ? process.stderr :
-             createWritableStdioStream(fd);
-
-/**
- * Is stdout a TTY? Colored output is enabled when `true`.
- */
-
-function useColors() {
-  return 'colors' in exports.inspectOpts
-    ? Boolean(exports.inspectOpts.colors)
-    : tty.isatty(fd);
-}
-
-/**
- * Map %o to `util.inspect()`, all on a single line.
- */
-
-exports.formatters.o = function(v) {
-  this.inspectOpts.colors = this.useColors;
-  return util.inspect(v, this.inspectOpts)
-    .split('\n').map(function(str) {
-      return str.trim()
-    }).join(' ');
-};
-
-/**
- * Map %o to `util.inspect()`, allowing multiple lines if needed.
- */
-
-exports.formatters.O = function(v) {
-  this.inspectOpts.colors = this.useColors;
-  return util.inspect(v, this.inspectOpts);
-};
-
-/**
- * Adds ANSI color escape codes if enabled.
- *
- * @api public
- */
-
-function formatArgs(args) {
-  var name = this.namespace;
-  var useColors = this.useColors;
-
-  if (useColors) {
-    var c = this.color;
-    var prefix = '  \u001b[3' + c + ';1m' + name + ' ' + '\u001b[0m';
-
-    args[0] = prefix + args[0].split('\n').join('\n' + prefix);
-    args.push('\u001b[3' + c + 'm+' + exports.humanize(this.diff) + '\u001b[0m');
-  } else {
-    args[0] = new Date().toUTCString()
-      + ' ' + name + ' ' + args[0];
-  }
-}
-
-/**
- * Invokes `util.format()` with the specified arguments and writes to `stream`.
- */
-
-function log() {
-  return stream.write(util.format.apply(util, arguments) + '\n');
-}
-
-/**
- * Save `namespaces`.
- *
- * @param {String} namespaces
- * @api private
- */
-
-function save(namespaces) {
-  if (null == namespaces) {
-    // If you set a process.env field to null or undefined, it gets cast to the
-    // string 'null' or 'undefined'. Just delete instead.
-    delete process.env.DEBUG;
-  } else {
-    process.env.DEBUG = namespaces;
-  }
-}
-
-/**
- * Load `namespaces`.
- *
- * @return {String} returns the previously persisted debug modes
- * @api private
- */
-
-function load() {
-  return process.env.DEBUG;
-}
-
-/**
- * Copied from `node/src/node.js`.
- *
- * XXX: It's lame that node doesn't expose this API out-of-the-box. It also
- * relies on the undocumented `tty_wrap.guessHandleType()` which is also lame.
- */
-
-function createWritableStdioStream (fd) {
-  var stream;
-  var tty_wrap = process.binding('tty_wrap');
-
-  // Note stream._type is used for test-module-load-list.js
-
-  switch (tty_wrap.guessHandleType(fd)) {
-    case 'TTY':
-      stream = new tty.WriteStream(fd);
-      stream._type = 'tty';
-
-      // Hack to have stream not keep the event loop alive.
-      // See https://github.com/joyent/node/issues/1726
-      if (stream._handle && stream._handle.unref) {
-        stream._handle.unref();
-      }
-      break;
-
-    case 'FILE':
-      var fs = __webpack_require__(5747);
-      stream = new fs.SyncWriteStream(fd, { autoClose: false });
-      stream._type = 'fs';
-      break;
-
-    case 'PIPE':
-    case 'TCP':
-      var net = __webpack_require__(1631);
-      stream = new net.Socket({
-        fd: fd,
-        readable: false,
-        writable: true
-      });
-
-      // FIXME Should probably have an option in net.Socket to create a
-      // stream from an existing fd which is writable only. But for now
-      // we'll just add this hack and set the `readable` member to false.
-      // Test: ./node test/fixtures/echo.js < /etc/passwd
-      stream.readable = false;
-      stream.read = null;
-      stream._type = 'pipe';
-
-      // FIXME Hack to have stream not keep the event loop alive.
-      // See https://github.com/joyent/node/issues/1726
-      if (stream._handle && stream._handle.unref) {
-        stream._handle.unref();
-      }
-      break;
-
-    default:
-      // Probably an error on in uv_guess_handle()
-      throw new Error('Implement me. Unknown stream file type!');
-  }
-
-  // For supporting legacy API we put the FD here.
-  stream.fd = fd;
-
-  stream._isStdio = true;
-
-  return stream;
-}
-
-/**
- * Init logic for `debug` instances.
- *
- * Create a new `inspectOpts` object in case `useColors` is set
- * differently for a particular `debug` instance.
- */
-
-function init (debug) {
-  debug.inspectOpts = {};
-
-  var keys = Object.keys(exports.inspectOpts);
-  for (var i = 0; i < keys.length; i++) {
-    debug.inspectOpts[keys[i]] = exports.inspectOpts[keys[i]];
-  }
-}
-
-/**
- * Enable namespaces listed in `process.env.DEBUG` initially.
- */
-
-exports.enable(load());
-
-
-/***/ }),
-
-/***/ 987:
-/***/ ((module) => {
-
-/**
- * Helpers.
- */
-
-var s = 1000;
-var m = s * 60;
-var h = m * 60;
-var d = h * 24;
-var w = d * 7;
-var y = d * 365.25;
-
-/**
- * Parse or format the given `val`.
- *
- * Options:
- *
- *  - `long` verbose formatting [false]
- *
- * @param {String|Number} val
- * @param {Object} [options]
- * @throws {Error} throw an error if val is not a non-empty string or a number
- * @return {String|Number}
- * @api public
- */
-
-module.exports = function(val, options) {
-  options = options || {};
-  var type = typeof val;
-  if (type === 'string' && val.length > 0) {
-    return parse(val);
-  } else if (type === 'number' && isNaN(val) === false) {
-    return options.long ? fmtLong(val) : fmtShort(val);
-  }
-  throw new Error(
-    'val is not a non-empty string or a valid number. val=' +
-      JSON.stringify(val)
-  );
-};
-
-/**
- * Parse the given `str` and return milliseconds.
- *
- * @param {String} str
- * @return {Number}
- * @api private
- */
-
-function parse(str) {
-  str = String(str);
-  if (str.length > 100) {
-    return;
-  }
-  var match = /^((?:\d+)?\-?\d?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)?$/i.exec(
-    str
-  );
-  if (!match) {
-    return;
-  }
-  var n = parseFloat(match[1]);
-  var type = (match[2] || 'ms').toLowerCase();
-  switch (type) {
-    case 'years':
-    case 'year':
-    case 'yrs':
-    case 'yr':
-    case 'y':
-      return n * y;
-    case 'weeks':
-    case 'week':
-    case 'w':
-      return n * w;
-    case 'days':
-    case 'day':
-    case 'd':
-      return n * d;
-    case 'hours':
-    case 'hour':
-    case 'hrs':
-    case 'hr':
-    case 'h':
-      return n * h;
-    case 'minutes':
-    case 'minute':
-    case 'mins':
-    case 'min':
-    case 'm':
-      return n * m;
-    case 'seconds':
-    case 'second':
-    case 'secs':
-    case 'sec':
-    case 's':
-      return n * s;
-    case 'milliseconds':
-    case 'millisecond':
-    case 'msecs':
-    case 'msec':
-    case 'ms':
-      return n;
-    default:
-      return undefined;
-  }
-}
-
-/**
- * Short format for `ms`.
- *
- * @param {Number} ms
- * @return {String}
- * @api private
- */
-
-function fmtShort(ms) {
-  var msAbs = Math.abs(ms);
-  if (msAbs >= d) {
-    return Math.round(ms / d) + 'd';
-  }
-  if (msAbs >= h) {
-    return Math.round(ms / h) + 'h';
-  }
-  if (msAbs >= m) {
-    return Math.round(ms / m) + 'm';
-  }
-  if (msAbs >= s) {
-    return Math.round(ms / s) + 's';
-  }
-  return ms + 'ms';
-}
-
-/**
- * Long format for `ms`.
- *
- * @param {Number} ms
- * @return {String}
- * @api private
- */
-
-function fmtLong(ms) {
-  var msAbs = Math.abs(ms);
-  if (msAbs >= d) {
-    return plural(ms, msAbs, d, 'day');
-  }
-  if (msAbs >= h) {
-    return plural(ms, msAbs, h, 'hour');
-  }
-  if (msAbs >= m) {
-    return plural(ms, msAbs, m, 'minute');
-  }
-  if (msAbs >= s) {
-    return plural(ms, msAbs, s, 'second');
-  }
-  return ms + ' ms';
-}
-
-/**
- * Pluralization helper.
- */
-
-function plural(ms, msAbs, n, name) {
-  var isPlural = msAbs >= n * 1.5;
-  return Math.round(ms / n) + ' ' + name + (isPlural ? 's' : '');
-}
-
-
-/***/ }),
-
-/***/ 3146:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-"use strict";
-/*!
- * serve-static
- * Copyright(c) 2010 Sencha Inc.
- * Copyright(c) 2011 TJ Holowaychuk
- * Copyright(c) 2014-2016 Douglas Christopher Wilson
- * MIT Licensed
- */
-
-
-
-/**
- * Module dependencies.
- * @private
- */
-
-var encodeUrl = __webpack_require__(6592)
-var escapeHtml = __webpack_require__(4070)
-var parseUrl = __webpack_require__(9808)
-var resolve = __webpack_require__(5622).resolve
-var send = __webpack_require__(5287)
-var url = __webpack_require__(8835)
-
-/**
- * Module exports.
- * @public
- */
-
-module.exports = serveStatic
-module.exports.mime = send.mime
-
-/**
- * @param {string} root
- * @param {object} [options]
- * @return {function}
- * @public
- */
-
-function serveStatic (root, options) {
-  if (!root) {
-    throw new TypeError('root path required')
-  }
-
-  if (typeof root !== 'string') {
-    throw new TypeError('root path must be a string')
-  }
-
-  // copy options object
-  var opts = Object.create(options || null)
-
-  // fall-though
-  var fallthrough = opts.fallthrough !== false
-
-  // default redirect
-  var redirect = opts.redirect !== false
-
-  // headers listener
-  var setHeaders = opts.setHeaders
-
-  if (setHeaders && typeof setHeaders !== 'function') {
-    throw new TypeError('option setHeaders must be function')
-  }
-
-  // setup options for send
-  opts.maxage = opts.maxage || opts.maxAge || 0
-  opts.root = resolve(root)
-
-  // construct directory listener
-  var onDirectory = redirect
-    ? createRedirectDirectoryListener()
-    : createNotFoundDirectoryListener()
-
-  return function serveStatic (req, res, next) {
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      if (fallthrough) {
-        return next()
-      }
-
-      // method not allowed
-      res.statusCode = 405
-      res.setHeader('Allow', 'GET, HEAD')
-      res.setHeader('Content-Length', '0')
-      res.end()
-      return
-    }
-
-    var forwardError = !fallthrough
-    var originalUrl = parseUrl.original(req)
-    var path = parseUrl(req).pathname
-
-    // make sure redirect occurs at mount
-    if (path === '/' && originalUrl.pathname.substr(-1) !== '/') {
+      tokens.push(path)
       path = ''
+      pathEscaped = false
     }
 
-    // create send stream
-    var stream = send(req, path, opts)
+    var partial = prev !== '' && next !== undefined && next !== prev
+    var repeat = modifier === '+' || modifier === '*'
+    var optional = modifier === '?' || modifier === '*'
+    var delimiter = prev || defaultDelimiter
+    var pattern = capture || group
 
-    // add directory handler
-    stream.on('directory', onDirectory)
+    tokens.push({
+      name: name || key++,
+      prefix: prev,
+      delimiter: delimiter,
+      optional: optional,
+      repeat: repeat,
+      partial: partial,
+      pattern: pattern ? escapeGroup(pattern) : '[^' + escapeString(delimiter) + ']+?'
+    })
+  }
 
-    // add headers listener
-    if (setHeaders) {
-      stream.on('headers', setHeaders)
+  // Push any remaining characters.
+  if (path || index < str.length) {
+    tokens.push(path + str.substr(index))
+  }
+
+  return tokens
+}
+
+/**
+ * Compile a string to a template function for the path.
+ *
+ * @param  {string}             str
+ * @param  {Object=}            options
+ * @return {!function(Object=, Object=)}
+ */
+function compile (str, options) {
+  return tokensToFunction(parse(str, options))
+}
+
+/**
+ * Expose a method for transforming tokens into the path function.
+ */
+function tokensToFunction (tokens) {
+  // Compile all the tokens into regexps.
+  var matches = new Array(tokens.length)
+
+  // Compile all the patterns before compilation.
+  for (var i = 0; i < tokens.length; i++) {
+    if (typeof tokens[i] === 'object') {
+      matches[i] = new RegExp('^(?:' + tokens[i].pattern + ')$')
     }
+  }
 
-    // add file listener for fallthrough
-    if (fallthrough) {
-      stream.on('file', function onFile () {
-        // once file is determined, always forward error
-        forwardError = true
-      })
-    }
+  return function (data, options) {
+    var path = ''
+    var encode = (options && options.encode) || encodeURIComponent
 
-    // forward errors
-    stream.on('error', function error (err) {
-      if (forwardError || !(err.statusCode < 500)) {
-        next(err)
-        return
+    for (var i = 0; i < tokens.length; i++) {
+      var token = tokens[i]
+
+      if (typeof token === 'string') {
+        path += token
+        continue
       }
 
-      next()
-    })
+      var value = data ? data[token.name] : undefined
+      var segment
 
-    // pipe
-    stream.pipe(res)
-  }
-}
+      if (Array.isArray(value)) {
+        if (!token.repeat) {
+          throw new TypeError('Expected "' + token.name + '" to not repeat, but got array')
+        }
 
-/**
- * Collapse all leading slashes into a single slash
- * @private
- */
-function collapseLeadingSlashes (str) {
-  for (var i = 0; i < str.length; i++) {
-    if (str.charCodeAt(i) !== 0x2f /* / */) {
-      break
+        if (value.length === 0) {
+          if (token.optional) continue
+
+          throw new TypeError('Expected "' + token.name + '" to not be empty')
+        }
+
+        for (var j = 0; j < value.length; j++) {
+          segment = encode(value[j], token)
+
+          if (!matches[i].test(segment)) {
+            throw new TypeError('Expected all "' + token.name + '" to match "' + token.pattern + '"')
+          }
+
+          path += (j === 0 ? token.prefix : token.delimiter) + segment
+        }
+
+        continue
+      }
+
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        segment = encode(String(value), token)
+
+        if (!matches[i].test(segment)) {
+          throw new TypeError('Expected "' + token.name + '" to match "' + token.pattern + '", but got "' + segment + '"')
+        }
+
+        path += token.prefix + segment
+        continue
+      }
+
+      if (token.optional) {
+        // Prepend partial segment prefixes.
+        if (token.partial) path += token.prefix
+
+        continue
+      }
+
+      throw new TypeError('Expected "' + token.name + '" to be ' + (token.repeat ? 'an array' : 'a string'))
     }
-  }
 
-  return i > 1
-    ? '/' + str.substr(i)
-    : str
+    return path
+  }
 }
 
 /**
- * Create a minimal HTML document.
+ * Escape a regular expression string.
  *
- * @param {string} title
- * @param {string} body
- * @private
+ * @param  {string} str
+ * @return {string}
  */
-
-function createHtmlDocument (title, body) {
-  return '<!DOCTYPE html>\n' +
-    '<html lang="en">\n' +
-    '<head>\n' +
-    '<meta charset="utf-8">\n' +
-    '<title>' + title + '</title>\n' +
-    '</head>\n' +
-    '<body>\n' +
-    '<pre>' + body + '</pre>\n' +
-    '</body>\n' +
-    '</html>\n'
+function escapeString (str) {
+  return str.replace(/([.+*?=^!:${}()[\]|/\\])/g, '\\$1')
 }
 
 /**
- * Create a directory listener that just 404s.
- * @private
+ * Escape the capturing group by escaping special characters and meaning.
+ *
+ * @param  {string} group
+ * @return {string}
  */
-
-function createNotFoundDirectoryListener () {
-  return function notFound () {
-    this.error(404)
-  }
+function escapeGroup (group) {
+  return group.replace(/([=!:$/()])/g, '\\$1')
 }
 
 /**
- * Create a directory listener that performs a redirect.
- * @private
+ * Get the flags for a regexp from the options.
+ *
+ * @param  {Object} options
+ * @return {string}
  */
+function flags (options) {
+  return options && options.sensitive ? '' : 'i'
+}
 
-function createRedirectDirectoryListener () {
-  return function redirect (res) {
-    if (this.hasTrailingSlash()) {
-      this.error(404)
-      return
+/**
+ * Pull out keys from a regexp.
+ *
+ * @param  {!RegExp} path
+ * @param  {Array=}  keys
+ * @return {!RegExp}
+ */
+function regexpToRegexp (path, keys) {
+  if (!keys) return path
+
+  // Use a negative lookahead to match only capturing groups.
+  var groups = path.source.match(/\((?!\?)/g)
+
+  if (groups) {
+    for (var i = 0; i < groups.length; i++) {
+      keys.push({
+        name: i,
+        prefix: null,
+        delimiter: null,
+        optional: false,
+        repeat: false,
+        partial: false,
+        pattern: null
+      })
     }
-
-    // get original URL
-    var originalUrl = parseUrl.original(this.req)
-
-    // append trailing slash
-    originalUrl.path = null
-    originalUrl.pathname = collapseLeadingSlashes(originalUrl.pathname + '/')
-
-    // reformat the URL
-    var loc = encodeUrl(url.format(originalUrl))
-    var doc = createHtmlDocument('Redirecting', 'Redirecting to <a href="' + escapeHtml(loc) + '">' +
-      escapeHtml(loc) + '</a>')
-
-    // send redirect response
-    res.statusCode = 301
-    res.setHeader('Content-Type', 'text/html; charset=UTF-8')
-    res.setHeader('Content-Length', Buffer.byteLength(doc))
-    res.setHeader('Content-Security-Policy', "default-src 'none'")
-    res.setHeader('X-Content-Type-Options', 'nosniff')
-    res.setHeader('Location', loc)
-    res.end(doc)
   }
+
+  return path
 }
+
+/**
+ * Transform an array into a regexp.
+ *
+ * @param  {!Array}  path
+ * @param  {Array=}  keys
+ * @param  {Object=} options
+ * @return {!RegExp}
+ */
+function arrayToRegexp (path, keys, options) {
+  var parts = []
+
+  for (var i = 0; i < path.length; i++) {
+    parts.push(pathToRegexp(path[i], keys, options).source)
+  }
+
+  return new RegExp('(?:' + parts.join('|') + ')', flags(options))
+}
+
+/**
+ * Create a path regexp from string input.
+ *
+ * @param  {string}  path
+ * @param  {Array=}  keys
+ * @param  {Object=} options
+ * @return {!RegExp}
+ */
+function stringToRegexp (path, keys, options) {
+  return tokensToRegExp(parse(path, options), keys, options)
+}
+
+/**
+ * Expose a function for taking tokens and returning a RegExp.
+ *
+ * @param  {!Array}  tokens
+ * @param  {Array=}  keys
+ * @param  {Object=} options
+ * @return {!RegExp}
+ */
+function tokensToRegExp (tokens, keys, options) {
+  options = options || {}
+
+  var strict = options.strict
+  var end = options.end !== false
+  var delimiter = escapeString(options.delimiter || DEFAULT_DELIMITER)
+  var delimiters = options.delimiters || DEFAULT_DELIMITERS
+  var endsWith = [].concat(options.endsWith || []).map(escapeString).concat('$').join('|')
+  var route = ''
+  var isEndDelimited = tokens.length === 0
+
+  // Iterate over the tokens and create our regexp string.
+  for (var i = 0; i < tokens.length; i++) {
+    var token = tokens[i]
+
+    if (typeof token === 'string') {
+      route += escapeString(token)
+      isEndDelimited = i === tokens.length - 1 && delimiters.indexOf(token[token.length - 1]) > -1
+    } else {
+      var prefix = escapeString(token.prefix)
+      var capture = token.repeat
+        ? '(?:' + token.pattern + ')(?:' + prefix + '(?:' + token.pattern + '))*'
+        : token.pattern
+
+      if (keys) keys.push(token)
+
+      if (token.optional) {
+        if (token.partial) {
+          route += prefix + '(' + capture + ')?'
+        } else {
+          route += '(?:' + prefix + '(' + capture + '))?'
+        }
+      } else {
+        route += prefix + '(' + capture + ')'
+      }
+    }
+  }
+
+  if (end) {
+    if (!strict) route += '(?:' + delimiter + ')?'
+
+    route += endsWith === '$' ? '$' : '(?=' + endsWith + ')'
+  } else {
+    if (!strict) route += '(?:' + delimiter + '(?=' + endsWith + '))?'
+    if (!isEndDelimited) route += '(?=' + delimiter + '|' + endsWith + ')'
+  }
+
+  return new RegExp('^' + route, flags(options))
+}
+
+/**
+ * Normalize the given path string, returning a regular expression.
+ *
+ * An empty array can be passed in for the keys, which will hold the
+ * placeholder key descriptions. For example, using `/user/:id`, `keys` will
+ * contain `[{ name: 'id', delimiter: '/', optional: false, repeat: false }]`.
+ *
+ * @param  {(string|RegExp|Array)} path
+ * @param  {Array=}                keys
+ * @param  {Object=}               options
+ * @return {!RegExp}
+ */
+function pathToRegexp (path, keys, options) {
+  if (path instanceof RegExp) {
+    return regexpToRegexp(path, keys)
+  }
+
+  if (Array.isArray(path)) {
+    return arrayToRegexp(/** @type {!Array} */ (path), keys, options)
+  }
+
+  return stringToRegexp(/** @type {string} */ (path), keys, options)
+}
+
+
+/***/ }),
+
+/***/ 658:
+/***/ ((module) => {
+
+(function(){function directory(it
+) {
+var encodeHTML = typeof _encodeHTML !== 'undefined' ? _encodeHTML : (function(doNotSkipEncoded) {
+		var encodeHTMLRules = { "&": "&#38;", "<": "&#60;", ">": "&#62;", '"': "&#34;", "'": "&#39;", "/": "&#47;" },
+			matchHTML = doNotSkipEncoded ? /[&<>"'\/]/g : /&(?!#?\w+;)|<|>|"|'|\//g;
+		return function(code) {
+			return code ? code.toString().replace(matchHTML, function(m) {return encodeHTMLRules[m] || m;}) : "";
+		};
+	}());var out='<!DOCTYPE html><html lang="en"> <head> <meta charset="utf-8"> <meta name="viewport" content="width=device-width, initial-scale=1"> <title>Files within '+encodeHTML(it.directory)+'</title> <style>body { margin: 0; padding: 30px; background: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif; -webkit-font-smoothing: antialiased;}main { max-width: 920px;}header { display: flex; justify-content: space-between; flex-wrap: wrap;}h1 { font-size: 18px; font-weight: 500; margin-top: 0; color: #000;}header h1 a { font-size: 18px; font-weight: 500; margin-top: 0; color: #000;}h1 i { font-style: normal;}ul { margin: 0 0 0 -2px; padding: 20px 0 0 0;}ul li { list-style: none; font-size: 14px; display: flex; justify-content: space-between;}a { text-decoration: none;}ul a { color: #000; padding: 10px 5px; margin: 0 -5px; white-space: nowrap; overflow: hidden; display: block; width: 100%; text-overflow: ellipsis;}header a { color: #0076FF; font-size: 11px; font-weight: 400; display: inline-block; line-height: 20px;}svg { height: 13px; vertical-align: text-bottom;}ul a::before { display: inline-block; vertical-align: middle; margin-right: 10px; width: 24px; text-align: center; line-height: 12px;}ul a.file::before { content: url("data:image/svg+xml;utf8,<svg width=\'15\' height=\'19\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M10 8C8.34 8 7 6.66 7 5V1H3c-1.1 0-2 .9-2 2v13c0 1.1.9 2 2 2h9c1.1 0 2-.9 2-2V8h-4zM8 5c0 1.1.9 2 2 2h3.59L8 1.41V5zM3 0h5l7 7v9c0 1.66-1.34 3-3 3H3c-1.66 0-3-1.34-3-3V3c0-1.66 1.34-3 3-3z\' fill=\'black\'/></svg>");}ul a:hover { text-decoration: underline;}ul a.folder::before { content: url("data:image/svg+xml;utf8,<svg width=\'20\' height=\'16\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M18.784 3.87a1.565 1.565 0 0 0-.565-.356V2.426c0-.648-.523-1.171-1.15-1.171H8.996L7.908.25A.89.89 0 0 0 7.302 0H2.094C1.445 0 .944.523.944 1.171v2.3c-.21.085-.398.21-.565.356a1.348 1.348 0 0 0-.377 1.004l.398 9.83C.42 15.393 1.048 16 1.8 16h15.583c.753 0 1.36-.586 1.4-1.339l.398-9.83c.021-.313-.125-.69-.397-.962zM1.843 3.41V1.191c0-.146.104-.272.25-.272H7.26l1.234 1.088c.083.042.167.104.293.104h8.282c.125 0 .25.126.25.272V3.41H1.844zm15.54 11.712H1.78a.47.47 0 0 1-.481-.46l-.397-9.83c0-.147.041-.252.125-.356a.504.504 0 0 1 .377-.147H17.78c.125 0 .272.063.377.147.083.083.125.209.125.334l-.418 9.83c-.021.272-.23.482-.481.482z\' fill=\'black\'/></svg>");}ul a.lambda::before { content: url("data:image/svg+xml; utf8,<svg width=\'15\' height=\'19\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M3.5 14.4354H5.31622L7.30541 9.81311H7.43514L8.65315 13.0797C9.05676 14.1643 9.55405 14.5 10.7 14.5C11.0171 14.5 11.291 14.4677 11.5 14.4032V13.1572C11.3847 13.1766 11.2622 13.2024 11.1541 13.2024C10.6351 13.2024 10.3829 13.0281 10.1595 12.4664L8.02613 7.07586C7.21171 5.01646 6.54865 4.5 5.11441 4.5C4.83333 4.5 4.62432 4.53228 4.37207 4.59038V5.83635C4.56667 5.81052 4.66036 5.79761 4.77568 5.79761C5.64775 5.79761 5.9 6.0042 6.4045 7.19852L6.64234 7.77954L3.5 14.4354Z\' fill=\'black\'/><rect x=\'0.5\' y=\'0.5\' width=\'14\' height=\'18\' rx=\'2.5\' stroke=\'black\'/></svg>");}ul a.file.gif::before,ul a.file.jpg::before,ul a.file.png::before,ul a.file.svg::before { content: url("data:image/svg+xml;utf8,<svg width=\'16\' height=\'16\' viewBox=\'0 0 80 80\' xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' stroke=\'black\' stroke-width=\'5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><rect x=\'6\' y=\'6\' width=\'68\' height=\'68\' rx=\'5\' ry=\'5\'/><circle cx=\'24\' cy=\'24\' r=\'8\'/><path d=\'M73 49L59 34 37 52m16 20L27 42 7 58\'/></svg>");}::selection { background-color: #79FFE1; color: #000;}::-moz-selection { background-color: #79FFE1; color: #000;}@media (min-width: 768px) { ul {display: flex;flex-wrap: wrap; } ul li {width: 230px;padding-right: 20px; }}@media (min-width: 992px) { body {padding: 45px; } h1, header h1 a {font-size: 15px; } ul li {font-size: 13px;box-sizing: border-box;justify-content: flex-start; }}</style> </head> <body> <main> <header> <h1> <i>Index of&nbsp;</i> ';var arr1=it.paths;if(arr1){var value,index=-1,l1=arr1.length-1;while(index<l1){value=arr1[index+=1];out+=' <a href="/'+encodeHTML(value.url)+'">'+encodeHTML(value.name)+'</a> ';} } out+=' </h1> </header> <ul id="files"> ';var arr2=it.files;if(arr2){var value,index=-1,l2=arr2.length-1;while(index<l2){value=arr2[index+=1];out+=' <li> <a href="'+encodeHTML(value.relative)+'" title="'+encodeHTML(value.title)+'" class="'+encodeHTML(value.type)+' '+encodeHTML(value.ext)+'">'+encodeHTML(value.base)+'</a> </li> ';} } out+=' </ul></main> </body></html>';return out;
+}var itself=directory, _encodeHTML=(function(doNotSkipEncoded) {
+		var encodeHTMLRules = { "&": "&#38;", "<": "&#60;", ">": "&#62;", '"': "&#34;", "'": "&#39;", "/": "&#47;" },
+			matchHTML = doNotSkipEncoded ? /[&<>"'\/]/g : /&(?!#?\w+;)|<|>|"|'|\//g;
+		return function(code) {
+			return code ? code.toString().replace(matchHTML, function(m) {return encodeHTMLRules[m] || m;}) : "";
+		};
+	}());if( true && module.exports) module.exports=itself;else if(typeof define==='function')define(function(){return itself;});else {window.render=window.render||{};window.render['directory']=itself;}}());
+
+/***/ }),
+
+/***/ 6669:
+/***/ ((module) => {
+
+(function(){function error(it
+) {
+var out='<!DOCTYPE html><head> <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/> <style> body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif; cursor: default; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; } main, aside, section { display: flex; justify-content: center; align-items: center; flex-direction: column; } main { height: 100%; } aside { background: #000; flex-shrink: 1; padding: 30px 20px; } aside p { margin: 0; color: #999999; font-size: 14px; line-height: 24px; } aside a { color: #fff; text-decoration: none; } section span { font-size: 24px; font-weight: 500; display: block; border-bottom: 1px solid #EAEAEA; text-align: center; padding-bottom: 20px; width: 100px; } section p { font-size: 14px; font-weight: 400; } section span + p { margin: 20px 0 0 0; } @media (min-width: 768px) { section { height: 40px; flex-direction: row; } section span, section p { height: 100%; line-height: 40px; } section span { border-bottom: 0; border-right: 1px solid #EAEAEA; padding: 0 20px 0 0; width: auto; } section span + p { margin: 0; padding-left: 20px; } aside { padding: 50px 0; } aside p { max-width: 520px; text-align: center; } } </style></head><body> <main> <section> <span>'+(it.statusCode)+'</span> <p>'+(it.message)+'</p> </section> </main></body>';return out;
+}var itself=error, _encodeHTML=(function(doNotSkipEncoded) {
+		var encodeHTMLRules = { "&": "&#38;", "<": "&#60;", ">": "&#62;", '"': "&#34;", "'": "&#39;", "/": "&#47;" },
+			matchHTML = doNotSkipEncoded ? /[&<>"'\/]/g : /&(?!#?\w+;)|<|>|"|'|\//g;
+		return function(code) {
+			return code ? code.toString().replace(matchHTML, function(m) {return encodeHTMLRules[m] || m;}) : "";
+		};
+	}());if( true && module.exports) module.exports=itself;else if(typeof define==='function')define(function(){return itself;});else {window.render=window.render||{};window.render['error']=itself;}}());
+
+/***/ }),
+
+/***/ 9391:
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+/* ! The MIT License (MIT) Copyright (c) 2014 Scott Corgan */
+
+// This is adopted from https://github.com/scottcorgan/glob-slash/
+
+const path = __webpack_require__(5622);
+const normalize = value => path.posix.normalize(path.posix.join('/', value));
+
+module.exports = value => (value.charAt(0) === '!' ? `!${normalize(value.substr(1))}` : normalize(value));
+module.exports.normalize = normalize;
+
+
+/***/ }),
+
+/***/ 8765:
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+// Native
+const {promisify} = __webpack_require__(1669);
+const path = __webpack_require__(5622);
+const {createHash} = __webpack_require__(6417);
+const {realpath, lstat, createReadStream, readdir} = __webpack_require__(5747);
+
+// Packages
+const url = __webpack_require__(4578);
+const slasher = __webpack_require__(9391);
+const minimatch = __webpack_require__(3973);
+const pathToRegExp = __webpack_require__(6420);
+const mime = __webpack_require__(3583);
+const bytes = __webpack_require__(6966);
+const contentDisposition = __webpack_require__(3921);
+const isPathInside = __webpack_require__(6849);
+const parseRange = __webpack_require__(6435);
+
+// Other
+const directoryTemplate = __webpack_require__(658);
+const errorTemplate = __webpack_require__(6669);
+
+const etags = new Map();
+
+const calculateSha = (handlers, absolutePath) =>
+	new Promise((resolve, reject) => {
+		const hash = createHash('sha1');
+		hash.update(path.extname(absolutePath));
+		hash.update('-');
+		const rs = handlers.createReadStream(absolutePath);
+		rs.on('error', reject);
+		rs.on('data', buf => hash.update(buf));
+		rs.on('end', () => {
+			const sha = hash.digest('hex');
+			resolve(sha);
+		});
+	});
+
+const sourceMatches = (source, requestPath, allowSegments) => {
+	const keys = [];
+	const slashed = slasher(source);
+	const resolvedPath = path.posix.resolve(requestPath);
+
+	let results = null;
+
+	if (allowSegments) {
+		const normalized = slashed.replace('*', '(.*)');
+		const expression = pathToRegExp(normalized, keys);
+
+		results = expression.exec(resolvedPath);
+
+		if (!results) {
+			// clear keys so that they are not used
+			// later with empty results. this may
+			// happen if minimatch returns true
+			keys.length = 0;
+		}
+	}
+
+	if (results || minimatch(resolvedPath, slashed)) {
+		return {
+			keys,
+			results
+		};
+	}
+
+	return null;
+};
+
+const toTarget = (source, destination, previousPath) => {
+	const matches = sourceMatches(source, previousPath, true);
+
+	if (!matches) {
+		return null;
+	}
+
+	const {keys, results} = matches;
+
+	const props = {};
+	const {protocol} = url.parse(destination);
+	const normalizedDest = protocol ? destination : slasher(destination);
+	const toPath = pathToRegExp.compile(normalizedDest);
+
+	for (let index = 0; index < keys.length; index++) {
+		const {name} = keys[index];
+		props[name] = results[index + 1];
+	}
+
+	return toPath(props);
+};
+
+const applyRewrites = (requestPath, rewrites = [], repetitive) => {
+	// We need to copy the array, since we're going to modify it.
+	const rewritesCopy = rewrites.slice();
+
+	// If the method was called again, the path was already rewritten
+	// so we need to make sure to return it.
+	const fallback = repetitive ? requestPath : null;
+
+	if (rewritesCopy.length === 0) {
+		return fallback;
+	}
+
+	for (let index = 0; index < rewritesCopy.length; index++) {
+		const {source, destination} = rewrites[index];
+		const target = toTarget(source, destination, requestPath);
+
+		if (target) {
+			// Remove rules that were already applied
+			rewritesCopy.splice(index, 1);
+
+			// Check if there are remaining ones to be applied
+			return applyRewrites(slasher(target), rewritesCopy, true);
+		}
+	}
+
+	return fallback;
+};
+
+const ensureSlashStart = target => (target.startsWith('/') ? target : `/${target}`);
+
+const shouldRedirect = (decodedPath, {redirects = [], trailingSlash}, cleanUrl) => {
+	const slashing = typeof trailingSlash === 'boolean';
+	const defaultType = 301;
+	const matchHTML = /(\.html|\/index)$/g;
+
+	if (redirects.length === 0 && !slashing && !cleanUrl) {
+		return null;
+	}
+
+	// By stripping the HTML parts from the decoded
+	// path *before* handling the trailing slash, we make
+	// sure that only *one* redirect occurs if both
+	// config options are used.
+	if (cleanUrl && matchHTML.test(decodedPath)) {
+		decodedPath = decodedPath.replace(matchHTML, '');
+		if (decodedPath.indexOf('//') > -1) {
+			decodedPath = decodedPath.replace(/\/+/g, '/');
+		}
+		return {
+			target: ensureSlashStart(decodedPath),
+			statusCode: defaultType
+		};
+	}
+
+	if (slashing) {
+		const {ext, name} = path.parse(decodedPath);
+		const isTrailed = decodedPath.endsWith('/');
+		const isDotfile = name.startsWith('.');
+
+		let target = null;
+
+		if (!trailingSlash && isTrailed) {
+			target = decodedPath.slice(0, -1);
+		} else if (trailingSlash && !isTrailed && !ext && !isDotfile) {
+			target = `${decodedPath}/`;
+		}
+
+		if (decodedPath.indexOf('//') > -1) {
+			target = decodedPath.replace(/\/+/g, '/');
+		}
+
+		if (target) {
+			return {
+				target: ensureSlashStart(target),
+				statusCode: defaultType
+			};
+		}
+	}
+
+	// This is currently the fastest way to
+	// iterate over an array
+	for (let index = 0; index < redirects.length; index++) {
+		const {source, destination, type} = redirects[index];
+		const target = toTarget(source, destination, decodedPath);
+
+		if (target) {
+			return {
+				target,
+				statusCode: type || defaultType
+			};
+		}
+	}
+
+	return null;
+};
+
+const appendHeaders = (target, source) => {
+	for (let index = 0; index < source.length; index++) {
+		const {key, value} = source[index];
+		target[key] = value;
+	}
+};
+
+const getHeaders = async (handlers, config, current, absolutePath, stats) => {
+	const {headers: customHeaders = [], etag = false} = config;
+	const related = {};
+	const {base} = path.parse(absolutePath);
+	const relativePath = path.relative(current, absolutePath);
+
+	if (customHeaders.length > 0) {
+		// By iterating over all headers and never stopping, developers
+		// can specify multiple header sources in the config that
+		// might match a single path.
+		for (let index = 0; index < customHeaders.length; index++) {
+			const {source, headers} = customHeaders[index];
+
+			if (sourceMatches(source, slasher(relativePath))) {
+				appendHeaders(related, headers);
+			}
+		}
+	}
+
+	let defaultHeaders = {};
+
+	if (stats) {
+		defaultHeaders = {
+			'Content-Length': stats.size,
+			// Default to "inline", which always tries to render in the browser,
+			// if that's not working, it will save the file. But to be clear: This
+			// only happens if it cannot find a appropiate value.
+			'Content-Disposition': contentDisposition(base, {
+				type: 'inline'
+			}),
+			'Accept-Ranges': 'bytes'
+		};
+
+		if (etag) {
+			let [mtime, sha] = etags.get(absolutePath) || [];
+			if (Number(mtime) !== Number(stats.mtime)) {
+				sha = await calculateSha(handlers, absolutePath);
+				etags.set(absolutePath, [stats.mtime, sha]);
+			}
+			defaultHeaders['ETag'] = `"${sha}"`;
+		} else {
+			defaultHeaders['Last-Modified'] = stats.mtime.toUTCString();
+		}
+
+		const contentType = mime.contentType(base);
+
+		if (contentType) {
+			defaultHeaders['Content-Type'] = contentType;
+		}
+	}
+
+	const headers = Object.assign(defaultHeaders, related);
+
+	for (const key in headers) {
+		if (headers.hasOwnProperty(key) && headers[key] === null) {
+			delete headers[key];
+		}
+	}
+
+	return headers;
+};
+
+const applicable = (decodedPath, configEntry) => {
+	if (typeof configEntry === 'boolean') {
+		return configEntry;
+	}
+
+	if (Array.isArray(configEntry)) {
+		for (let index = 0; index < configEntry.length; index++) {
+			const source = configEntry[index];
+
+			if (sourceMatches(source, decodedPath)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	return true;
+};
+
+const getPossiblePaths = (relativePath, extension) => [
+	path.join(relativePath, `index${extension}`),
+	relativePath.endsWith('/') ? relativePath.replace(/\/$/g, extension) : (relativePath + extension)
+].filter(item => path.basename(item) !== extension);
+
+const findRelated = async (current, relativePath, rewrittenPath, originalStat) => {
+	const possible = rewrittenPath ? [rewrittenPath] : getPossiblePaths(relativePath, '.html');
+
+	let stats = null;
+
+	for (let index = 0; index < possible.length; index++) {
+		const related = possible[index];
+		const absolutePath = path.join(current, related);
+
+		try {
+			stats = await originalStat(absolutePath);
+		} catch (err) {
+			if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
+				throw err;
+			}
+		}
+
+		if (stats) {
+			return {
+				stats,
+				absolutePath
+			};
+		}
+	}
+
+	return null;
+};
+
+const canBeListed = (excluded, file) => {
+	const slashed = slasher(file);
+	let whether = true;
+
+	for (let mark = 0; mark < excluded.length; mark++) {
+		const source = excluded[mark];
+
+		if (sourceMatches(source, slashed)) {
+			whether = false;
+			break;
+		}
+	}
+
+	return whether;
+};
+
+const renderDirectory = async (current, acceptsJSON, handlers, methods, config, paths) => {
+	const {directoryListing, trailingSlash, unlisted = [], renderSingle} = config;
+	const slashSuffix = typeof trailingSlash === 'boolean' ? (trailingSlash ? '/' : '') : '/';
+	const {relativePath, absolutePath} = paths;
+
+	const excluded = [
+		'.DS_Store',
+		'.git',
+		...unlisted
+	];
+
+	if (!applicable(relativePath, directoryListing) && !renderSingle) {
+		return {};
+	}
+
+	let files = await handlers.readdir(absolutePath);
+
+	const canRenderSingle = renderSingle && (files.length === 1);
+
+	for (let index = 0; index < files.length; index++) {
+		const file = files[index];
+
+		const filePath = path.resolve(absolutePath, file);
+		const details = path.parse(filePath);
+
+		// It's important to indicate that the `stat` call was
+		// spawned by the directory listing, as Now is
+		// simulating those calls and needs to special-case this.
+		let stats = null;
+
+		if (methods.lstat) {
+			stats = await handlers.lstat(filePath, true);
+		} else {
+			stats = await handlers.lstat(filePath);
+		}
+
+		details.relative = path.join(relativePath, details.base);
+
+		if (stats.isDirectory()) {
+			details.base += slashSuffix;
+			details.relative += slashSuffix;
+			details.type = 'folder';
+		} else {
+			if (canRenderSingle) {
+				return {
+					singleFile: true,
+					absolutePath: filePath,
+					stats
+				};
+			}
+
+			details.ext = details.ext.split('.')[1] || 'txt';
+			details.type = 'file';
+
+			details.size = bytes(stats.size, {
+				unitSeparator: ' ',
+				decimalPlaces: 0
+			});
+		}
+
+		details.title = details.base;
+
+		if (canBeListed(excluded, file)) {
+			files[index] = details;
+		} else {
+			delete files[index];
+		}
+	}
+
+	const toRoot = path.relative(current, absolutePath);
+	const directory = path.join(path.basename(current), toRoot, slashSuffix);
+	const pathParts = directory.split(path.sep).filter(Boolean);
+
+	// Sort to list directories first, then sort alphabetically
+	files = files.sort((a, b) => {
+		const aIsDir = a.type === 'directory';
+		const bIsDir = b.type === 'directory';
+
+		/* istanbul ignore next */
+		if (aIsDir && !bIsDir) {
+			return -1;
+		}
+
+		if ((bIsDir && !aIsDir) || (a.base > b.base)) {
+			return 1;
+		}
+
+		/* istanbul ignore next */
+		if (a.base < b.base) {
+			return -1;
+		}
+
+		/* istanbul ignore next */
+		return 0;
+	}).filter(Boolean);
+
+	// Add parent directory to the head of the sorted files array
+	if (toRoot.length > 0) {
+		const directoryPath = [...pathParts].slice(1);
+		const relative = path.join('/', ...directoryPath, '..', slashSuffix);
+
+		files.unshift({
+			type: 'directory',
+			base: '..',
+			relative,
+			title: relative,
+			ext: ''
+		});
+	}
+
+	const subPaths = [];
+
+	for (let index = 0; index < pathParts.length; index++) {
+		const parents = [];
+		const isLast = index === (pathParts.length - 1);
+
+		let before = 0;
+
+		while (before <= index) {
+			parents.push(pathParts[before]);
+			before++;
+		}
+
+		parents.shift();
+
+		subPaths.push({
+			name: pathParts[index] + (isLast ? slashSuffix : '/'),
+			url: index === 0 ? '' : parents.join('/') + slashSuffix
+		});
+	}
+
+	const spec = {
+		files,
+		directory,
+		paths: subPaths
+	};
+
+	const output = acceptsJSON ? JSON.stringify(spec) : directoryTemplate(spec);
+
+	return {directory: output};
+};
+
+const sendError = async (absolutePath, response, acceptsJSON, current, handlers, config, spec) => {
+	const {err: original, message, code, statusCode} = spec;
+
+	/* istanbul ignore next */
+	if (original && process.env.NODE_ENV !== 'test') {
+		console.error(original);
+	}
+
+	response.statusCode = statusCode;
+
+	if (acceptsJSON) {
+		response.setHeader('Content-Type', 'application/json; charset=utf-8');
+
+		response.end(JSON.stringify({
+			error: {
+				code,
+				message
+			}
+		}));
+
+		return;
+	}
+
+	let stats = null;
+
+	const errorPage = path.join(current, `${statusCode}.html`);
+
+	try {
+		stats = await handlers.lstat(errorPage);
+	} catch (err) {
+		if (err.code !== 'ENOENT') {
+			console.error(err);
+		}
+	}
+
+	if (stats) {
+		let stream = null;
+
+		try {
+			stream = await handlers.createReadStream(errorPage);
+
+			const headers = await getHeaders(handlers, config, current, errorPage, stats);
+
+			response.writeHead(statusCode, headers);
+			stream.pipe(response);
+
+			return;
+		} catch (err) {
+			console.error(err);
+		}
+	}
+
+	const headers = await getHeaders(handlers, config, current, absolutePath, null);
+	headers['Content-Type'] = 'text/html; charset=utf-8';
+
+	response.writeHead(statusCode, headers);
+	response.end(errorTemplate({statusCode, message}));
+};
+
+const internalError = async (...args) => {
+	const lastIndex = args.length - 1;
+	const err = args[lastIndex];
+
+	args[lastIndex] = {
+		statusCode: 500,
+		code: 'internal_server_error',
+		message: 'A server error has occurred',
+		err
+	};
+
+	return sendError(...args);
+};
+
+const getHandlers = methods => Object.assign({
+	lstat: promisify(lstat),
+	realpath: promisify(realpath),
+	createReadStream,
+	readdir: promisify(readdir),
+	sendError
+}, methods);
+
+module.exports = async (request, response, config = {}, methods = {}) => {
+	const cwd = process.cwd();
+	const current = config.public ? path.resolve(cwd, config.public) : cwd;
+	const handlers = getHandlers(methods);
+
+	let relativePath = null;
+	let acceptsJSON = null;
+
+	if (request.headers.accept) {
+		acceptsJSON = request.headers.accept.includes('application/json');
+	}
+
+	try {
+		relativePath = decodeURIComponent(url.parse(request.url).pathname);
+	} catch (err) {
+		return sendError('/', response, acceptsJSON, current, handlers, config, {
+			statusCode: 400,
+			code: 'bad_request',
+			message: 'Bad Request'
+		});
+	}
+
+	let absolutePath = path.join(current, relativePath);
+
+	// Prevent path traversal vulnerabilities. We could do this
+	// by ourselves, but using the package covers all the edge cases.
+	if (!isPathInside(absolutePath, current)) {
+		return sendError(absolutePath, response, acceptsJSON, current, handlers, config, {
+			statusCode: 400,
+			code: 'bad_request',
+			message: 'Bad Request'
+		});
+	}
+
+	const cleanUrl = applicable(relativePath, config.cleanUrls);
+	const redirect = shouldRedirect(relativePath, config, cleanUrl);
+
+	if (redirect) {
+		response.writeHead(redirect.statusCode, {
+			Location: encodeURI(redirect.target)
+		});
+
+		response.end();
+		return;
+	}
+
+	let stats = null;
+
+	// It's extremely important that we're doing multiple stat calls. This one
+	// right here could technically be removed, but then the program
+	// would be slower. Because for directories, we always want to see if a related file
+	// exists and then (after that), fetch the directory itself if no
+	// related file was found. However (for files, of which most have extensions), we should
+	// always stat right away.
+	//
+	// When simulating a file system without directory indexes, calculating whether a
+	// directory exists requires loading all the file paths and then checking if
+	// one of them includes the path of the directory. As that's a very
+	// performance-expensive thing to do, we need to ensure it's not happening if not really necessary.
+
+	if (path.extname(relativePath) !== '') {
+		try {
+			stats = await handlers.lstat(absolutePath);
+		} catch (err) {
+			if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
+				return internalError(absolutePath, response, acceptsJSON, current, handlers, config, err);
+			}
+		}
+	}
+
+	const rewrittenPath = applyRewrites(relativePath, config.rewrites);
+
+	if (!stats && (cleanUrl || rewrittenPath)) {
+		try {
+			const related = await findRelated(current, relativePath, rewrittenPath, handlers.lstat);
+
+			if (related) {
+				({stats, absolutePath} = related);
+			}
+		} catch (err) {
+			if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
+				return internalError(absolutePath, response, acceptsJSON, current, handlers, config, err);
+			}
+		}
+	}
+
+	if (!stats) {
+		try {
+			stats = await handlers.lstat(absolutePath);
+		} catch (err) {
+			if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
+				return internalError(absolutePath, response, acceptsJSON, current, handlers, config, err);
+			}
+		}
+	}
+
+	if (stats && stats.isDirectory()) {
+		let directory = null;
+		let singleFile = null;
+
+		try {
+			const related = await renderDirectory(current, acceptsJSON, handlers, methods, config, {
+				relativePath,
+				absolutePath
+			});
+
+			if (related.singleFile) {
+				({stats, absolutePath, singleFile} = related);
+			} else {
+				({directory} = related);
+			}
+		} catch (err) {
+			if (err.code !== 'ENOENT') {
+				return internalError(absolutePath, response, acceptsJSON, current, handlers, config, err);
+			}
+		}
+
+		if (directory) {
+			const contentType = acceptsJSON ? 'application/json; charset=utf-8' : 'text/html; charset=utf-8';
+
+			response.statusCode = 200;
+			response.setHeader('Content-Type', contentType);
+			response.end(directory);
+
+			return;
+		}
+
+		if (!singleFile) {
+			// The directory listing is disabled, so we want to
+			// render a 404 error.
+			stats = null;
+		}
+	}
+
+	const isSymLink = stats && stats.isSymbolicLink();
+
+	// There are two scenarios in which we want to reply with
+	// a 404 error: Either the path does not exist, or it is a
+	// symlink while the `symlinks` option is disabled (which it is by default).
+	if (!stats || (!config.symlinks && isSymLink)) {
+		// allow for custom 404 handling
+		return handlers.sendError(absolutePath, response, acceptsJSON, current, handlers, config, {
+			statusCode: 404,
+			code: 'not_found',
+			message: 'The requested path could not be found'
+		});
+	}
+
+	// If we figured out that the target is a symlink, we need to
+	// resolve the symlink and run a new `stat` call just for the
+	// target of that symlink.
+	if (isSymLink) {
+		absolutePath = await handlers.realpath(absolutePath);
+		stats = await handlers.lstat(absolutePath);
+	}
+
+	const streamOpts = {};
+
+	// TODO ? if-range
+	if (request.headers.range && stats.size) {
+		const range = parseRange(stats.size, request.headers.range);
+
+		if (typeof range === 'object' && range.type === 'bytes') {
+			const {start, end} = range[0];
+
+			streamOpts.start = start;
+			streamOpts.end = end;
+
+			response.statusCode = 206;
+		} else {
+			response.statusCode = 416;
+			response.setHeader('Content-Range', `bytes */${stats.size}`);
+		}
+	}
+
+	// TODO ? multiple ranges
+
+	let stream = null;
+
+	try {
+		stream = await handlers.createReadStream(absolutePath, streamOpts);
+	} catch (err) {
+		return internalError(absolutePath, response, acceptsJSON, current, handlers, config, err);
+	}
+
+	const headers = await getHeaders(handlers, config, current, absolutePath, stats);
+
+	// eslint-disable-next-line no-undefined
+	if (streamOpts.start !== undefined && streamOpts.end !== undefined) {
+		headers['Content-Range'] = `bytes ${streamOpts.start}-${streamOpts.end}/${stats.size}`;
+		headers['Content-Length'] = streamOpts.end - streamOpts.start + 1;
+	}
+
+	// We need to check for `headers.ETag` being truthy first, otherwise it will
+	// match `undefined` being equal to `undefined`, which is true.
+	//
+	// Checking for `undefined` and `null` is also important, because `Range` can be `0`.
+	//
+	// eslint-disable-next-line no-eq-null
+	if (request.headers.range == null && headers.ETag && headers.ETag === request.headers['if-none-match']) {
+		response.statusCode = 304;
+		response.end();
+
+		return;
+	}
+
+	response.writeHead(response.statusCode || 200, headers);
+	stream.pipe(response);
+};
 
 
 /***/ }),
@@ -35006,152 +32533,6 @@ function enableDestroy(server) {
     for (var key in connections)
       connections[key].destroy();
   };
-}
-
-
-/***/ }),
-
-/***/ 414:
-/***/ ((module) => {
-
-"use strict";
-
-/* eslint no-proto: 0 */
-module.exports = Object.setPrototypeOf || ({ __proto__: [] } instanceof Array ? setProtoOf : mixinProperties)
-
-function setProtoOf (obj, proto) {
-  obj.__proto__ = proto
-  return obj
-}
-
-function mixinProperties (obj, proto) {
-  for (var prop in proto) {
-    if (!obj.hasOwnProperty(prop)) {
-      obj[prop] = proto[prop]
-    }
-  }
-  return obj
-}
-
-
-/***/ }),
-
-/***/ 7415:
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-"use strict";
-/*!
- * statuses
- * Copyright(c) 2014 Jonathan Ong
- * Copyright(c) 2016 Douglas Christopher Wilson
- * MIT Licensed
- */
-
-
-
-/**
- * Module dependencies.
- * @private
- */
-
-var codes = __webpack_require__(7799)
-
-/**
- * Module exports.
- * @public
- */
-
-module.exports = status
-
-// status code to message map
-status.STATUS_CODES = codes
-
-// array of status codes
-status.codes = populateStatusesMap(status, codes)
-
-// status codes for redirects
-status.redirect = {
-  300: true,
-  301: true,
-  302: true,
-  303: true,
-  305: true,
-  307: true,
-  308: true
-}
-
-// status codes for empty bodies
-status.empty = {
-  204: true,
-  205: true,
-  304: true
-}
-
-// status codes for when you should retry the request
-status.retry = {
-  502: true,
-  503: true,
-  504: true
-}
-
-/**
- * Populate the statuses map for given codes.
- * @private
- */
-
-function populateStatusesMap (statuses, codes) {
-  var arr = []
-
-  Object.keys(codes).forEach(function forEachCode (code) {
-    var message = codes[code]
-    var status = Number(code)
-
-    // Populate properties
-    statuses[status] = message
-    statuses[message] = status
-    statuses[message.toLowerCase()] = status
-
-    // Add to array
-    arr.push(status)
-  })
-
-  return arr
-}
-
-/**
- * Get the status code.
- *
- * Given a number, this will throw if it is not a known status
- * code, otherwise the code will be returned. Given a string,
- * the string will be parsed for a number and return the code
- * if valid, otherwise will lookup the code assuming this is
- * the status message.
- *
- * @param {string|number} code
- * @returns {number}
- * @public
- */
-
-function status (code) {
-  if (typeof code === 'number') {
-    if (!status[code]) throw new Error('invalid status code: ' + code)
-    return code
-  }
-
-  if (typeof code !== 'string') {
-    throw new TypeError('code must be a number or string')
-  }
-
-  // '403'
-  var n = parseInt(code, 10)
-  if (!isNaN(n)) {
-    if (!status[n]) throw new Error('invalid status code: ' + n)
-    return n
-  }
-
-  n = status[code.toLowerCase()]
-  if (!n) throw new Error('invalid status message: "' + code + '"')
-  return n
 }
 
 
@@ -35300,120 +32681,6 @@ module.exports = {
 
 /***/ }),
 
-/***/ 6399:
-/***/ ((module) => {
-
-/*!
- * toidentifier
- * Copyright(c) 2016 Douglas Christopher Wilson
- * MIT Licensed
- */
-
-/**
- * Module exports.
- * @public
- */
-
-module.exports = toIdentifier
-
-/**
- * Trasform the given string into a JavaScript identifier
- *
- * @param {string} str
- * @returns {string}
- * @public
- */
-
-function toIdentifier (str) {
-  return str
-    .split(' ')
-    .map(function (token) {
-      return token.slice(0, 1).toUpperCase() + token.slice(1)
-    })
-    .join('')
-    .replace(/[^ _0-9a-z]/gi, '')
-}
-
-
-/***/ }),
-
-/***/ 3124:
-/***/ ((module) => {
-
-"use strict";
-/*!
- * unpipe
- * Copyright(c) 2015 Douglas Christopher Wilson
- * MIT Licensed
- */
-
-
-
-/**
- * Module exports.
- * @public
- */
-
-module.exports = unpipe
-
-/**
- * Determine if there are Node.js pipe-like data listeners.
- * @private
- */
-
-function hasPipeDataListeners(stream) {
-  var listeners = stream.listeners('data')
-
-  for (var i = 0; i < listeners.length; i++) {
-    if (listeners[i].name === 'ondata') {
-      return true
-    }
-  }
-
-  return false
-}
-
-/**
- * Unpipe a stream from all destinations.
- *
- * @param {object} stream
- * @public
- */
-
-function unpipe(stream) {
-  if (!stream) {
-    throw new TypeError('argument stream is required')
-  }
-
-  if (typeof stream.unpipe === 'function') {
-    // new-style
-    stream.unpipe()
-    return
-  }
-
-  // Node.js 0.8 hack
-  if (!hasPipeDataListeners(stream)) {
-    return
-  }
-
-  var listener
-  var listeners = stream.listeners('close')
-
-  for (var i = 0; i < listeners.length; i++) {
-    listener = listeners[i]
-
-    if (listener.name !== 'cleanup' && listener.name !== 'onclose') {
-      continue
-    }
-
-    // invoke the listener
-    listener.call(stream)
-  }
-}
-
-
-/***/ }),
-
 /***/ 2940:
 /***/ ((module) => {
 
@@ -35467,7 +32734,10 @@ async function main () {
       path: parseList(qq('paths', '*.md')),
       concurrency: Number(qq('concurrency', 100)),
       recurse: Boolean(qq('recurse', false)),
-      linksToSkip: parseList(qq('linksToSkip', '')),
+      linksToSkip: parseList(
+        core.getInput('linksToSkip') ||
+        core.getInput('skip' ||
+        0)),
       timeout: Number(qq('timeout', 0)),
       markdown: Boolean(qq('markdown', true)),
       serverRoot: qq('serverRoot', undefined)
@@ -35495,14 +32765,14 @@ async function main () {
   }
 }
 
-function qq (propName, defaultValue, typeFunction) {
+function qq (propName, defaultValue) {
   return core.getInput(propName) === ''
     ? defaultValue
     : core.getInput(propName);
 }
 
 function parseList (input) {
-  return input.split(',').map(x => x.trim()).filter(x => !!x);
+  return input.split(/[\s,]+/).map(x => x.trim()).filter(x => !!x);
 }
 
 if (require.main === require.cache[eval('__filename')]) {
@@ -35563,19 +32833,11 @@ module.exports = JSON.parse("{\"amp\":\"&\",\"apos\":\"'\",\"gt\":\">\",\"lt\":\
 
 /***/ }),
 
-/***/ 2274:
+/***/ 3313:
 /***/ ((module) => {
 
 "use strict";
-module.exports = JSON.parse("{\"application/andrew-inset\":[\"ez\"],\"application/applixware\":[\"aw\"],\"application/atom+xml\":[\"atom\"],\"application/atomcat+xml\":[\"atomcat\"],\"application/atomsvc+xml\":[\"atomsvc\"],\"application/bdoc\":[\"bdoc\"],\"application/ccxml+xml\":[\"ccxml\"],\"application/cdmi-capability\":[\"cdmia\"],\"application/cdmi-container\":[\"cdmic\"],\"application/cdmi-domain\":[\"cdmid\"],\"application/cdmi-object\":[\"cdmio\"],\"application/cdmi-queue\":[\"cdmiq\"],\"application/cu-seeme\":[\"cu\"],\"application/dash+xml\":[\"mpd\"],\"application/davmount+xml\":[\"davmount\"],\"application/docbook+xml\":[\"dbk\"],\"application/dssc+der\":[\"dssc\"],\"application/dssc+xml\":[\"xdssc\"],\"application/ecmascript\":[\"ecma\"],\"application/emma+xml\":[\"emma\"],\"application/epub+zip\":[\"epub\"],\"application/exi\":[\"exi\"],\"application/font-tdpfr\":[\"pfr\"],\"application/font-woff\":[],\"application/font-woff2\":[],\"application/geo+json\":[\"geojson\"],\"application/gml+xml\":[\"gml\"],\"application/gpx+xml\":[\"gpx\"],\"application/gxf\":[\"gxf\"],\"application/gzip\":[\"gz\"],\"application/hyperstudio\":[\"stk\"],\"application/inkml+xml\":[\"ink\",\"inkml\"],\"application/ipfix\":[\"ipfix\"],\"application/java-archive\":[\"jar\",\"war\",\"ear\"],\"application/java-serialized-object\":[\"ser\"],\"application/java-vm\":[\"class\"],\"application/javascript\":[\"js\",\"mjs\"],\"application/json\":[\"json\",\"map\"],\"application/json5\":[\"json5\"],\"application/jsonml+json\":[\"jsonml\"],\"application/ld+json\":[\"jsonld\"],\"application/lost+xml\":[\"lostxml\"],\"application/mac-binhex40\":[\"hqx\"],\"application/mac-compactpro\":[\"cpt\"],\"application/mads+xml\":[\"mads\"],\"application/manifest+json\":[\"webmanifest\"],\"application/marc\":[\"mrc\"],\"application/marcxml+xml\":[\"mrcx\"],\"application/mathematica\":[\"ma\",\"nb\",\"mb\"],\"application/mathml+xml\":[\"mathml\"],\"application/mbox\":[\"mbox\"],\"application/mediaservercontrol+xml\":[\"mscml\"],\"application/metalink+xml\":[\"metalink\"],\"application/metalink4+xml\":[\"meta4\"],\"application/mets+xml\":[\"mets\"],\"application/mods+xml\":[\"mods\"],\"application/mp21\":[\"m21\",\"mp21\"],\"application/mp4\":[\"mp4s\",\"m4p\"],\"application/msword\":[\"doc\",\"dot\"],\"application/mxf\":[\"mxf\"],\"application/octet-stream\":[\"bin\",\"dms\",\"lrf\",\"mar\",\"so\",\"dist\",\"distz\",\"pkg\",\"bpk\",\"dump\",\"elc\",\"deploy\",\"exe\",\"dll\",\"deb\",\"dmg\",\"iso\",\"img\",\"msi\",\"msp\",\"msm\",\"buffer\"],\"application/oda\":[\"oda\"],\"application/oebps-package+xml\":[\"opf\"],\"application/ogg\":[\"ogx\"],\"application/omdoc+xml\":[\"omdoc\"],\"application/onenote\":[\"onetoc\",\"onetoc2\",\"onetmp\",\"onepkg\"],\"application/oxps\":[\"oxps\"],\"application/patch-ops-error+xml\":[\"xer\"],\"application/pdf\":[\"pdf\"],\"application/pgp-encrypted\":[\"pgp\"],\"application/pgp-signature\":[\"asc\",\"sig\"],\"application/pics-rules\":[\"prf\"],\"application/pkcs10\":[\"p10\"],\"application/pkcs7-mime\":[\"p7m\",\"p7c\"],\"application/pkcs7-signature\":[\"p7s\"],\"application/pkcs8\":[\"p8\"],\"application/pkix-attr-cert\":[\"ac\"],\"application/pkix-cert\":[\"cer\"],\"application/pkix-crl\":[\"crl\"],\"application/pkix-pkipath\":[\"pkipath\"],\"application/pkixcmp\":[\"pki\"],\"application/pls+xml\":[\"pls\"],\"application/postscript\":[\"ai\",\"eps\",\"ps\"],\"application/prs.cww\":[\"cww\"],\"application/pskc+xml\":[\"pskcxml\"],\"application/raml+yaml\":[\"raml\"],\"application/rdf+xml\":[\"rdf\"],\"application/reginfo+xml\":[\"rif\"],\"application/relax-ng-compact-syntax\":[\"rnc\"],\"application/resource-lists+xml\":[\"rl\"],\"application/resource-lists-diff+xml\":[\"rld\"],\"application/rls-services+xml\":[\"rs\"],\"application/rpki-ghostbusters\":[\"gbr\"],\"application/rpki-manifest\":[\"mft\"],\"application/rpki-roa\":[\"roa\"],\"application/rsd+xml\":[\"rsd\"],\"application/rss+xml\":[\"rss\"],\"application/rtf\":[\"rtf\"],\"application/sbml+xml\":[\"sbml\"],\"application/scvp-cv-request\":[\"scq\"],\"application/scvp-cv-response\":[\"scs\"],\"application/scvp-vp-request\":[\"spq\"],\"application/scvp-vp-response\":[\"spp\"],\"application/sdp\":[\"sdp\"],\"application/set-payment-initiation\":[\"setpay\"],\"application/set-registration-initiation\":[\"setreg\"],\"application/shf+xml\":[\"shf\"],\"application/smil+xml\":[\"smi\",\"smil\"],\"application/sparql-query\":[\"rq\"],\"application/sparql-results+xml\":[\"srx\"],\"application/srgs\":[\"gram\"],\"application/srgs+xml\":[\"grxml\"],\"application/sru+xml\":[\"sru\"],\"application/ssdl+xml\":[\"ssdl\"],\"application/ssml+xml\":[\"ssml\"],\"application/tei+xml\":[\"tei\",\"teicorpus\"],\"application/thraud+xml\":[\"tfi\"],\"application/timestamped-data\":[\"tsd\"],\"application/vnd.3gpp.pic-bw-large\":[\"plb\"],\"application/vnd.3gpp.pic-bw-small\":[\"psb\"],\"application/vnd.3gpp.pic-bw-var\":[\"pvb\"],\"application/vnd.3gpp2.tcap\":[\"tcap\"],\"application/vnd.3m.post-it-notes\":[\"pwn\"],\"application/vnd.accpac.simply.aso\":[\"aso\"],\"application/vnd.accpac.simply.imp\":[\"imp\"],\"application/vnd.acucobol\":[\"acu\"],\"application/vnd.acucorp\":[\"atc\",\"acutc\"],\"application/vnd.adobe.air-application-installer-package+zip\":[\"air\"],\"application/vnd.adobe.formscentral.fcdt\":[\"fcdt\"],\"application/vnd.adobe.fxp\":[\"fxp\",\"fxpl\"],\"application/vnd.adobe.xdp+xml\":[\"xdp\"],\"application/vnd.adobe.xfdf\":[\"xfdf\"],\"application/vnd.ahead.space\":[\"ahead\"],\"application/vnd.airzip.filesecure.azf\":[\"azf\"],\"application/vnd.airzip.filesecure.azs\":[\"azs\"],\"application/vnd.amazon.ebook\":[\"azw\"],\"application/vnd.americandynamics.acc\":[\"acc\"],\"application/vnd.amiga.ami\":[\"ami\"],\"application/vnd.android.package-archive\":[\"apk\"],\"application/vnd.anser-web-certificate-issue-initiation\":[\"cii\"],\"application/vnd.anser-web-funds-transfer-initiation\":[\"fti\"],\"application/vnd.antix.game-component\":[\"atx\"],\"application/vnd.apple.installer+xml\":[\"mpkg\"],\"application/vnd.apple.mpegurl\":[\"m3u8\"],\"application/vnd.apple.pkpass\":[\"pkpass\"],\"application/vnd.aristanetworks.swi\":[\"swi\"],\"application/vnd.astraea-software.iota\":[\"iota\"],\"application/vnd.audiograph\":[\"aep\"],\"application/vnd.blueice.multipass\":[\"mpm\"],\"application/vnd.bmi\":[\"bmi\"],\"application/vnd.businessobjects\":[\"rep\"],\"application/vnd.chemdraw+xml\":[\"cdxml\"],\"application/vnd.chipnuts.karaoke-mmd\":[\"mmd\"],\"application/vnd.cinderella\":[\"cdy\"],\"application/vnd.claymore\":[\"cla\"],\"application/vnd.cloanto.rp9\":[\"rp9\"],\"application/vnd.clonk.c4group\":[\"c4g\",\"c4d\",\"c4f\",\"c4p\",\"c4u\"],\"application/vnd.cluetrust.cartomobile-config\":[\"c11amc\"],\"application/vnd.cluetrust.cartomobile-config-pkg\":[\"c11amz\"],\"application/vnd.commonspace\":[\"csp\"],\"application/vnd.contact.cmsg\":[\"cdbcmsg\"],\"application/vnd.cosmocaller\":[\"cmc\"],\"application/vnd.crick.clicker\":[\"clkx\"],\"application/vnd.crick.clicker.keyboard\":[\"clkk\"],\"application/vnd.crick.clicker.palette\":[\"clkp\"],\"application/vnd.crick.clicker.template\":[\"clkt\"],\"application/vnd.crick.clicker.wordbank\":[\"clkw\"],\"application/vnd.criticaltools.wbs+xml\":[\"wbs\"],\"application/vnd.ctc-posml\":[\"pml\"],\"application/vnd.cups-ppd\":[\"ppd\"],\"application/vnd.curl.car\":[\"car\"],\"application/vnd.curl.pcurl\":[\"pcurl\"],\"application/vnd.dart\":[\"dart\"],\"application/vnd.data-vision.rdz\":[\"rdz\"],\"application/vnd.dece.data\":[\"uvf\",\"uvvf\",\"uvd\",\"uvvd\"],\"application/vnd.dece.ttml+xml\":[\"uvt\",\"uvvt\"],\"application/vnd.dece.unspecified\":[\"uvx\",\"uvvx\"],\"application/vnd.dece.zip\":[\"uvz\",\"uvvz\"],\"application/vnd.denovo.fcselayout-link\":[\"fe_launch\"],\"application/vnd.dna\":[\"dna\"],\"application/vnd.dolby.mlp\":[\"mlp\"],\"application/vnd.dpgraph\":[\"dpg\"],\"application/vnd.dreamfactory\":[\"dfac\"],\"application/vnd.ds-keypoint\":[\"kpxx\"],\"application/vnd.dvb.ait\":[\"ait\"],\"application/vnd.dvb.service\":[\"svc\"],\"application/vnd.dynageo\":[\"geo\"],\"application/vnd.ecowin.chart\":[\"mag\"],\"application/vnd.enliven\":[\"nml\"],\"application/vnd.epson.esf\":[\"esf\"],\"application/vnd.epson.msf\":[\"msf\"],\"application/vnd.epson.quickanime\":[\"qam\"],\"application/vnd.epson.salt\":[\"slt\"],\"application/vnd.epson.ssf\":[\"ssf\"],\"application/vnd.eszigno3+xml\":[\"es3\",\"et3\"],\"application/vnd.ezpix-album\":[\"ez2\"],\"application/vnd.ezpix-package\":[\"ez3\"],\"application/vnd.fdf\":[\"fdf\"],\"application/vnd.fdsn.mseed\":[\"mseed\"],\"application/vnd.fdsn.seed\":[\"seed\",\"dataless\"],\"application/vnd.flographit\":[\"gph\"],\"application/vnd.fluxtime.clip\":[\"ftc\"],\"application/vnd.framemaker\":[\"fm\",\"frame\",\"maker\",\"book\"],\"application/vnd.frogans.fnc\":[\"fnc\"],\"application/vnd.frogans.ltf\":[\"ltf\"],\"application/vnd.fsc.weblaunch\":[\"fsc\"],\"application/vnd.fujitsu.oasys\":[\"oas\"],\"application/vnd.fujitsu.oasys2\":[\"oa2\"],\"application/vnd.fujitsu.oasys3\":[\"oa3\"],\"application/vnd.fujitsu.oasysgp\":[\"fg5\"],\"application/vnd.fujitsu.oasysprs\":[\"bh2\"],\"application/vnd.fujixerox.ddd\":[\"ddd\"],\"application/vnd.fujixerox.docuworks\":[\"xdw\"],\"application/vnd.fujixerox.docuworks.binder\":[\"xbd\"],\"application/vnd.fuzzysheet\":[\"fzs\"],\"application/vnd.genomatix.tuxedo\":[\"txd\"],\"application/vnd.geogebra.file\":[\"ggb\"],\"application/vnd.geogebra.tool\":[\"ggt\"],\"application/vnd.geometry-explorer\":[\"gex\",\"gre\"],\"application/vnd.geonext\":[\"gxt\"],\"application/vnd.geoplan\":[\"g2w\"],\"application/vnd.geospace\":[\"g3w\"],\"application/vnd.gmx\":[\"gmx\"],\"application/vnd.google-apps.document\":[\"gdoc\"],\"application/vnd.google-apps.presentation\":[\"gslides\"],\"application/vnd.google-apps.spreadsheet\":[\"gsheet\"],\"application/vnd.google-earth.kml+xml\":[\"kml\"],\"application/vnd.google-earth.kmz\":[\"kmz\"],\"application/vnd.grafeq\":[\"gqf\",\"gqs\"],\"application/vnd.groove-account\":[\"gac\"],\"application/vnd.groove-help\":[\"ghf\"],\"application/vnd.groove-identity-message\":[\"gim\"],\"application/vnd.groove-injector\":[\"grv\"],\"application/vnd.groove-tool-message\":[\"gtm\"],\"application/vnd.groove-tool-template\":[\"tpl\"],\"application/vnd.groove-vcard\":[\"vcg\"],\"application/vnd.hal+xml\":[\"hal\"],\"application/vnd.handheld-entertainment+xml\":[\"zmm\"],\"application/vnd.hbci\":[\"hbci\"],\"application/vnd.hhe.lesson-player\":[\"les\"],\"application/vnd.hp-hpgl\":[\"hpgl\"],\"application/vnd.hp-hpid\":[\"hpid\"],\"application/vnd.hp-hps\":[\"hps\"],\"application/vnd.hp-jlyt\":[\"jlt\"],\"application/vnd.hp-pcl\":[\"pcl\"],\"application/vnd.hp-pclxl\":[\"pclxl\"],\"application/vnd.hydrostatix.sof-data\":[\"sfd-hdstx\"],\"application/vnd.ibm.minipay\":[\"mpy\"],\"application/vnd.ibm.modcap\":[\"afp\",\"listafp\",\"list3820\"],\"application/vnd.ibm.rights-management\":[\"irm\"],\"application/vnd.ibm.secure-container\":[\"sc\"],\"application/vnd.iccprofile\":[\"icc\",\"icm\"],\"application/vnd.igloader\":[\"igl\"],\"application/vnd.immervision-ivp\":[\"ivp\"],\"application/vnd.immervision-ivu\":[\"ivu\"],\"application/vnd.insors.igm\":[\"igm\"],\"application/vnd.intercon.formnet\":[\"xpw\",\"xpx\"],\"application/vnd.intergeo\":[\"i2g\"],\"application/vnd.intu.qbo\":[\"qbo\"],\"application/vnd.intu.qfx\":[\"qfx\"],\"application/vnd.ipunplugged.rcprofile\":[\"rcprofile\"],\"application/vnd.irepository.package+xml\":[\"irp\"],\"application/vnd.is-xpr\":[\"xpr\"],\"application/vnd.isac.fcs\":[\"fcs\"],\"application/vnd.jam\":[\"jam\"],\"application/vnd.jcp.javame.midlet-rms\":[\"rms\"],\"application/vnd.jisp\":[\"jisp\"],\"application/vnd.joost.joda-archive\":[\"joda\"],\"application/vnd.kahootz\":[\"ktz\",\"ktr\"],\"application/vnd.kde.karbon\":[\"karbon\"],\"application/vnd.kde.kchart\":[\"chrt\"],\"application/vnd.kde.kformula\":[\"kfo\"],\"application/vnd.kde.kivio\":[\"flw\"],\"application/vnd.kde.kontour\":[\"kon\"],\"application/vnd.kde.kpresenter\":[\"kpr\",\"kpt\"],\"application/vnd.kde.kspread\":[\"ksp\"],\"application/vnd.kde.kword\":[\"kwd\",\"kwt\"],\"application/vnd.kenameaapp\":[\"htke\"],\"application/vnd.kidspiration\":[\"kia\"],\"application/vnd.kinar\":[\"kne\",\"knp\"],\"application/vnd.koan\":[\"skp\",\"skd\",\"skt\",\"skm\"],\"application/vnd.kodak-descriptor\":[\"sse\"],\"application/vnd.las.las+xml\":[\"lasxml\"],\"application/vnd.llamagraphics.life-balance.desktop\":[\"lbd\"],\"application/vnd.llamagraphics.life-balance.exchange+xml\":[\"lbe\"],\"application/vnd.lotus-1-2-3\":[\"123\"],\"application/vnd.lotus-approach\":[\"apr\"],\"application/vnd.lotus-freelance\":[\"pre\"],\"application/vnd.lotus-notes\":[\"nsf\"],\"application/vnd.lotus-organizer\":[\"org\"],\"application/vnd.lotus-screencam\":[\"scm\"],\"application/vnd.lotus-wordpro\":[\"lwp\"],\"application/vnd.macports.portpkg\":[\"portpkg\"],\"application/vnd.mcd\":[\"mcd\"],\"application/vnd.medcalcdata\":[\"mc1\"],\"application/vnd.mediastation.cdkey\":[\"cdkey\"],\"application/vnd.mfer\":[\"mwf\"],\"application/vnd.mfmp\":[\"mfm\"],\"application/vnd.micrografx.flo\":[\"flo\"],\"application/vnd.micrografx.igx\":[\"igx\"],\"application/vnd.mif\":[\"mif\"],\"application/vnd.mobius.daf\":[\"daf\"],\"application/vnd.mobius.dis\":[\"dis\"],\"application/vnd.mobius.mbk\":[\"mbk\"],\"application/vnd.mobius.mqy\":[\"mqy\"],\"application/vnd.mobius.msl\":[\"msl\"],\"application/vnd.mobius.plc\":[\"plc\"],\"application/vnd.mobius.txf\":[\"txf\"],\"application/vnd.mophun.application\":[\"mpn\"],\"application/vnd.mophun.certificate\":[\"mpc\"],\"application/vnd.mozilla.xul+xml\":[\"xul\"],\"application/vnd.ms-artgalry\":[\"cil\"],\"application/vnd.ms-cab-compressed\":[\"cab\"],\"application/vnd.ms-excel\":[\"xls\",\"xlm\",\"xla\",\"xlc\",\"xlt\",\"xlw\"],\"application/vnd.ms-excel.addin.macroenabled.12\":[\"xlam\"],\"application/vnd.ms-excel.sheet.binary.macroenabled.12\":[\"xlsb\"],\"application/vnd.ms-excel.sheet.macroenabled.12\":[\"xlsm\"],\"application/vnd.ms-excel.template.macroenabled.12\":[\"xltm\"],\"application/vnd.ms-fontobject\":[\"eot\"],\"application/vnd.ms-htmlhelp\":[\"chm\"],\"application/vnd.ms-ims\":[\"ims\"],\"application/vnd.ms-lrm\":[\"lrm\"],\"application/vnd.ms-officetheme\":[\"thmx\"],\"application/vnd.ms-outlook\":[\"msg\"],\"application/vnd.ms-pki.seccat\":[\"cat\"],\"application/vnd.ms-pki.stl\":[\"stl\"],\"application/vnd.ms-powerpoint\":[\"ppt\",\"pps\",\"pot\"],\"application/vnd.ms-powerpoint.addin.macroenabled.12\":[\"ppam\"],\"application/vnd.ms-powerpoint.presentation.macroenabled.12\":[\"pptm\"],\"application/vnd.ms-powerpoint.slide.macroenabled.12\":[\"sldm\"],\"application/vnd.ms-powerpoint.slideshow.macroenabled.12\":[\"ppsm\"],\"application/vnd.ms-powerpoint.template.macroenabled.12\":[\"potm\"],\"application/vnd.ms-project\":[\"mpp\",\"mpt\"],\"application/vnd.ms-word.document.macroenabled.12\":[\"docm\"],\"application/vnd.ms-word.template.macroenabled.12\":[\"dotm\"],\"application/vnd.ms-works\":[\"wps\",\"wks\",\"wcm\",\"wdb\"],\"application/vnd.ms-wpl\":[\"wpl\"],\"application/vnd.ms-xpsdocument\":[\"xps\"],\"application/vnd.mseq\":[\"mseq\"],\"application/vnd.musician\":[\"mus\"],\"application/vnd.muvee.style\":[\"msty\"],\"application/vnd.mynfc\":[\"taglet\"],\"application/vnd.neurolanguage.nlu\":[\"nlu\"],\"application/vnd.nitf\":[\"ntf\",\"nitf\"],\"application/vnd.noblenet-directory\":[\"nnd\"],\"application/vnd.noblenet-sealer\":[\"nns\"],\"application/vnd.noblenet-web\":[\"nnw\"],\"application/vnd.nokia.n-gage.data\":[\"ngdat\"],\"application/vnd.nokia.n-gage.symbian.install\":[\"n-gage\"],\"application/vnd.nokia.radio-preset\":[\"rpst\"],\"application/vnd.nokia.radio-presets\":[\"rpss\"],\"application/vnd.novadigm.edm\":[\"edm\"],\"application/vnd.novadigm.edx\":[\"edx\"],\"application/vnd.novadigm.ext\":[\"ext\"],\"application/vnd.oasis.opendocument.chart\":[\"odc\"],\"application/vnd.oasis.opendocument.chart-template\":[\"otc\"],\"application/vnd.oasis.opendocument.database\":[\"odb\"],\"application/vnd.oasis.opendocument.formula\":[\"odf\"],\"application/vnd.oasis.opendocument.formula-template\":[\"odft\"],\"application/vnd.oasis.opendocument.graphics\":[\"odg\"],\"application/vnd.oasis.opendocument.graphics-template\":[\"otg\"],\"application/vnd.oasis.opendocument.image\":[\"odi\"],\"application/vnd.oasis.opendocument.image-template\":[\"oti\"],\"application/vnd.oasis.opendocument.presentation\":[\"odp\"],\"application/vnd.oasis.opendocument.presentation-template\":[\"otp\"],\"application/vnd.oasis.opendocument.spreadsheet\":[\"ods\"],\"application/vnd.oasis.opendocument.spreadsheet-template\":[\"ots\"],\"application/vnd.oasis.opendocument.text\":[\"odt\"],\"application/vnd.oasis.opendocument.text-master\":[\"odm\"],\"application/vnd.oasis.opendocument.text-template\":[\"ott\"],\"application/vnd.oasis.opendocument.text-web\":[\"oth\"],\"application/vnd.olpc-sugar\":[\"xo\"],\"application/vnd.oma.dd2+xml\":[\"dd2\"],\"application/vnd.openofficeorg.extension\":[\"oxt\"],\"application/vnd.openxmlformats-officedocument.presentationml.presentation\":[\"pptx\"],\"application/vnd.openxmlformats-officedocument.presentationml.slide\":[\"sldx\"],\"application/vnd.openxmlformats-officedocument.presentationml.slideshow\":[\"ppsx\"],\"application/vnd.openxmlformats-officedocument.presentationml.template\":[\"potx\"],\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\":[\"xlsx\"],\"application/vnd.openxmlformats-officedocument.spreadsheetml.template\":[\"xltx\"],\"application/vnd.openxmlformats-officedocument.wordprocessingml.document\":[\"docx\"],\"application/vnd.openxmlformats-officedocument.wordprocessingml.template\":[\"dotx\"],\"application/vnd.osgeo.mapguide.package\":[\"mgp\"],\"application/vnd.osgi.dp\":[\"dp\"],\"application/vnd.osgi.subsystem\":[\"esa\"],\"application/vnd.palm\":[\"pdb\",\"pqa\",\"oprc\"],\"application/vnd.pawaafile\":[\"paw\"],\"application/vnd.pg.format\":[\"str\"],\"application/vnd.pg.osasli\":[\"ei6\"],\"application/vnd.picsel\":[\"efif\"],\"application/vnd.pmi.widget\":[\"wg\"],\"application/vnd.pocketlearn\":[\"plf\"],\"application/vnd.powerbuilder6\":[\"pbd\"],\"application/vnd.previewsystems.box\":[\"box\"],\"application/vnd.proteus.magazine\":[\"mgz\"],\"application/vnd.publishare-delta-tree\":[\"qps\"],\"application/vnd.pvi.ptid1\":[\"ptid\"],\"application/vnd.quark.quarkxpress\":[\"qxd\",\"qxt\",\"qwd\",\"qwt\",\"qxl\",\"qxb\"],\"application/vnd.realvnc.bed\":[\"bed\"],\"application/vnd.recordare.musicxml\":[\"mxl\"],\"application/vnd.recordare.musicxml+xml\":[\"musicxml\"],\"application/vnd.rig.cryptonote\":[\"cryptonote\"],\"application/vnd.rim.cod\":[\"cod\"],\"application/vnd.rn-realmedia\":[\"rm\"],\"application/vnd.rn-realmedia-vbr\":[\"rmvb\"],\"application/vnd.route66.link66+xml\":[\"link66\"],\"application/vnd.sailingtracker.track\":[\"st\"],\"application/vnd.seemail\":[\"see\"],\"application/vnd.sema\":[\"sema\"],\"application/vnd.semd\":[\"semd\"],\"application/vnd.semf\":[\"semf\"],\"application/vnd.shana.informed.formdata\":[\"ifm\"],\"application/vnd.shana.informed.formtemplate\":[\"itp\"],\"application/vnd.shana.informed.interchange\":[\"iif\"],\"application/vnd.shana.informed.package\":[\"ipk\"],\"application/vnd.simtech-mindmapper\":[\"twd\",\"twds\"],\"application/vnd.smaf\":[\"mmf\"],\"application/vnd.smart.teacher\":[\"teacher\"],\"application/vnd.solent.sdkm+xml\":[\"sdkm\",\"sdkd\"],\"application/vnd.spotfire.dxp\":[\"dxp\"],\"application/vnd.spotfire.sfs\":[\"sfs\"],\"application/vnd.stardivision.calc\":[\"sdc\"],\"application/vnd.stardivision.draw\":[\"sda\"],\"application/vnd.stardivision.impress\":[\"sdd\"],\"application/vnd.stardivision.math\":[\"smf\"],\"application/vnd.stardivision.writer\":[\"sdw\",\"vor\"],\"application/vnd.stardivision.writer-global\":[\"sgl\"],\"application/vnd.stepmania.package\":[\"smzip\"],\"application/vnd.stepmania.stepchart\":[\"sm\"],\"application/vnd.sun.wadl+xml\":[\"wadl\"],\"application/vnd.sun.xml.calc\":[\"sxc\"],\"application/vnd.sun.xml.calc.template\":[\"stc\"],\"application/vnd.sun.xml.draw\":[\"sxd\"],\"application/vnd.sun.xml.draw.template\":[\"std\"],\"application/vnd.sun.xml.impress\":[\"sxi\"],\"application/vnd.sun.xml.impress.template\":[\"sti\"],\"application/vnd.sun.xml.math\":[\"sxm\"],\"application/vnd.sun.xml.writer\":[\"sxw\"],\"application/vnd.sun.xml.writer.global\":[\"sxg\"],\"application/vnd.sun.xml.writer.template\":[\"stw\"],\"application/vnd.sus-calendar\":[\"sus\",\"susp\"],\"application/vnd.svd\":[\"svd\"],\"application/vnd.symbian.install\":[\"sis\",\"sisx\"],\"application/vnd.syncml+xml\":[\"xsm\"],\"application/vnd.syncml.dm+wbxml\":[\"bdm\"],\"application/vnd.syncml.dm+xml\":[\"xdm\"],\"application/vnd.tao.intent-module-archive\":[\"tao\"],\"application/vnd.tcpdump.pcap\":[\"pcap\",\"cap\",\"dmp\"],\"application/vnd.tmobile-livetv\":[\"tmo\"],\"application/vnd.trid.tpt\":[\"tpt\"],\"application/vnd.triscape.mxs\":[\"mxs\"],\"application/vnd.trueapp\":[\"tra\"],\"application/vnd.ufdl\":[\"ufd\",\"ufdl\"],\"application/vnd.uiq.theme\":[\"utz\"],\"application/vnd.umajin\":[\"umj\"],\"application/vnd.unity\":[\"unityweb\"],\"application/vnd.uoml+xml\":[\"uoml\"],\"application/vnd.vcx\":[\"vcx\"],\"application/vnd.visio\":[\"vsd\",\"vst\",\"vss\",\"vsw\"],\"application/vnd.visionary\":[\"vis\"],\"application/vnd.vsf\":[\"vsf\"],\"application/vnd.wap.wbxml\":[\"wbxml\"],\"application/vnd.wap.wmlc\":[\"wmlc\"],\"application/vnd.wap.wmlscriptc\":[\"wmlsc\"],\"application/vnd.webturbo\":[\"wtb\"],\"application/vnd.wolfram.player\":[\"nbp\"],\"application/vnd.wordperfect\":[\"wpd\"],\"application/vnd.wqd\":[\"wqd\"],\"application/vnd.wt.stf\":[\"stf\"],\"application/vnd.xara\":[\"xar\"],\"application/vnd.xfdl\":[\"xfdl\"],\"application/vnd.yamaha.hv-dic\":[\"hvd\"],\"application/vnd.yamaha.hv-script\":[\"hvs\"],\"application/vnd.yamaha.hv-voice\":[\"hvp\"],\"application/vnd.yamaha.openscoreformat\":[\"osf\"],\"application/vnd.yamaha.openscoreformat.osfpvg+xml\":[\"osfpvg\"],\"application/vnd.yamaha.smaf-audio\":[\"saf\"],\"application/vnd.yamaha.smaf-phrase\":[\"spf\"],\"application/vnd.yellowriver-custom-menu\":[\"cmp\"],\"application/vnd.zul\":[\"zir\",\"zirz\"],\"application/vnd.zzazz.deck+xml\":[\"zaz\"],\"application/voicexml+xml\":[\"vxml\"],\"application/wasm\":[\"wasm\"],\"application/widget\":[\"wgt\"],\"application/winhlp\":[\"hlp\"],\"application/wsdl+xml\":[\"wsdl\"],\"application/wspolicy+xml\":[\"wspolicy\"],\"application/x-7z-compressed\":[\"7z\"],\"application/x-abiword\":[\"abw\"],\"application/x-ace-compressed\":[\"ace\"],\"application/x-apple-diskimage\":[],\"application/x-arj\":[\"arj\"],\"application/x-authorware-bin\":[\"aab\",\"x32\",\"u32\",\"vox\"],\"application/x-authorware-map\":[\"aam\"],\"application/x-authorware-seg\":[\"aas\"],\"application/x-bcpio\":[\"bcpio\"],\"application/x-bdoc\":[],\"application/x-bittorrent\":[\"torrent\"],\"application/x-blorb\":[\"blb\",\"blorb\"],\"application/x-bzip\":[\"bz\"],\"application/x-bzip2\":[\"bz2\",\"boz\"],\"application/x-cbr\":[\"cbr\",\"cba\",\"cbt\",\"cbz\",\"cb7\"],\"application/x-cdlink\":[\"vcd\"],\"application/x-cfs-compressed\":[\"cfs\"],\"application/x-chat\":[\"chat\"],\"application/x-chess-pgn\":[\"pgn\"],\"application/x-chrome-extension\":[\"crx\"],\"application/x-cocoa\":[\"cco\"],\"application/x-conference\":[\"nsc\"],\"application/x-cpio\":[\"cpio\"],\"application/x-csh\":[\"csh\"],\"application/x-debian-package\":[\"udeb\"],\"application/x-dgc-compressed\":[\"dgc\"],\"application/x-director\":[\"dir\",\"dcr\",\"dxr\",\"cst\",\"cct\",\"cxt\",\"w3d\",\"fgd\",\"swa\"],\"application/x-doom\":[\"wad\"],\"application/x-dtbncx+xml\":[\"ncx\"],\"application/x-dtbook+xml\":[\"dtb\"],\"application/x-dtbresource+xml\":[\"res\"],\"application/x-dvi\":[\"dvi\"],\"application/x-envoy\":[\"evy\"],\"application/x-eva\":[\"eva\"],\"application/x-font-bdf\":[\"bdf\"],\"application/x-font-ghostscript\":[\"gsf\"],\"application/x-font-linux-psf\":[\"psf\"],\"application/x-font-pcf\":[\"pcf\"],\"application/x-font-snf\":[\"snf\"],\"application/x-font-type1\":[\"pfa\",\"pfb\",\"pfm\",\"afm\"],\"application/x-freearc\":[\"arc\"],\"application/x-futuresplash\":[\"spl\"],\"application/x-gca-compressed\":[\"gca\"],\"application/x-glulx\":[\"ulx\"],\"application/x-gnumeric\":[\"gnumeric\"],\"application/x-gramps-xml\":[\"gramps\"],\"application/x-gtar\":[\"gtar\"],\"application/x-hdf\":[\"hdf\"],\"application/x-httpd-php\":[\"php\"],\"application/x-install-instructions\":[\"install\"],\"application/x-iso9660-image\":[],\"application/x-java-archive-diff\":[\"jardiff\"],\"application/x-java-jnlp-file\":[\"jnlp\"],\"application/x-latex\":[\"latex\"],\"application/x-lua-bytecode\":[\"luac\"],\"application/x-lzh-compressed\":[\"lzh\",\"lha\"],\"application/x-makeself\":[\"run\"],\"application/x-mie\":[\"mie\"],\"application/x-mobipocket-ebook\":[\"prc\",\"mobi\"],\"application/x-ms-application\":[\"application\"],\"application/x-ms-shortcut\":[\"lnk\"],\"application/x-ms-wmd\":[\"wmd\"],\"application/x-ms-wmz\":[\"wmz\"],\"application/x-ms-xbap\":[\"xbap\"],\"application/x-msaccess\":[\"mdb\"],\"application/x-msbinder\":[\"obd\"],\"application/x-mscardfile\":[\"crd\"],\"application/x-msclip\":[\"clp\"],\"application/x-msdos-program\":[],\"application/x-msdownload\":[\"com\",\"bat\"],\"application/x-msmediaview\":[\"mvb\",\"m13\",\"m14\"],\"application/x-msmetafile\":[\"wmf\",\"emf\",\"emz\"],\"application/x-msmoney\":[\"mny\"],\"application/x-mspublisher\":[\"pub\"],\"application/x-msschedule\":[\"scd\"],\"application/x-msterminal\":[\"trm\"],\"application/x-mswrite\":[\"wri\"],\"application/x-netcdf\":[\"nc\",\"cdf\"],\"application/x-ns-proxy-autoconfig\":[\"pac\"],\"application/x-nzb\":[\"nzb\"],\"application/x-perl\":[\"pl\",\"pm\"],\"application/x-pilot\":[],\"application/x-pkcs12\":[\"p12\",\"pfx\"],\"application/x-pkcs7-certificates\":[\"p7b\",\"spc\"],\"application/x-pkcs7-certreqresp\":[\"p7r\"],\"application/x-rar-compressed\":[\"rar\"],\"application/x-redhat-package-manager\":[\"rpm\"],\"application/x-research-info-systems\":[\"ris\"],\"application/x-sea\":[\"sea\"],\"application/x-sh\":[\"sh\"],\"application/x-shar\":[\"shar\"],\"application/x-shockwave-flash\":[\"swf\"],\"application/x-silverlight-app\":[\"xap\"],\"application/x-sql\":[\"sql\"],\"application/x-stuffit\":[\"sit\"],\"application/x-stuffitx\":[\"sitx\"],\"application/x-subrip\":[\"srt\"],\"application/x-sv4cpio\":[\"sv4cpio\"],\"application/x-sv4crc\":[\"sv4crc\"],\"application/x-t3vm-image\":[\"t3\"],\"application/x-tads\":[\"gam\"],\"application/x-tar\":[\"tar\"],\"application/x-tcl\":[\"tcl\",\"tk\"],\"application/x-tex\":[\"tex\"],\"application/x-tex-tfm\":[\"tfm\"],\"application/x-texinfo\":[\"texinfo\",\"texi\"],\"application/x-tgif\":[\"obj\"],\"application/x-ustar\":[\"ustar\"],\"application/x-virtualbox-hdd\":[\"hdd\"],\"application/x-virtualbox-ova\":[\"ova\"],\"application/x-virtualbox-ovf\":[\"ovf\"],\"application/x-virtualbox-vbox\":[\"vbox\"],\"application/x-virtualbox-vbox-extpack\":[\"vbox-extpack\"],\"application/x-virtualbox-vdi\":[\"vdi\"],\"application/x-virtualbox-vhd\":[\"vhd\"],\"application/x-virtualbox-vmdk\":[\"vmdk\"],\"application/x-wais-source\":[\"src\"],\"application/x-web-app-manifest+json\":[\"webapp\"],\"application/x-x509-ca-cert\":[\"der\",\"crt\",\"pem\"],\"application/x-xfig\":[\"fig\"],\"application/x-xliff+xml\":[\"xlf\"],\"application/x-xpinstall\":[\"xpi\"],\"application/x-xz\":[\"xz\"],\"application/x-zmachine\":[\"z1\",\"z2\",\"z3\",\"z4\",\"z5\",\"z6\",\"z7\",\"z8\"],\"application/xaml+xml\":[\"xaml\"],\"application/xcap-diff+xml\":[\"xdf\"],\"application/xenc+xml\":[\"xenc\"],\"application/xhtml+xml\":[\"xhtml\",\"xht\"],\"application/xml\":[\"xml\",\"xsl\",\"xsd\",\"rng\"],\"application/xml-dtd\":[\"dtd\"],\"application/xop+xml\":[\"xop\"],\"application/xproc+xml\":[\"xpl\"],\"application/xslt+xml\":[\"xslt\"],\"application/xspf+xml\":[\"xspf\"],\"application/xv+xml\":[\"mxml\",\"xhvml\",\"xvml\",\"xvm\"],\"application/yang\":[\"yang\"],\"application/yin+xml\":[\"yin\"],\"application/zip\":[\"zip\"],\"audio/3gpp\":[],\"audio/adpcm\":[\"adp\"],\"audio/basic\":[\"au\",\"snd\"],\"audio/midi\":[\"mid\",\"midi\",\"kar\",\"rmi\"],\"audio/mp3\":[],\"audio/mp4\":[\"m4a\",\"mp4a\"],\"audio/mpeg\":[\"mpga\",\"mp2\",\"mp2a\",\"mp3\",\"m2a\",\"m3a\"],\"audio/ogg\":[\"oga\",\"ogg\",\"spx\"],\"audio/s3m\":[\"s3m\"],\"audio/silk\":[\"sil\"],\"audio/vnd.dece.audio\":[\"uva\",\"uvva\"],\"audio/vnd.digital-winds\":[\"eol\"],\"audio/vnd.dra\":[\"dra\"],\"audio/vnd.dts\":[\"dts\"],\"audio/vnd.dts.hd\":[\"dtshd\"],\"audio/vnd.lucent.voice\":[\"lvp\"],\"audio/vnd.ms-playready.media.pya\":[\"pya\"],\"audio/vnd.nuera.ecelp4800\":[\"ecelp4800\"],\"audio/vnd.nuera.ecelp7470\":[\"ecelp7470\"],\"audio/vnd.nuera.ecelp9600\":[\"ecelp9600\"],\"audio/vnd.rip\":[\"rip\"],\"audio/wav\":[\"wav\"],\"audio/wave\":[],\"audio/webm\":[\"weba\"],\"audio/x-aac\":[\"aac\"],\"audio/x-aiff\":[\"aif\",\"aiff\",\"aifc\"],\"audio/x-caf\":[\"caf\"],\"audio/x-flac\":[\"flac\"],\"audio/x-m4a\":[],\"audio/x-matroska\":[\"mka\"],\"audio/x-mpegurl\":[\"m3u\"],\"audio/x-ms-wax\":[\"wax\"],\"audio/x-ms-wma\":[\"wma\"],\"audio/x-pn-realaudio\":[\"ram\",\"ra\"],\"audio/x-pn-realaudio-plugin\":[\"rmp\"],\"audio/x-realaudio\":[],\"audio/x-wav\":[],\"audio/xm\":[\"xm\"],\"chemical/x-cdx\":[\"cdx\"],\"chemical/x-cif\":[\"cif\"],\"chemical/x-cmdf\":[\"cmdf\"],\"chemical/x-cml\":[\"cml\"],\"chemical/x-csml\":[\"csml\"],\"chemical/x-xyz\":[\"xyz\"],\"font/collection\":[\"ttc\"],\"font/otf\":[\"otf\"],\"font/ttf\":[\"ttf\"],\"font/woff\":[\"woff\"],\"font/woff2\":[\"woff2\"],\"image/apng\":[\"apng\"],\"image/bmp\":[\"bmp\"],\"image/cgm\":[\"cgm\"],\"image/g3fax\":[\"g3\"],\"image/gif\":[\"gif\"],\"image/ief\":[\"ief\"],\"image/jp2\":[\"jp2\",\"jpg2\"],\"image/jpeg\":[\"jpeg\",\"jpg\",\"jpe\"],\"image/jpm\":[\"jpm\"],\"image/jpx\":[\"jpx\",\"jpf\"],\"image/ktx\":[\"ktx\"],\"image/png\":[\"png\"],\"image/prs.btif\":[\"btif\"],\"image/sgi\":[\"sgi\"],\"image/svg+xml\":[\"svg\",\"svgz\"],\"image/tiff\":[\"tiff\",\"tif\"],\"image/vnd.adobe.photoshop\":[\"psd\"],\"image/vnd.dece.graphic\":[\"uvi\",\"uvvi\",\"uvg\",\"uvvg\"],\"image/vnd.djvu\":[\"djvu\",\"djv\"],\"image/vnd.dvb.subtitle\":[],\"image/vnd.dwg\":[\"dwg\"],\"image/vnd.dxf\":[\"dxf\"],\"image/vnd.fastbidsheet\":[\"fbs\"],\"image/vnd.fpx\":[\"fpx\"],\"image/vnd.fst\":[\"fst\"],\"image/vnd.fujixerox.edmics-mmr\":[\"mmr\"],\"image/vnd.fujixerox.edmics-rlc\":[\"rlc\"],\"image/vnd.ms-modi\":[\"mdi\"],\"image/vnd.ms-photo\":[\"wdp\"],\"image/vnd.net-fpx\":[\"npx\"],\"image/vnd.wap.wbmp\":[\"wbmp\"],\"image/vnd.xiff\":[\"xif\"],\"image/webp\":[\"webp\"],\"image/x-3ds\":[\"3ds\"],\"image/x-cmu-raster\":[\"ras\"],\"image/x-cmx\":[\"cmx\"],\"image/x-freehand\":[\"fh\",\"fhc\",\"fh4\",\"fh5\",\"fh7\"],\"image/x-icon\":[\"ico\"],\"image/x-jng\":[\"jng\"],\"image/x-mrsid-image\":[\"sid\"],\"image/x-ms-bmp\":[],\"image/x-pcx\":[\"pcx\"],\"image/x-pict\":[\"pic\",\"pct\"],\"image/x-portable-anymap\":[\"pnm\"],\"image/x-portable-bitmap\":[\"pbm\"],\"image/x-portable-graymap\":[\"pgm\"],\"image/x-portable-pixmap\":[\"ppm\"],\"image/x-rgb\":[\"rgb\"],\"image/x-tga\":[\"tga\"],\"image/x-xbitmap\":[\"xbm\"],\"image/x-xpixmap\":[\"xpm\"],\"image/x-xwindowdump\":[\"xwd\"],\"message/rfc822\":[\"eml\",\"mime\"],\"model/gltf+json\":[\"gltf\"],\"model/gltf-binary\":[\"glb\"],\"model/iges\":[\"igs\",\"iges\"],\"model/mesh\":[\"msh\",\"mesh\",\"silo\"],\"model/vnd.collada+xml\":[\"dae\"],\"model/vnd.dwf\":[\"dwf\"],\"model/vnd.gdl\":[\"gdl\"],\"model/vnd.gtw\":[\"gtw\"],\"model/vnd.mts\":[\"mts\"],\"model/vnd.vtu\":[\"vtu\"],\"model/vrml\":[\"wrl\",\"vrml\"],\"model/x3d+binary\":[\"x3db\",\"x3dbz\"],\"model/x3d+vrml\":[\"x3dv\",\"x3dvz\"],\"model/x3d+xml\":[\"x3d\",\"x3dz\"],\"text/cache-manifest\":[\"appcache\",\"manifest\"],\"text/calendar\":[\"ics\",\"ifb\"],\"text/coffeescript\":[\"coffee\",\"litcoffee\"],\"text/css\":[\"css\"],\"text/csv\":[\"csv\"],\"text/hjson\":[\"hjson\"],\"text/html\":[\"html\",\"htm\",\"shtml\"],\"text/jade\":[\"jade\"],\"text/jsx\":[\"jsx\"],\"text/less\":[\"less\"],\"text/markdown\":[\"markdown\",\"md\"],\"text/mathml\":[\"mml\"],\"text/n3\":[\"n3\"],\"text/plain\":[\"txt\",\"text\",\"conf\",\"def\",\"list\",\"log\",\"in\",\"ini\"],\"text/prs.lines.tag\":[\"dsc\"],\"text/richtext\":[\"rtx\"],\"text/rtf\":[],\"text/sgml\":[\"sgml\",\"sgm\"],\"text/slim\":[\"slim\",\"slm\"],\"text/stylus\":[\"stylus\",\"styl\"],\"text/tab-separated-values\":[\"tsv\"],\"text/troff\":[\"t\",\"tr\",\"roff\",\"man\",\"me\",\"ms\"],\"text/turtle\":[\"ttl\"],\"text/uri-list\":[\"uri\",\"uris\",\"urls\"],\"text/vcard\":[\"vcard\"],\"text/vnd.curl\":[\"curl\"],\"text/vnd.curl.dcurl\":[\"dcurl\"],\"text/vnd.curl.mcurl\":[\"mcurl\"],\"text/vnd.curl.scurl\":[\"scurl\"],\"text/vnd.dvb.subtitle\":[\"sub\"],\"text/vnd.fly\":[\"fly\"],\"text/vnd.fmi.flexstor\":[\"flx\"],\"text/vnd.graphviz\":[\"gv\"],\"text/vnd.in3d.3dml\":[\"3dml\"],\"text/vnd.in3d.spot\":[\"spot\"],\"text/vnd.sun.j2me.app-descriptor\":[\"jad\"],\"text/vnd.wap.wml\":[\"wml\"],\"text/vnd.wap.wmlscript\":[\"wmls\"],\"text/vtt\":[\"vtt\"],\"text/x-asm\":[\"s\",\"asm\"],\"text/x-c\":[\"c\",\"cc\",\"cxx\",\"cpp\",\"h\",\"hh\",\"dic\"],\"text/x-component\":[\"htc\"],\"text/x-fortran\":[\"f\",\"for\",\"f77\",\"f90\"],\"text/x-handlebars-template\":[\"hbs\"],\"text/x-java-source\":[\"java\"],\"text/x-lua\":[\"lua\"],\"text/x-markdown\":[\"mkd\"],\"text/x-nfo\":[\"nfo\"],\"text/x-opml\":[\"opml\"],\"text/x-org\":[],\"text/x-pascal\":[\"p\",\"pas\"],\"text/x-processing\":[\"pde\"],\"text/x-sass\":[\"sass\"],\"text/x-scss\":[\"scss\"],\"text/x-setext\":[\"etx\"],\"text/x-sfv\":[\"sfv\"],\"text/x-suse-ymp\":[\"ymp\"],\"text/x-uuencode\":[\"uu\"],\"text/x-vcalendar\":[\"vcs\"],\"text/x-vcard\":[\"vcf\"],\"text/xml\":[],\"text/yaml\":[\"yaml\",\"yml\"],\"video/3gpp\":[\"3gp\",\"3gpp\"],\"video/3gpp2\":[\"3g2\"],\"video/h261\":[\"h261\"],\"video/h263\":[\"h263\"],\"video/h264\":[\"h264\"],\"video/jpeg\":[\"jpgv\"],\"video/jpm\":[\"jpgm\"],\"video/mj2\":[\"mj2\",\"mjp2\"],\"video/mp2t\":[\"ts\"],\"video/mp4\":[\"mp4\",\"mp4v\",\"mpg4\"],\"video/mpeg\":[\"mpeg\",\"mpg\",\"mpe\",\"m1v\",\"m2v\"],\"video/ogg\":[\"ogv\"],\"video/quicktime\":[\"qt\",\"mov\"],\"video/vnd.dece.hd\":[\"uvh\",\"uvvh\"],\"video/vnd.dece.mobile\":[\"uvm\",\"uvvm\"],\"video/vnd.dece.pd\":[\"uvp\",\"uvvp\"],\"video/vnd.dece.sd\":[\"uvs\",\"uvvs\"],\"video/vnd.dece.video\":[\"uvv\",\"uvvv\"],\"video/vnd.dvb.file\":[\"dvb\"],\"video/vnd.fvt\":[\"fvt\"],\"video/vnd.mpegurl\":[\"mxu\",\"m4u\"],\"video/vnd.ms-playready.media.pyv\":[\"pyv\"],\"video/vnd.uvvu.mp4\":[\"uvu\",\"uvvu\"],\"video/vnd.vivo\":[\"viv\"],\"video/webm\":[\"webm\"],\"video/x-f4v\":[\"f4v\"],\"video/x-fli\":[\"fli\"],\"video/x-flv\":[\"flv\"],\"video/x-m4v\":[\"m4v\"],\"video/x-matroska\":[\"mkv\",\"mk3d\",\"mks\"],\"video/x-mng\":[\"mng\"],\"video/x-ms-asf\":[\"asf\",\"asx\"],\"video/x-ms-vob\":[\"vob\"],\"video/x-ms-wm\":[\"wm\"],\"video/x-ms-wmv\":[\"wmv\"],\"video/x-ms-wmx\":[\"wmx\"],\"video/x-ms-wvx\":[\"wvx\"],\"video/x-msvideo\":[\"avi\"],\"video/x-sgi-movie\":[\"movie\"],\"video/x-smv\":[\"smv\"],\"x-conference/x-cooltalk\":[\"ice\"]}");
-
-/***/ }),
-
-/***/ 7799:
-/***/ ((module) => {
-
-"use strict";
-module.exports = JSON.parse("{\"100\":\"Continue\",\"101\":\"Switching Protocols\",\"102\":\"Processing\",\"103\":\"Early Hints\",\"200\":\"OK\",\"201\":\"Created\",\"202\":\"Accepted\",\"203\":\"Non-Authoritative Information\",\"204\":\"No Content\",\"205\":\"Reset Content\",\"206\":\"Partial Content\",\"207\":\"Multi-Status\",\"208\":\"Already Reported\",\"226\":\"IM Used\",\"300\":\"Multiple Choices\",\"301\":\"Moved Permanently\",\"302\":\"Found\",\"303\":\"See Other\",\"304\":\"Not Modified\",\"305\":\"Use Proxy\",\"306\":\"(Unused)\",\"307\":\"Temporary Redirect\",\"308\":\"Permanent Redirect\",\"400\":\"Bad Request\",\"401\":\"Unauthorized\",\"402\":\"Payment Required\",\"403\":\"Forbidden\",\"404\":\"Not Found\",\"405\":\"Method Not Allowed\",\"406\":\"Not Acceptable\",\"407\":\"Proxy Authentication Required\",\"408\":\"Request Timeout\",\"409\":\"Conflict\",\"410\":\"Gone\",\"411\":\"Length Required\",\"412\":\"Precondition Failed\",\"413\":\"Payload Too Large\",\"414\":\"URI Too Long\",\"415\":\"Unsupported Media Type\",\"416\":\"Range Not Satisfiable\",\"417\":\"Expectation Failed\",\"418\":\"I'm a teapot\",\"421\":\"Misdirected Request\",\"422\":\"Unprocessable Entity\",\"423\":\"Locked\",\"424\":\"Failed Dependency\",\"425\":\"Unordered Collection\",\"426\":\"Upgrade Required\",\"428\":\"Precondition Required\",\"429\":\"Too Many Requests\",\"431\":\"Request Header Fields Too Large\",\"451\":\"Unavailable For Legal Reasons\",\"500\":\"Internal Server Error\",\"501\":\"Not Implemented\",\"502\":\"Bad Gateway\",\"503\":\"Service Unavailable\",\"504\":\"Gateway Timeout\",\"505\":\"HTTP Version Not Supported\",\"506\":\"Variant Also Negotiates\",\"507\":\"Insufficient Storage\",\"508\":\"Loop Detected\",\"509\":\"Bandwidth Limit Exceeded\",\"510\":\"Not Extended\",\"511\":\"Network Authentication Required\"}");
+module.exports = JSON.parse("{\"application/1d-interleaved-parityfec\":{\"source\":\"iana\"},\"application/3gpdash-qoe-report+xml\":{\"source\":\"iana\"},\"application/3gpp-ims+xml\":{\"source\":\"iana\"},\"application/a2l\":{\"source\":\"iana\"},\"application/activemessage\":{\"source\":\"iana\"},\"application/alto-costmap+json\":{\"source\":\"iana\",\"compressible\":true},\"application/alto-costmapfilter+json\":{\"source\":\"iana\",\"compressible\":true},\"application/alto-directory+json\":{\"source\":\"iana\",\"compressible\":true},\"application/alto-endpointcost+json\":{\"source\":\"iana\",\"compressible\":true},\"application/alto-endpointcostparams+json\":{\"source\":\"iana\",\"compressible\":true},\"application/alto-endpointprop+json\":{\"source\":\"iana\",\"compressible\":true},\"application/alto-endpointpropparams+json\":{\"source\":\"iana\",\"compressible\":true},\"application/alto-error+json\":{\"source\":\"iana\",\"compressible\":true},\"application/alto-networkmap+json\":{\"source\":\"iana\",\"compressible\":true},\"application/alto-networkmapfilter+json\":{\"source\":\"iana\",\"compressible\":true},\"application/aml\":{\"source\":\"iana\"},\"application/andrew-inset\":{\"source\":\"iana\",\"extensions\":[\"ez\"]},\"application/applefile\":{\"source\":\"iana\"},\"application/applixware\":{\"source\":\"apache\",\"extensions\":[\"aw\"]},\"application/atf\":{\"source\":\"iana\"},\"application/atfx\":{\"source\":\"iana\"},\"application/atom+xml\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"atom\"]},\"application/atomcat+xml\":{\"source\":\"iana\",\"extensions\":[\"atomcat\"]},\"application/atomdeleted+xml\":{\"source\":\"iana\"},\"application/atomicmail\":{\"source\":\"iana\"},\"application/atomsvc+xml\":{\"source\":\"iana\",\"extensions\":[\"atomsvc\"]},\"application/atxml\":{\"source\":\"iana\"},\"application/auth-policy+xml\":{\"source\":\"iana\"},\"application/bacnet-xdd+zip\":{\"source\":\"iana\"},\"application/batch-smtp\":{\"source\":\"iana\"},\"application/bdoc\":{\"compressible\":false,\"extensions\":[\"bdoc\"]},\"application/beep+xml\":{\"source\":\"iana\"},\"application/calendar+json\":{\"source\":\"iana\",\"compressible\":true},\"application/calendar+xml\":{\"source\":\"iana\"},\"application/call-completion\":{\"source\":\"iana\"},\"application/cals-1840\":{\"source\":\"iana\"},\"application/cbor\":{\"source\":\"iana\"},\"application/cccex\":{\"source\":\"iana\"},\"application/ccmp+xml\":{\"source\":\"iana\"},\"application/ccxml+xml\":{\"source\":\"iana\",\"extensions\":[\"ccxml\"]},\"application/cdfx+xml\":{\"source\":\"iana\"},\"application/cdmi-capability\":{\"source\":\"iana\",\"extensions\":[\"cdmia\"]},\"application/cdmi-container\":{\"source\":\"iana\",\"extensions\":[\"cdmic\"]},\"application/cdmi-domain\":{\"source\":\"iana\",\"extensions\":[\"cdmid\"]},\"application/cdmi-object\":{\"source\":\"iana\",\"extensions\":[\"cdmio\"]},\"application/cdmi-queue\":{\"source\":\"iana\",\"extensions\":[\"cdmiq\"]},\"application/cdni\":{\"source\":\"iana\"},\"application/cea\":{\"source\":\"iana\"},\"application/cea-2018+xml\":{\"source\":\"iana\"},\"application/cellml+xml\":{\"source\":\"iana\"},\"application/cfw\":{\"source\":\"iana\"},\"application/clue_info+xml\":{\"source\":\"iana\"},\"application/cms\":{\"source\":\"iana\"},\"application/cnrp+xml\":{\"source\":\"iana\"},\"application/coap-group+json\":{\"source\":\"iana\",\"compressible\":true},\"application/coap-payload\":{\"source\":\"iana\"},\"application/commonground\":{\"source\":\"iana\"},\"application/conference-info+xml\":{\"source\":\"iana\"},\"application/cose\":{\"source\":\"iana\"},\"application/cose-key\":{\"source\":\"iana\"},\"application/cose-key-set\":{\"source\":\"iana\"},\"application/cpl+xml\":{\"source\":\"iana\"},\"application/csrattrs\":{\"source\":\"iana\"},\"application/csta+xml\":{\"source\":\"iana\"},\"application/cstadata+xml\":{\"source\":\"iana\"},\"application/csvm+json\":{\"source\":\"iana\",\"compressible\":true},\"application/cu-seeme\":{\"source\":\"apache\",\"extensions\":[\"cu\"]},\"application/cybercash\":{\"source\":\"iana\"},\"application/dart\":{\"compressible\":true},\"application/dash+xml\":{\"source\":\"iana\",\"extensions\":[\"mpd\"]},\"application/dashdelta\":{\"source\":\"iana\"},\"application/davmount+xml\":{\"source\":\"iana\",\"extensions\":[\"davmount\"]},\"application/dca-rft\":{\"source\":\"iana\"},\"application/dcd\":{\"source\":\"iana\"},\"application/dec-dx\":{\"source\":\"iana\"},\"application/dialog-info+xml\":{\"source\":\"iana\"},\"application/dicom\":{\"source\":\"iana\"},\"application/dicom+json\":{\"source\":\"iana\",\"compressible\":true},\"application/dicom+xml\":{\"source\":\"iana\"},\"application/dii\":{\"source\":\"iana\"},\"application/dit\":{\"source\":\"iana\"},\"application/dns\":{\"source\":\"iana\"},\"application/docbook+xml\":{\"source\":\"apache\",\"extensions\":[\"dbk\"]},\"application/dskpp+xml\":{\"source\":\"iana\"},\"application/dssc+der\":{\"source\":\"iana\",\"extensions\":[\"dssc\"]},\"application/dssc+xml\":{\"source\":\"iana\",\"extensions\":[\"xdssc\"]},\"application/dvcs\":{\"source\":\"iana\"},\"application/ecmascript\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"ecma\"]},\"application/edi-consent\":{\"source\":\"iana\"},\"application/edi-x12\":{\"source\":\"iana\",\"compressible\":false},\"application/edifact\":{\"source\":\"iana\",\"compressible\":false},\"application/efi\":{\"source\":\"iana\"},\"application/emergencycalldata.comment+xml\":{\"source\":\"iana\"},\"application/emergencycalldata.control+xml\":{\"source\":\"iana\"},\"application/emergencycalldata.deviceinfo+xml\":{\"source\":\"iana\"},\"application/emergencycalldata.ecall.msd\":{\"source\":\"iana\"},\"application/emergencycalldata.providerinfo+xml\":{\"source\":\"iana\"},\"application/emergencycalldata.serviceinfo+xml\":{\"source\":\"iana\"},\"application/emergencycalldata.subscriberinfo+xml\":{\"source\":\"iana\"},\"application/emergencycalldata.veds+xml\":{\"source\":\"iana\"},\"application/emma+xml\":{\"source\":\"iana\",\"extensions\":[\"emma\"]},\"application/emotionml+xml\":{\"source\":\"iana\"},\"application/encaprtp\":{\"source\":\"iana\"},\"application/epp+xml\":{\"source\":\"iana\"},\"application/epub+zip\":{\"source\":\"iana\",\"extensions\":[\"epub\"]},\"application/eshop\":{\"source\":\"iana\"},\"application/exi\":{\"source\":\"iana\",\"extensions\":[\"exi\"]},\"application/fastinfoset\":{\"source\":\"iana\"},\"application/fastsoap\":{\"source\":\"iana\"},\"application/fdt+xml\":{\"source\":\"iana\"},\"application/fhir+xml\":{\"source\":\"iana\"},\"application/fido.trusted-apps+json\":{\"compressible\":true},\"application/fits\":{\"source\":\"iana\"},\"application/font-sfnt\":{\"source\":\"iana\"},\"application/font-tdpfr\":{\"source\":\"iana\",\"extensions\":[\"pfr\"]},\"application/font-woff\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"woff\"]},\"application/framework-attributes+xml\":{\"source\":\"iana\"},\"application/geo+json\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"geojson\"]},\"application/geo+json-seq\":{\"source\":\"iana\"},\"application/geoxacml+xml\":{\"source\":\"iana\"},\"application/gml+xml\":{\"source\":\"iana\",\"extensions\":[\"gml\"]},\"application/gpx+xml\":{\"source\":\"apache\",\"extensions\":[\"gpx\"]},\"application/gxf\":{\"source\":\"apache\",\"extensions\":[\"gxf\"]},\"application/gzip\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"gz\"]},\"application/h224\":{\"source\":\"iana\"},\"application/held+xml\":{\"source\":\"iana\"},\"application/hjson\":{\"extensions\":[\"hjson\"]},\"application/http\":{\"source\":\"iana\"},\"application/hyperstudio\":{\"source\":\"iana\",\"extensions\":[\"stk\"]},\"application/ibe-key-request+xml\":{\"source\":\"iana\"},\"application/ibe-pkg-reply+xml\":{\"source\":\"iana\"},\"application/ibe-pp-data\":{\"source\":\"iana\"},\"application/iges\":{\"source\":\"iana\"},\"application/im-iscomposing+xml\":{\"source\":\"iana\"},\"application/index\":{\"source\":\"iana\"},\"application/index.cmd\":{\"source\":\"iana\"},\"application/index.obj\":{\"source\":\"iana\"},\"application/index.response\":{\"source\":\"iana\"},\"application/index.vnd\":{\"source\":\"iana\"},\"application/inkml+xml\":{\"source\":\"iana\",\"extensions\":[\"ink\",\"inkml\"]},\"application/iotp\":{\"source\":\"iana\"},\"application/ipfix\":{\"source\":\"iana\",\"extensions\":[\"ipfix\"]},\"application/ipp\":{\"source\":\"iana\"},\"application/isup\":{\"source\":\"iana\"},\"application/its+xml\":{\"source\":\"iana\"},\"application/java-archive\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"jar\",\"war\",\"ear\"]},\"application/java-serialized-object\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"ser\"]},\"application/java-vm\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"class\"]},\"application/javascript\":{\"source\":\"iana\",\"charset\":\"UTF-8\",\"compressible\":true,\"extensions\":[\"js\",\"mjs\"]},\"application/jf2feed+json\":{\"source\":\"iana\",\"compressible\":true},\"application/jose\":{\"source\":\"iana\"},\"application/jose+json\":{\"source\":\"iana\",\"compressible\":true},\"application/jrd+json\":{\"source\":\"iana\",\"compressible\":true},\"application/json\":{\"source\":\"iana\",\"charset\":\"UTF-8\",\"compressible\":true,\"extensions\":[\"json\",\"map\"]},\"application/json-patch+json\":{\"source\":\"iana\",\"compressible\":true},\"application/json-seq\":{\"source\":\"iana\"},\"application/json5\":{\"extensions\":[\"json5\"]},\"application/jsonml+json\":{\"source\":\"apache\",\"compressible\":true,\"extensions\":[\"jsonml\"]},\"application/jwk+json\":{\"source\":\"iana\",\"compressible\":true},\"application/jwk-set+json\":{\"source\":\"iana\",\"compressible\":true},\"application/jwt\":{\"source\":\"iana\"},\"application/kpml-request+xml\":{\"source\":\"iana\"},\"application/kpml-response+xml\":{\"source\":\"iana\"},\"application/ld+json\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"jsonld\"]},\"application/lgr+xml\":{\"source\":\"iana\"},\"application/link-format\":{\"source\":\"iana\"},\"application/load-control+xml\":{\"source\":\"iana\"},\"application/lost+xml\":{\"source\":\"iana\",\"extensions\":[\"lostxml\"]},\"application/lostsync+xml\":{\"source\":\"iana\"},\"application/lxf\":{\"source\":\"iana\"},\"application/mac-binhex40\":{\"source\":\"iana\",\"extensions\":[\"hqx\"]},\"application/mac-compactpro\":{\"source\":\"apache\",\"extensions\":[\"cpt\"]},\"application/macwriteii\":{\"source\":\"iana\"},\"application/mads+xml\":{\"source\":\"iana\",\"extensions\":[\"mads\"]},\"application/manifest+json\":{\"charset\":\"UTF-8\",\"compressible\":true,\"extensions\":[\"webmanifest\"]},\"application/marc\":{\"source\":\"iana\",\"extensions\":[\"mrc\"]},\"application/marcxml+xml\":{\"source\":\"iana\",\"extensions\":[\"mrcx\"]},\"application/mathematica\":{\"source\":\"iana\",\"extensions\":[\"ma\",\"nb\",\"mb\"]},\"application/mathml+xml\":{\"source\":\"iana\",\"extensions\":[\"mathml\"]},\"application/mathml-content+xml\":{\"source\":\"iana\"},\"application/mathml-presentation+xml\":{\"source\":\"iana\"},\"application/mbms-associated-procedure-description+xml\":{\"source\":\"iana\"},\"application/mbms-deregister+xml\":{\"source\":\"iana\"},\"application/mbms-envelope+xml\":{\"source\":\"iana\"},\"application/mbms-msk+xml\":{\"source\":\"iana\"},\"application/mbms-msk-response+xml\":{\"source\":\"iana\"},\"application/mbms-protection-description+xml\":{\"source\":\"iana\"},\"application/mbms-reception-report+xml\":{\"source\":\"iana\"},\"application/mbms-register+xml\":{\"source\":\"iana\"},\"application/mbms-register-response+xml\":{\"source\":\"iana\"},\"application/mbms-schedule+xml\":{\"source\":\"iana\"},\"application/mbms-user-service-description+xml\":{\"source\":\"iana\"},\"application/mbox\":{\"source\":\"iana\",\"extensions\":[\"mbox\"]},\"application/media-policy-dataset+xml\":{\"source\":\"iana\"},\"application/media_control+xml\":{\"source\":\"iana\"},\"application/mediaservercontrol+xml\":{\"source\":\"iana\",\"extensions\":[\"mscml\"]},\"application/merge-patch+json\":{\"source\":\"iana\",\"compressible\":true},\"application/metalink+xml\":{\"source\":\"apache\",\"extensions\":[\"metalink\"]},\"application/metalink4+xml\":{\"source\":\"iana\",\"extensions\":[\"meta4\"]},\"application/mets+xml\":{\"source\":\"iana\",\"extensions\":[\"mets\"]},\"application/mf4\":{\"source\":\"iana\"},\"application/mikey\":{\"source\":\"iana\"},\"application/mmt-usd+xml\":{\"source\":\"iana\"},\"application/mods+xml\":{\"source\":\"iana\",\"extensions\":[\"mods\"]},\"application/moss-keys\":{\"source\":\"iana\"},\"application/moss-signature\":{\"source\":\"iana\"},\"application/mosskey-data\":{\"source\":\"iana\"},\"application/mosskey-request\":{\"source\":\"iana\"},\"application/mp21\":{\"source\":\"iana\",\"extensions\":[\"m21\",\"mp21\"]},\"application/mp4\":{\"source\":\"iana\",\"extensions\":[\"mp4s\",\"m4p\"]},\"application/mpeg4-generic\":{\"source\":\"iana\"},\"application/mpeg4-iod\":{\"source\":\"iana\"},\"application/mpeg4-iod-xmt\":{\"source\":\"iana\"},\"application/mrb-consumer+xml\":{\"source\":\"iana\"},\"application/mrb-publish+xml\":{\"source\":\"iana\"},\"application/msc-ivr+xml\":{\"source\":\"iana\"},\"application/msc-mixer+xml\":{\"source\":\"iana\"},\"application/msword\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"doc\",\"dot\"]},\"application/mud+json\":{\"source\":\"iana\",\"compressible\":true},\"application/mxf\":{\"source\":\"iana\",\"extensions\":[\"mxf\"]},\"application/n-quads\":{\"source\":\"iana\"},\"application/n-triples\":{\"source\":\"iana\"},\"application/nasdata\":{\"source\":\"iana\"},\"application/news-checkgroups\":{\"source\":\"iana\"},\"application/news-groupinfo\":{\"source\":\"iana\"},\"application/news-transmission\":{\"source\":\"iana\"},\"application/nlsml+xml\":{\"source\":\"iana\"},\"application/node\":{\"source\":\"iana\"},\"application/nss\":{\"source\":\"iana\"},\"application/ocsp-request\":{\"source\":\"iana\"},\"application/ocsp-response\":{\"source\":\"iana\"},\"application/octet-stream\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"bin\",\"dms\",\"lrf\",\"mar\",\"so\",\"dist\",\"distz\",\"pkg\",\"bpk\",\"dump\",\"elc\",\"deploy\",\"exe\",\"dll\",\"deb\",\"dmg\",\"iso\",\"img\",\"msi\",\"msp\",\"msm\",\"buffer\"]},\"application/oda\":{\"source\":\"iana\",\"extensions\":[\"oda\"]},\"application/odx\":{\"source\":\"iana\"},\"application/oebps-package+xml\":{\"source\":\"iana\",\"extensions\":[\"opf\"]},\"application/ogg\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"ogx\"]},\"application/omdoc+xml\":{\"source\":\"apache\",\"extensions\":[\"omdoc\"]},\"application/onenote\":{\"source\":\"apache\",\"extensions\":[\"onetoc\",\"onetoc2\",\"onetmp\",\"onepkg\"]},\"application/oxps\":{\"source\":\"iana\",\"extensions\":[\"oxps\"]},\"application/p2p-overlay+xml\":{\"source\":\"iana\"},\"application/parityfec\":{\"source\":\"iana\"},\"application/passport\":{\"source\":\"iana\"},\"application/patch-ops-error+xml\":{\"source\":\"iana\",\"extensions\":[\"xer\"]},\"application/pdf\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"pdf\"]},\"application/pdx\":{\"source\":\"iana\"},\"application/pgp-encrypted\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"pgp\"]},\"application/pgp-keys\":{\"source\":\"iana\"},\"application/pgp-signature\":{\"source\":\"iana\",\"extensions\":[\"asc\",\"sig\"]},\"application/pics-rules\":{\"source\":\"apache\",\"extensions\":[\"prf\"]},\"application/pidf+xml\":{\"source\":\"iana\"},\"application/pidf-diff+xml\":{\"source\":\"iana\"},\"application/pkcs10\":{\"source\":\"iana\",\"extensions\":[\"p10\"]},\"application/pkcs12\":{\"source\":\"iana\"},\"application/pkcs7-mime\":{\"source\":\"iana\",\"extensions\":[\"p7m\",\"p7c\"]},\"application/pkcs7-signature\":{\"source\":\"iana\",\"extensions\":[\"p7s\"]},\"application/pkcs8\":{\"source\":\"iana\",\"extensions\":[\"p8\"]},\"application/pkcs8-encrypted\":{\"source\":\"iana\"},\"application/pkix-attr-cert\":{\"source\":\"iana\",\"extensions\":[\"ac\"]},\"application/pkix-cert\":{\"source\":\"iana\",\"extensions\":[\"cer\"]},\"application/pkix-crl\":{\"source\":\"iana\",\"extensions\":[\"crl\"]},\"application/pkix-pkipath\":{\"source\":\"iana\",\"extensions\":[\"pkipath\"]},\"application/pkixcmp\":{\"source\":\"iana\",\"extensions\":[\"pki\"]},\"application/pls+xml\":{\"source\":\"iana\",\"extensions\":[\"pls\"]},\"application/poc-settings+xml\":{\"source\":\"iana\"},\"application/postscript\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"ai\",\"eps\",\"ps\"]},\"application/ppsp-tracker+json\":{\"source\":\"iana\",\"compressible\":true},\"application/problem+json\":{\"source\":\"iana\",\"compressible\":true},\"application/problem+xml\":{\"source\":\"iana\"},\"application/provenance+xml\":{\"source\":\"iana\"},\"application/prs.alvestrand.titrax-sheet\":{\"source\":\"iana\"},\"application/prs.cww\":{\"source\":\"iana\",\"extensions\":[\"cww\"]},\"application/prs.hpub+zip\":{\"source\":\"iana\"},\"application/prs.nprend\":{\"source\":\"iana\"},\"application/prs.plucker\":{\"source\":\"iana\"},\"application/prs.rdf-xml-crypt\":{\"source\":\"iana\"},\"application/prs.xsf+xml\":{\"source\":\"iana\"},\"application/pskc+xml\":{\"source\":\"iana\",\"extensions\":[\"pskcxml\"]},\"application/qsig\":{\"source\":\"iana\"},\"application/raml+yaml\":{\"compressible\":true,\"extensions\":[\"raml\"]},\"application/raptorfec\":{\"source\":\"iana\"},\"application/rdap+json\":{\"source\":\"iana\",\"compressible\":true},\"application/rdf+xml\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"rdf\"]},\"application/reginfo+xml\":{\"source\":\"iana\",\"extensions\":[\"rif\"]},\"application/relax-ng-compact-syntax\":{\"source\":\"iana\",\"extensions\":[\"rnc\"]},\"application/remote-printing\":{\"source\":\"iana\"},\"application/reputon+json\":{\"source\":\"iana\",\"compressible\":true},\"application/resource-lists+xml\":{\"source\":\"iana\",\"extensions\":[\"rl\"]},\"application/resource-lists-diff+xml\":{\"source\":\"iana\",\"extensions\":[\"rld\"]},\"application/rfc+xml\":{\"source\":\"iana\"},\"application/riscos\":{\"source\":\"iana\"},\"application/rlmi+xml\":{\"source\":\"iana\"},\"application/rls-services+xml\":{\"source\":\"iana\",\"extensions\":[\"rs\"]},\"application/route-apd+xml\":{\"source\":\"iana\"},\"application/route-s-tsid+xml\":{\"source\":\"iana\"},\"application/route-usd+xml\":{\"source\":\"iana\"},\"application/rpki-ghostbusters\":{\"source\":\"iana\",\"extensions\":[\"gbr\"]},\"application/rpki-manifest\":{\"source\":\"iana\",\"extensions\":[\"mft\"]},\"application/rpki-publication\":{\"source\":\"iana\"},\"application/rpki-roa\":{\"source\":\"iana\",\"extensions\":[\"roa\"]},\"application/rpki-updown\":{\"source\":\"iana\"},\"application/rsd+xml\":{\"source\":\"apache\",\"extensions\":[\"rsd\"]},\"application/rss+xml\":{\"source\":\"apache\",\"compressible\":true,\"extensions\":[\"rss\"]},\"application/rtf\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"rtf\"]},\"application/rtploopback\":{\"source\":\"iana\"},\"application/rtx\":{\"source\":\"iana\"},\"application/samlassertion+xml\":{\"source\":\"iana\"},\"application/samlmetadata+xml\":{\"source\":\"iana\"},\"application/sbml+xml\":{\"source\":\"iana\",\"extensions\":[\"sbml\"]},\"application/scaip+xml\":{\"source\":\"iana\"},\"application/scim+json\":{\"source\":\"iana\",\"compressible\":true},\"application/scvp-cv-request\":{\"source\":\"iana\",\"extensions\":[\"scq\"]},\"application/scvp-cv-response\":{\"source\":\"iana\",\"extensions\":[\"scs\"]},\"application/scvp-vp-request\":{\"source\":\"iana\",\"extensions\":[\"spq\"]},\"application/scvp-vp-response\":{\"source\":\"iana\",\"extensions\":[\"spp\"]},\"application/sdp\":{\"source\":\"iana\",\"extensions\":[\"sdp\"]},\"application/sep+xml\":{\"source\":\"iana\"},\"application/sep-exi\":{\"source\":\"iana\"},\"application/session-info\":{\"source\":\"iana\"},\"application/set-payment\":{\"source\":\"iana\"},\"application/set-payment-initiation\":{\"source\":\"iana\",\"extensions\":[\"setpay\"]},\"application/set-registration\":{\"source\":\"iana\"},\"application/set-registration-initiation\":{\"source\":\"iana\",\"extensions\":[\"setreg\"]},\"application/sgml\":{\"source\":\"iana\"},\"application/sgml-open-catalog\":{\"source\":\"iana\"},\"application/shf+xml\":{\"source\":\"iana\",\"extensions\":[\"shf\"]},\"application/sieve\":{\"source\":\"iana\"},\"application/simple-filter+xml\":{\"source\":\"iana\"},\"application/simple-message-summary\":{\"source\":\"iana\"},\"application/simplesymbolcontainer\":{\"source\":\"iana\"},\"application/slate\":{\"source\":\"iana\"},\"application/smil\":{\"source\":\"iana\"},\"application/smil+xml\":{\"source\":\"iana\",\"extensions\":[\"smi\",\"smil\"]},\"application/smpte336m\":{\"source\":\"iana\"},\"application/soap+fastinfoset\":{\"source\":\"iana\"},\"application/soap+xml\":{\"source\":\"iana\",\"compressible\":true},\"application/sparql-query\":{\"source\":\"iana\",\"extensions\":[\"rq\"]},\"application/sparql-results+xml\":{\"source\":\"iana\",\"extensions\":[\"srx\"]},\"application/spirits-event+xml\":{\"source\":\"iana\"},\"application/sql\":{\"source\":\"iana\"},\"application/srgs\":{\"source\":\"iana\",\"extensions\":[\"gram\"]},\"application/srgs+xml\":{\"source\":\"iana\",\"extensions\":[\"grxml\"]},\"application/sru+xml\":{\"source\":\"iana\",\"extensions\":[\"sru\"]},\"application/ssdl+xml\":{\"source\":\"apache\",\"extensions\":[\"ssdl\"]},\"application/ssml+xml\":{\"source\":\"iana\",\"extensions\":[\"ssml\"]},\"application/tamp-apex-update\":{\"source\":\"iana\"},\"application/tamp-apex-update-confirm\":{\"source\":\"iana\"},\"application/tamp-community-update\":{\"source\":\"iana\"},\"application/tamp-community-update-confirm\":{\"source\":\"iana\"},\"application/tamp-error\":{\"source\":\"iana\"},\"application/tamp-sequence-adjust\":{\"source\":\"iana\"},\"application/tamp-sequence-adjust-confirm\":{\"source\":\"iana\"},\"application/tamp-status-query\":{\"source\":\"iana\"},\"application/tamp-status-response\":{\"source\":\"iana\"},\"application/tamp-update\":{\"source\":\"iana\"},\"application/tamp-update-confirm\":{\"source\":\"iana\"},\"application/tar\":{\"compressible\":true},\"application/tei+xml\":{\"source\":\"iana\",\"extensions\":[\"tei\",\"teicorpus\"]},\"application/thraud+xml\":{\"source\":\"iana\",\"extensions\":[\"tfi\"]},\"application/timestamp-query\":{\"source\":\"iana\"},\"application/timestamp-reply\":{\"source\":\"iana\"},\"application/timestamped-data\":{\"source\":\"iana\",\"extensions\":[\"tsd\"]},\"application/tnauthlist\":{\"source\":\"iana\"},\"application/trig\":{\"source\":\"iana\"},\"application/ttml+xml\":{\"source\":\"iana\"},\"application/tve-trigger\":{\"source\":\"iana\"},\"application/ulpfec\":{\"source\":\"iana\"},\"application/urc-grpsheet+xml\":{\"source\":\"iana\"},\"application/urc-ressheet+xml\":{\"source\":\"iana\"},\"application/urc-targetdesc+xml\":{\"source\":\"iana\"},\"application/urc-uisocketdesc+xml\":{\"source\":\"iana\"},\"application/vcard+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vcard+xml\":{\"source\":\"iana\"},\"application/vemmi\":{\"source\":\"iana\"},\"application/vividence.scriptfile\":{\"source\":\"apache\"},\"application/vnd.1000minds.decision-model+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp-prose+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp-prose-pc3ch+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp-v2x-local-service-information\":{\"source\":\"iana\"},\"application/vnd.3gpp.access-transfer-events+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp.bsf+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp.gmop+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp.mcptt-affiliation-command+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp.mcptt-floor-request+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp.mcptt-info+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp.mcptt-location-info+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp.mcptt-mbms-usage-info+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp.mcptt-signed+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp.mid-call+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp.pic-bw-large\":{\"source\":\"iana\",\"extensions\":[\"plb\"]},\"application/vnd.3gpp.pic-bw-small\":{\"source\":\"iana\",\"extensions\":[\"psb\"]},\"application/vnd.3gpp.pic-bw-var\":{\"source\":\"iana\",\"extensions\":[\"pvb\"]},\"application/vnd.3gpp.sms\":{\"source\":\"iana\"},\"application/vnd.3gpp.sms+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp.srvcc-ext+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp.srvcc-info+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp.state-and-event-info+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp.ussd+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp2.bcmcsinfo+xml\":{\"source\":\"iana\"},\"application/vnd.3gpp2.sms\":{\"source\":\"iana\"},\"application/vnd.3gpp2.tcap\":{\"source\":\"iana\",\"extensions\":[\"tcap\"]},\"application/vnd.3lightssoftware.imagescal\":{\"source\":\"iana\"},\"application/vnd.3m.post-it-notes\":{\"source\":\"iana\",\"extensions\":[\"pwn\"]},\"application/vnd.accpac.simply.aso\":{\"source\":\"iana\",\"extensions\":[\"aso\"]},\"application/vnd.accpac.simply.imp\":{\"source\":\"iana\",\"extensions\":[\"imp\"]},\"application/vnd.acucobol\":{\"source\":\"iana\",\"extensions\":[\"acu\"]},\"application/vnd.acucorp\":{\"source\":\"iana\",\"extensions\":[\"atc\",\"acutc\"]},\"application/vnd.adobe.air-application-installer-package+zip\":{\"source\":\"apache\",\"extensions\":[\"air\"]},\"application/vnd.adobe.flash.movie\":{\"source\":\"iana\"},\"application/vnd.adobe.formscentral.fcdt\":{\"source\":\"iana\",\"extensions\":[\"fcdt\"]},\"application/vnd.adobe.fxp\":{\"source\":\"iana\",\"extensions\":[\"fxp\",\"fxpl\"]},\"application/vnd.adobe.partial-upload\":{\"source\":\"iana\"},\"application/vnd.adobe.xdp+xml\":{\"source\":\"iana\",\"extensions\":[\"xdp\"]},\"application/vnd.adobe.xfdf\":{\"source\":\"iana\",\"extensions\":[\"xfdf\"]},\"application/vnd.aether.imp\":{\"source\":\"iana\"},\"application/vnd.ah-barcode\":{\"source\":\"iana\"},\"application/vnd.ahead.space\":{\"source\":\"iana\",\"extensions\":[\"ahead\"]},\"application/vnd.airzip.filesecure.azf\":{\"source\":\"iana\",\"extensions\":[\"azf\"]},\"application/vnd.airzip.filesecure.azs\":{\"source\":\"iana\",\"extensions\":[\"azs\"]},\"application/vnd.amadeus+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.amazon.ebook\":{\"source\":\"apache\",\"extensions\":[\"azw\"]},\"application/vnd.amazon.mobi8-ebook\":{\"source\":\"iana\"},\"application/vnd.americandynamics.acc\":{\"source\":\"iana\",\"extensions\":[\"acc\"]},\"application/vnd.amiga.ami\":{\"source\":\"iana\",\"extensions\":[\"ami\"]},\"application/vnd.amundsen.maze+xml\":{\"source\":\"iana\"},\"application/vnd.android.package-archive\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"apk\"]},\"application/vnd.anki\":{\"source\":\"iana\"},\"application/vnd.anser-web-certificate-issue-initiation\":{\"source\":\"iana\",\"extensions\":[\"cii\"]},\"application/vnd.anser-web-funds-transfer-initiation\":{\"source\":\"apache\",\"extensions\":[\"fti\"]},\"application/vnd.antix.game-component\":{\"source\":\"iana\",\"extensions\":[\"atx\"]},\"application/vnd.apache.thrift.binary\":{\"source\":\"iana\"},\"application/vnd.apache.thrift.compact\":{\"source\":\"iana\"},\"application/vnd.apache.thrift.json\":{\"source\":\"iana\"},\"application/vnd.api+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.apothekende.reservation+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.apple.installer+xml\":{\"source\":\"iana\",\"extensions\":[\"mpkg\"]},\"application/vnd.apple.mpegurl\":{\"source\":\"iana\",\"extensions\":[\"m3u8\"]},\"application/vnd.apple.pkpass\":{\"compressible\":false,\"extensions\":[\"pkpass\"]},\"application/vnd.arastra.swi\":{\"source\":\"iana\"},\"application/vnd.aristanetworks.swi\":{\"source\":\"iana\",\"extensions\":[\"swi\"]},\"application/vnd.artsquare\":{\"source\":\"iana\"},\"application/vnd.astraea-software.iota\":{\"source\":\"iana\",\"extensions\":[\"iota\"]},\"application/vnd.audiograph\":{\"source\":\"iana\",\"extensions\":[\"aep\"]},\"application/vnd.autopackage\":{\"source\":\"iana\"},\"application/vnd.avalon+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.avistar+xml\":{\"source\":\"iana\"},\"application/vnd.balsamiq.bmml+xml\":{\"source\":\"iana\"},\"application/vnd.balsamiq.bmpr\":{\"source\":\"iana\"},\"application/vnd.bbf.usp.msg\":{\"source\":\"iana\"},\"application/vnd.bbf.usp.msg+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.bekitzur-stech+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.bint.med-content\":{\"source\":\"iana\"},\"application/vnd.biopax.rdf+xml\":{\"source\":\"iana\"},\"application/vnd.blink-idb-value-wrapper\":{\"source\":\"iana\"},\"application/vnd.blueice.multipass\":{\"source\":\"iana\",\"extensions\":[\"mpm\"]},\"application/vnd.bluetooth.ep.oob\":{\"source\":\"iana\"},\"application/vnd.bluetooth.le.oob\":{\"source\":\"iana\"},\"application/vnd.bmi\":{\"source\":\"iana\",\"extensions\":[\"bmi\"]},\"application/vnd.businessobjects\":{\"source\":\"iana\",\"extensions\":[\"rep\"]},\"application/vnd.cab-jscript\":{\"source\":\"iana\"},\"application/vnd.canon-cpdl\":{\"source\":\"iana\"},\"application/vnd.canon-lips\":{\"source\":\"iana\"},\"application/vnd.capasystems-pg+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.cendio.thinlinc.clientconf\":{\"source\":\"iana\"},\"application/vnd.century-systems.tcp_stream\":{\"source\":\"iana\"},\"application/vnd.chemdraw+xml\":{\"source\":\"iana\",\"extensions\":[\"cdxml\"]},\"application/vnd.chess-pgn\":{\"source\":\"iana\"},\"application/vnd.chipnuts.karaoke-mmd\":{\"source\":\"iana\",\"extensions\":[\"mmd\"]},\"application/vnd.cinderella\":{\"source\":\"iana\",\"extensions\":[\"cdy\"]},\"application/vnd.cirpack.isdn-ext\":{\"source\":\"iana\"},\"application/vnd.citationstyles.style+xml\":{\"source\":\"iana\"},\"application/vnd.claymore\":{\"source\":\"iana\",\"extensions\":[\"cla\"]},\"application/vnd.cloanto.rp9\":{\"source\":\"iana\",\"extensions\":[\"rp9\"]},\"application/vnd.clonk.c4group\":{\"source\":\"iana\",\"extensions\":[\"c4g\",\"c4d\",\"c4f\",\"c4p\",\"c4u\"]},\"application/vnd.cluetrust.cartomobile-config\":{\"source\":\"iana\",\"extensions\":[\"c11amc\"]},\"application/vnd.cluetrust.cartomobile-config-pkg\":{\"source\":\"iana\",\"extensions\":[\"c11amz\"]},\"application/vnd.coffeescript\":{\"source\":\"iana\"},\"application/vnd.collabio.xodocuments.document\":{\"source\":\"iana\"},\"application/vnd.collabio.xodocuments.document-template\":{\"source\":\"iana\"},\"application/vnd.collabio.xodocuments.presentation\":{\"source\":\"iana\"},\"application/vnd.collabio.xodocuments.presentation-template\":{\"source\":\"iana\"},\"application/vnd.collabio.xodocuments.spreadsheet\":{\"source\":\"iana\"},\"application/vnd.collabio.xodocuments.spreadsheet-template\":{\"source\":\"iana\"},\"application/vnd.collection+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.collection.doc+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.collection.next+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.comicbook+zip\":{\"source\":\"iana\"},\"application/vnd.comicbook-rar\":{\"source\":\"iana\"},\"application/vnd.commerce-battelle\":{\"source\":\"iana\"},\"application/vnd.commonspace\":{\"source\":\"iana\",\"extensions\":[\"csp\"]},\"application/vnd.contact.cmsg\":{\"source\":\"iana\",\"extensions\":[\"cdbcmsg\"]},\"application/vnd.coreos.ignition+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.cosmocaller\":{\"source\":\"iana\",\"extensions\":[\"cmc\"]},\"application/vnd.crick.clicker\":{\"source\":\"iana\",\"extensions\":[\"clkx\"]},\"application/vnd.crick.clicker.keyboard\":{\"source\":\"iana\",\"extensions\":[\"clkk\"]},\"application/vnd.crick.clicker.palette\":{\"source\":\"iana\",\"extensions\":[\"clkp\"]},\"application/vnd.crick.clicker.template\":{\"source\":\"iana\",\"extensions\":[\"clkt\"]},\"application/vnd.crick.clicker.wordbank\":{\"source\":\"iana\",\"extensions\":[\"clkw\"]},\"application/vnd.criticaltools.wbs+xml\":{\"source\":\"iana\",\"extensions\":[\"wbs\"]},\"application/vnd.ctc-posml\":{\"source\":\"iana\",\"extensions\":[\"pml\"]},\"application/vnd.ctct.ws+xml\":{\"source\":\"iana\"},\"application/vnd.cups-pdf\":{\"source\":\"iana\"},\"application/vnd.cups-postscript\":{\"source\":\"iana\"},\"application/vnd.cups-ppd\":{\"source\":\"iana\",\"extensions\":[\"ppd\"]},\"application/vnd.cups-raster\":{\"source\":\"iana\"},\"application/vnd.cups-raw\":{\"source\":\"iana\"},\"application/vnd.curl\":{\"source\":\"iana\"},\"application/vnd.curl.car\":{\"source\":\"apache\",\"extensions\":[\"car\"]},\"application/vnd.curl.pcurl\":{\"source\":\"apache\",\"extensions\":[\"pcurl\"]},\"application/vnd.cyan.dean.root+xml\":{\"source\":\"iana\"},\"application/vnd.cybank\":{\"source\":\"iana\"},\"application/vnd.d2l.coursepackage1p0+zip\":{\"source\":\"iana\"},\"application/vnd.dart\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"dart\"]},\"application/vnd.data-vision.rdz\":{\"source\":\"iana\",\"extensions\":[\"rdz\"]},\"application/vnd.datapackage+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.dataresource+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.debian.binary-package\":{\"source\":\"iana\"},\"application/vnd.dece.data\":{\"source\":\"iana\",\"extensions\":[\"uvf\",\"uvvf\",\"uvd\",\"uvvd\"]},\"application/vnd.dece.ttml+xml\":{\"source\":\"iana\",\"extensions\":[\"uvt\",\"uvvt\"]},\"application/vnd.dece.unspecified\":{\"source\":\"iana\",\"extensions\":[\"uvx\",\"uvvx\"]},\"application/vnd.dece.zip\":{\"source\":\"iana\",\"extensions\":[\"uvz\",\"uvvz\"]},\"application/vnd.denovo.fcselayout-link\":{\"source\":\"iana\",\"extensions\":[\"fe_launch\"]},\"application/vnd.desmume-movie\":{\"source\":\"iana\"},\"application/vnd.desmume.movie\":{\"source\":\"apache\"},\"application/vnd.dir-bi.plate-dl-nosuffix\":{\"source\":\"iana\"},\"application/vnd.dm.delegation+xml\":{\"source\":\"iana\"},\"application/vnd.dna\":{\"source\":\"iana\",\"extensions\":[\"dna\"]},\"application/vnd.document+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.dolby.mlp\":{\"source\":\"apache\",\"extensions\":[\"mlp\"]},\"application/vnd.dolby.mobile.1\":{\"source\":\"iana\"},\"application/vnd.dolby.mobile.2\":{\"source\":\"iana\"},\"application/vnd.doremir.scorecloud-binary-document\":{\"source\":\"iana\"},\"application/vnd.dpgraph\":{\"source\":\"iana\",\"extensions\":[\"dpg\"]},\"application/vnd.dreamfactory\":{\"source\":\"iana\",\"extensions\":[\"dfac\"]},\"application/vnd.drive+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.ds-keypoint\":{\"source\":\"apache\",\"extensions\":[\"kpxx\"]},\"application/vnd.dtg.local\":{\"source\":\"iana\"},\"application/vnd.dtg.local.flash\":{\"source\":\"iana\"},\"application/vnd.dtg.local.html\":{\"source\":\"iana\"},\"application/vnd.dvb.ait\":{\"source\":\"iana\",\"extensions\":[\"ait\"]},\"application/vnd.dvb.dvbj\":{\"source\":\"iana\"},\"application/vnd.dvb.esgcontainer\":{\"source\":\"iana\"},\"application/vnd.dvb.ipdcdftnotifaccess\":{\"source\":\"iana\"},\"application/vnd.dvb.ipdcesgaccess\":{\"source\":\"iana\"},\"application/vnd.dvb.ipdcesgaccess2\":{\"source\":\"iana\"},\"application/vnd.dvb.ipdcesgpdd\":{\"source\":\"iana\"},\"application/vnd.dvb.ipdcroaming\":{\"source\":\"iana\"},\"application/vnd.dvb.iptv.alfec-base\":{\"source\":\"iana\"},\"application/vnd.dvb.iptv.alfec-enhancement\":{\"source\":\"iana\"},\"application/vnd.dvb.notif-aggregate-root+xml\":{\"source\":\"iana\"},\"application/vnd.dvb.notif-container+xml\":{\"source\":\"iana\"},\"application/vnd.dvb.notif-generic+xml\":{\"source\":\"iana\"},\"application/vnd.dvb.notif-ia-msglist+xml\":{\"source\":\"iana\"},\"application/vnd.dvb.notif-ia-registration-request+xml\":{\"source\":\"iana\"},\"application/vnd.dvb.notif-ia-registration-response+xml\":{\"source\":\"iana\"},\"application/vnd.dvb.notif-init+xml\":{\"source\":\"iana\"},\"application/vnd.dvb.pfr\":{\"source\":\"iana\"},\"application/vnd.dvb.service\":{\"source\":\"iana\",\"extensions\":[\"svc\"]},\"application/vnd.dxr\":{\"source\":\"iana\"},\"application/vnd.dynageo\":{\"source\":\"iana\",\"extensions\":[\"geo\"]},\"application/vnd.dzr\":{\"source\":\"iana\"},\"application/vnd.easykaraoke.cdgdownload\":{\"source\":\"iana\"},\"application/vnd.ecdis-update\":{\"source\":\"iana\"},\"application/vnd.ecip.rlp\":{\"source\":\"iana\"},\"application/vnd.ecowin.chart\":{\"source\":\"iana\",\"extensions\":[\"mag\"]},\"application/vnd.ecowin.filerequest\":{\"source\":\"iana\"},\"application/vnd.ecowin.fileupdate\":{\"source\":\"iana\"},\"application/vnd.ecowin.series\":{\"source\":\"iana\"},\"application/vnd.ecowin.seriesrequest\":{\"source\":\"iana\"},\"application/vnd.ecowin.seriesupdate\":{\"source\":\"iana\"},\"application/vnd.efi.img\":{\"source\":\"iana\"},\"application/vnd.efi.iso\":{\"source\":\"iana\"},\"application/vnd.emclient.accessrequest+xml\":{\"source\":\"iana\"},\"application/vnd.enliven\":{\"source\":\"iana\",\"extensions\":[\"nml\"]},\"application/vnd.enphase.envoy\":{\"source\":\"iana\"},\"application/vnd.eprints.data+xml\":{\"source\":\"iana\"},\"application/vnd.epson.esf\":{\"source\":\"iana\",\"extensions\":[\"esf\"]},\"application/vnd.epson.msf\":{\"source\":\"iana\",\"extensions\":[\"msf\"]},\"application/vnd.epson.quickanime\":{\"source\":\"iana\",\"extensions\":[\"qam\"]},\"application/vnd.epson.salt\":{\"source\":\"iana\",\"extensions\":[\"slt\"]},\"application/vnd.epson.ssf\":{\"source\":\"iana\",\"extensions\":[\"ssf\"]},\"application/vnd.ericsson.quickcall\":{\"source\":\"iana\"},\"application/vnd.espass-espass+zip\":{\"source\":\"iana\"},\"application/vnd.eszigno3+xml\":{\"source\":\"iana\",\"extensions\":[\"es3\",\"et3\"]},\"application/vnd.etsi.aoc+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.asic-e+zip\":{\"source\":\"iana\"},\"application/vnd.etsi.asic-s+zip\":{\"source\":\"iana\"},\"application/vnd.etsi.cug+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.iptvcommand+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.iptvdiscovery+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.iptvprofile+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.iptvsad-bc+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.iptvsad-cod+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.iptvsad-npvr+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.iptvservice+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.iptvsync+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.iptvueprofile+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.mcid+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.mheg5\":{\"source\":\"iana\"},\"application/vnd.etsi.overload-control-policy-dataset+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.pstn+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.sci+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.simservs+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.timestamp-token\":{\"source\":\"iana\"},\"application/vnd.etsi.tsl+xml\":{\"source\":\"iana\"},\"application/vnd.etsi.tsl.der\":{\"source\":\"iana\"},\"application/vnd.eudora.data\":{\"source\":\"iana\"},\"application/vnd.evolv.ecig.profile\":{\"source\":\"iana\"},\"application/vnd.evolv.ecig.settings\":{\"source\":\"iana\"},\"application/vnd.evolv.ecig.theme\":{\"source\":\"iana\"},\"application/vnd.ezpix-album\":{\"source\":\"iana\",\"extensions\":[\"ez2\"]},\"application/vnd.ezpix-package\":{\"source\":\"iana\",\"extensions\":[\"ez3\"]},\"application/vnd.f-secure.mobile\":{\"source\":\"iana\"},\"application/vnd.fastcopy-disk-image\":{\"source\":\"iana\"},\"application/vnd.fdf\":{\"source\":\"iana\",\"extensions\":[\"fdf\"]},\"application/vnd.fdsn.mseed\":{\"source\":\"iana\",\"extensions\":[\"mseed\"]},\"application/vnd.fdsn.seed\":{\"source\":\"iana\",\"extensions\":[\"seed\",\"dataless\"]},\"application/vnd.ffsns\":{\"source\":\"iana\"},\"application/vnd.filmit.zfc\":{\"source\":\"iana\"},\"application/vnd.fints\":{\"source\":\"iana\"},\"application/vnd.firemonkeys.cloudcell\":{\"source\":\"iana\"},\"application/vnd.flographit\":{\"source\":\"iana\",\"extensions\":[\"gph\"]},\"application/vnd.fluxtime.clip\":{\"source\":\"iana\",\"extensions\":[\"ftc\"]},\"application/vnd.font-fontforge-sfd\":{\"source\":\"iana\"},\"application/vnd.framemaker\":{\"source\":\"iana\",\"extensions\":[\"fm\",\"frame\",\"maker\",\"book\"]},\"application/vnd.frogans.fnc\":{\"source\":\"iana\",\"extensions\":[\"fnc\"]},\"application/vnd.frogans.ltf\":{\"source\":\"iana\",\"extensions\":[\"ltf\"]},\"application/vnd.fsc.weblaunch\":{\"source\":\"iana\",\"extensions\":[\"fsc\"]},\"application/vnd.fujitsu.oasys\":{\"source\":\"iana\",\"extensions\":[\"oas\"]},\"application/vnd.fujitsu.oasys2\":{\"source\":\"iana\",\"extensions\":[\"oa2\"]},\"application/vnd.fujitsu.oasys3\":{\"source\":\"iana\",\"extensions\":[\"oa3\"]},\"application/vnd.fujitsu.oasysgp\":{\"source\":\"iana\",\"extensions\":[\"fg5\"]},\"application/vnd.fujitsu.oasysprs\":{\"source\":\"iana\",\"extensions\":[\"bh2\"]},\"application/vnd.fujixerox.art-ex\":{\"source\":\"iana\"},\"application/vnd.fujixerox.art4\":{\"source\":\"iana\"},\"application/vnd.fujixerox.ddd\":{\"source\":\"iana\",\"extensions\":[\"ddd\"]},\"application/vnd.fujixerox.docuworks\":{\"source\":\"iana\",\"extensions\":[\"xdw\"]},\"application/vnd.fujixerox.docuworks.binder\":{\"source\":\"iana\",\"extensions\":[\"xbd\"]},\"application/vnd.fujixerox.docuworks.container\":{\"source\":\"iana\"},\"application/vnd.fujixerox.hbpl\":{\"source\":\"iana\"},\"application/vnd.fut-misnet\":{\"source\":\"iana\"},\"application/vnd.fuzzysheet\":{\"source\":\"iana\",\"extensions\":[\"fzs\"]},\"application/vnd.genomatix.tuxedo\":{\"source\":\"iana\",\"extensions\":[\"txd\"]},\"application/vnd.geo+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.geocube+xml\":{\"source\":\"iana\"},\"application/vnd.geogebra.file\":{\"source\":\"iana\",\"extensions\":[\"ggb\"]},\"application/vnd.geogebra.tool\":{\"source\":\"iana\",\"extensions\":[\"ggt\"]},\"application/vnd.geometry-explorer\":{\"source\":\"iana\",\"extensions\":[\"gex\",\"gre\"]},\"application/vnd.geonext\":{\"source\":\"iana\",\"extensions\":[\"gxt\"]},\"application/vnd.geoplan\":{\"source\":\"iana\",\"extensions\":[\"g2w\"]},\"application/vnd.geospace\":{\"source\":\"iana\",\"extensions\":[\"g3w\"]},\"application/vnd.gerber\":{\"source\":\"iana\"},\"application/vnd.globalplatform.card-content-mgt\":{\"source\":\"iana\"},\"application/vnd.globalplatform.card-content-mgt-response\":{\"source\":\"iana\"},\"application/vnd.gmx\":{\"source\":\"iana\",\"extensions\":[\"gmx\"]},\"application/vnd.google-apps.document\":{\"compressible\":false,\"extensions\":[\"gdoc\"]},\"application/vnd.google-apps.presentation\":{\"compressible\":false,\"extensions\":[\"gslides\"]},\"application/vnd.google-apps.spreadsheet\":{\"compressible\":false,\"extensions\":[\"gsheet\"]},\"application/vnd.google-earth.kml+xml\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"kml\"]},\"application/vnd.google-earth.kmz\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"kmz\"]},\"application/vnd.gov.sk.e-form+xml\":{\"source\":\"iana\"},\"application/vnd.gov.sk.e-form+zip\":{\"source\":\"iana\"},\"application/vnd.gov.sk.xmldatacontainer+xml\":{\"source\":\"iana\"},\"application/vnd.grafeq\":{\"source\":\"iana\",\"extensions\":[\"gqf\",\"gqs\"]},\"application/vnd.gridmp\":{\"source\":\"iana\"},\"application/vnd.groove-account\":{\"source\":\"iana\",\"extensions\":[\"gac\"]},\"application/vnd.groove-help\":{\"source\":\"iana\",\"extensions\":[\"ghf\"]},\"application/vnd.groove-identity-message\":{\"source\":\"iana\",\"extensions\":[\"gim\"]},\"application/vnd.groove-injector\":{\"source\":\"iana\",\"extensions\":[\"grv\"]},\"application/vnd.groove-tool-message\":{\"source\":\"iana\",\"extensions\":[\"gtm\"]},\"application/vnd.groove-tool-template\":{\"source\":\"iana\",\"extensions\":[\"tpl\"]},\"application/vnd.groove-vcard\":{\"source\":\"iana\",\"extensions\":[\"vcg\"]},\"application/vnd.hal+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.hal+xml\":{\"source\":\"iana\",\"extensions\":[\"hal\"]},\"application/vnd.handheld-entertainment+xml\":{\"source\":\"iana\",\"extensions\":[\"zmm\"]},\"application/vnd.hbci\":{\"source\":\"iana\",\"extensions\":[\"hbci\"]},\"application/vnd.hc+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.hcl-bireports\":{\"source\":\"iana\"},\"application/vnd.hdt\":{\"source\":\"iana\"},\"application/vnd.heroku+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.hhe.lesson-player\":{\"source\":\"iana\",\"extensions\":[\"les\"]},\"application/vnd.hp-hpgl\":{\"source\":\"iana\",\"extensions\":[\"hpgl\"]},\"application/vnd.hp-hpid\":{\"source\":\"iana\",\"extensions\":[\"hpid\"]},\"application/vnd.hp-hps\":{\"source\":\"iana\",\"extensions\":[\"hps\"]},\"application/vnd.hp-jlyt\":{\"source\":\"iana\",\"extensions\":[\"jlt\"]},\"application/vnd.hp-pcl\":{\"source\":\"iana\",\"extensions\":[\"pcl\"]},\"application/vnd.hp-pclxl\":{\"source\":\"iana\",\"extensions\":[\"pclxl\"]},\"application/vnd.httphone\":{\"source\":\"iana\"},\"application/vnd.hydrostatix.sof-data\":{\"source\":\"iana\",\"extensions\":[\"sfd-hdstx\"]},\"application/vnd.hyper-item+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.hyperdrive+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.hzn-3d-crossword\":{\"source\":\"iana\"},\"application/vnd.ibm.afplinedata\":{\"source\":\"iana\"},\"application/vnd.ibm.electronic-media\":{\"source\":\"iana\"},\"application/vnd.ibm.minipay\":{\"source\":\"iana\",\"extensions\":[\"mpy\"]},\"application/vnd.ibm.modcap\":{\"source\":\"iana\",\"extensions\":[\"afp\",\"listafp\",\"list3820\"]},\"application/vnd.ibm.rights-management\":{\"source\":\"iana\",\"extensions\":[\"irm\"]},\"application/vnd.ibm.secure-container\":{\"source\":\"iana\",\"extensions\":[\"sc\"]},\"application/vnd.iccprofile\":{\"source\":\"iana\",\"extensions\":[\"icc\",\"icm\"]},\"application/vnd.ieee.1905\":{\"source\":\"iana\"},\"application/vnd.igloader\":{\"source\":\"iana\",\"extensions\":[\"igl\"]},\"application/vnd.imagemeter.folder+zip\":{\"source\":\"iana\"},\"application/vnd.imagemeter.image+zip\":{\"source\":\"iana\"},\"application/vnd.immervision-ivp\":{\"source\":\"iana\",\"extensions\":[\"ivp\"]},\"application/vnd.immervision-ivu\":{\"source\":\"iana\",\"extensions\":[\"ivu\"]},\"application/vnd.ims.imsccv1p1\":{\"source\":\"iana\"},\"application/vnd.ims.imsccv1p2\":{\"source\":\"iana\"},\"application/vnd.ims.imsccv1p3\":{\"source\":\"iana\"},\"application/vnd.ims.lis.v2.result+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.ims.lti.v2.toolconsumerprofile+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.ims.lti.v2.toolproxy+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.ims.lti.v2.toolproxy.id+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.ims.lti.v2.toolsettings+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.ims.lti.v2.toolsettings.simple+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.informedcontrol.rms+xml\":{\"source\":\"iana\"},\"application/vnd.informix-visionary\":{\"source\":\"iana\"},\"application/vnd.infotech.project\":{\"source\":\"iana\"},\"application/vnd.infotech.project+xml\":{\"source\":\"iana\"},\"application/vnd.innopath.wamp.notification\":{\"source\":\"iana\"},\"application/vnd.insors.igm\":{\"source\":\"iana\",\"extensions\":[\"igm\"]},\"application/vnd.intercon.formnet\":{\"source\":\"iana\",\"extensions\":[\"xpw\",\"xpx\"]},\"application/vnd.intergeo\":{\"source\":\"iana\",\"extensions\":[\"i2g\"]},\"application/vnd.intertrust.digibox\":{\"source\":\"iana\"},\"application/vnd.intertrust.nncp\":{\"source\":\"iana\"},\"application/vnd.intu.qbo\":{\"source\":\"iana\",\"extensions\":[\"qbo\"]},\"application/vnd.intu.qfx\":{\"source\":\"iana\",\"extensions\":[\"qfx\"]},\"application/vnd.iptc.g2.catalogitem+xml\":{\"source\":\"iana\"},\"application/vnd.iptc.g2.conceptitem+xml\":{\"source\":\"iana\"},\"application/vnd.iptc.g2.knowledgeitem+xml\":{\"source\":\"iana\"},\"application/vnd.iptc.g2.newsitem+xml\":{\"source\":\"iana\"},\"application/vnd.iptc.g2.newsmessage+xml\":{\"source\":\"iana\"},\"application/vnd.iptc.g2.packageitem+xml\":{\"source\":\"iana\"},\"application/vnd.iptc.g2.planningitem+xml\":{\"source\":\"iana\"},\"application/vnd.ipunplugged.rcprofile\":{\"source\":\"iana\",\"extensions\":[\"rcprofile\"]},\"application/vnd.irepository.package+xml\":{\"source\":\"iana\",\"extensions\":[\"irp\"]},\"application/vnd.is-xpr\":{\"source\":\"iana\",\"extensions\":[\"xpr\"]},\"application/vnd.isac.fcs\":{\"source\":\"iana\",\"extensions\":[\"fcs\"]},\"application/vnd.jam\":{\"source\":\"iana\",\"extensions\":[\"jam\"]},\"application/vnd.japannet-directory-service\":{\"source\":\"iana\"},\"application/vnd.japannet-jpnstore-wakeup\":{\"source\":\"iana\"},\"application/vnd.japannet-payment-wakeup\":{\"source\":\"iana\"},\"application/vnd.japannet-registration\":{\"source\":\"iana\"},\"application/vnd.japannet-registration-wakeup\":{\"source\":\"iana\"},\"application/vnd.japannet-setstore-wakeup\":{\"source\":\"iana\"},\"application/vnd.japannet-verification\":{\"source\":\"iana\"},\"application/vnd.japannet-verification-wakeup\":{\"source\":\"iana\"},\"application/vnd.jcp.javame.midlet-rms\":{\"source\":\"iana\",\"extensions\":[\"rms\"]},\"application/vnd.jisp\":{\"source\":\"iana\",\"extensions\":[\"jisp\"]},\"application/vnd.joost.joda-archive\":{\"source\":\"iana\",\"extensions\":[\"joda\"]},\"application/vnd.jsk.isdn-ngn\":{\"source\":\"iana\"},\"application/vnd.kahootz\":{\"source\":\"iana\",\"extensions\":[\"ktz\",\"ktr\"]},\"application/vnd.kde.karbon\":{\"source\":\"iana\",\"extensions\":[\"karbon\"]},\"application/vnd.kde.kchart\":{\"source\":\"iana\",\"extensions\":[\"chrt\"]},\"application/vnd.kde.kformula\":{\"source\":\"iana\",\"extensions\":[\"kfo\"]},\"application/vnd.kde.kivio\":{\"source\":\"iana\",\"extensions\":[\"flw\"]},\"application/vnd.kde.kontour\":{\"source\":\"iana\",\"extensions\":[\"kon\"]},\"application/vnd.kde.kpresenter\":{\"source\":\"iana\",\"extensions\":[\"kpr\",\"kpt\"]},\"application/vnd.kde.kspread\":{\"source\":\"iana\",\"extensions\":[\"ksp\"]},\"application/vnd.kde.kword\":{\"source\":\"iana\",\"extensions\":[\"kwd\",\"kwt\"]},\"application/vnd.kenameaapp\":{\"source\":\"iana\",\"extensions\":[\"htke\"]},\"application/vnd.kidspiration\":{\"source\":\"iana\",\"extensions\":[\"kia\"]},\"application/vnd.kinar\":{\"source\":\"iana\",\"extensions\":[\"kne\",\"knp\"]},\"application/vnd.koan\":{\"source\":\"iana\",\"extensions\":[\"skp\",\"skd\",\"skt\",\"skm\"]},\"application/vnd.kodak-descriptor\":{\"source\":\"iana\",\"extensions\":[\"sse\"]},\"application/vnd.las.las+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.las.las+xml\":{\"source\":\"iana\",\"extensions\":[\"lasxml\"]},\"application/vnd.liberty-request+xml\":{\"source\":\"iana\"},\"application/vnd.llamagraphics.life-balance.desktop\":{\"source\":\"iana\",\"extensions\":[\"lbd\"]},\"application/vnd.llamagraphics.life-balance.exchange+xml\":{\"source\":\"iana\",\"extensions\":[\"lbe\"]},\"application/vnd.lotus-1-2-3\":{\"source\":\"iana\",\"extensions\":[\"123\"]},\"application/vnd.lotus-approach\":{\"source\":\"iana\",\"extensions\":[\"apr\"]},\"application/vnd.lotus-freelance\":{\"source\":\"iana\",\"extensions\":[\"pre\"]},\"application/vnd.lotus-notes\":{\"source\":\"iana\",\"extensions\":[\"nsf\"]},\"application/vnd.lotus-organizer\":{\"source\":\"iana\",\"extensions\":[\"org\"]},\"application/vnd.lotus-screencam\":{\"source\":\"iana\",\"extensions\":[\"scm\"]},\"application/vnd.lotus-wordpro\":{\"source\":\"iana\",\"extensions\":[\"lwp\"]},\"application/vnd.macports.portpkg\":{\"source\":\"iana\",\"extensions\":[\"portpkg\"]},\"application/vnd.mapbox-vector-tile\":{\"source\":\"iana\"},\"application/vnd.marlin.drm.actiontoken+xml\":{\"source\":\"iana\"},\"application/vnd.marlin.drm.conftoken+xml\":{\"source\":\"iana\"},\"application/vnd.marlin.drm.license+xml\":{\"source\":\"iana\"},\"application/vnd.marlin.drm.mdcf\":{\"source\":\"iana\"},\"application/vnd.mason+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.maxmind.maxmind-db\":{\"source\":\"iana\"},\"application/vnd.mcd\":{\"source\":\"iana\",\"extensions\":[\"mcd\"]},\"application/vnd.medcalcdata\":{\"source\":\"iana\",\"extensions\":[\"mc1\"]},\"application/vnd.mediastation.cdkey\":{\"source\":\"iana\",\"extensions\":[\"cdkey\"]},\"application/vnd.meridian-slingshot\":{\"source\":\"iana\"},\"application/vnd.mfer\":{\"source\":\"iana\",\"extensions\":[\"mwf\"]},\"application/vnd.mfmp\":{\"source\":\"iana\",\"extensions\":[\"mfm\"]},\"application/vnd.micro+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.micrografx.flo\":{\"source\":\"iana\",\"extensions\":[\"flo\"]},\"application/vnd.micrografx.igx\":{\"source\":\"iana\",\"extensions\":[\"igx\"]},\"application/vnd.microsoft.portable-executable\":{\"source\":\"iana\"},\"application/vnd.microsoft.windows.thumbnail-cache\":{\"source\":\"iana\"},\"application/vnd.miele+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.mif\":{\"source\":\"iana\",\"extensions\":[\"mif\"]},\"application/vnd.minisoft-hp3000-save\":{\"source\":\"iana\"},\"application/vnd.mitsubishi.misty-guard.trustweb\":{\"source\":\"iana\"},\"application/vnd.mobius.daf\":{\"source\":\"iana\",\"extensions\":[\"daf\"]},\"application/vnd.mobius.dis\":{\"source\":\"iana\",\"extensions\":[\"dis\"]},\"application/vnd.mobius.mbk\":{\"source\":\"iana\",\"extensions\":[\"mbk\"]},\"application/vnd.mobius.mqy\":{\"source\":\"iana\",\"extensions\":[\"mqy\"]},\"application/vnd.mobius.msl\":{\"source\":\"iana\",\"extensions\":[\"msl\"]},\"application/vnd.mobius.plc\":{\"source\":\"iana\",\"extensions\":[\"plc\"]},\"application/vnd.mobius.txf\":{\"source\":\"iana\",\"extensions\":[\"txf\"]},\"application/vnd.mophun.application\":{\"source\":\"iana\",\"extensions\":[\"mpn\"]},\"application/vnd.mophun.certificate\":{\"source\":\"iana\",\"extensions\":[\"mpc\"]},\"application/vnd.motorola.flexsuite\":{\"source\":\"iana\"},\"application/vnd.motorola.flexsuite.adsi\":{\"source\":\"iana\"},\"application/vnd.motorola.flexsuite.fis\":{\"source\":\"iana\"},\"application/vnd.motorola.flexsuite.gotap\":{\"source\":\"iana\"},\"application/vnd.motorola.flexsuite.kmr\":{\"source\":\"iana\"},\"application/vnd.motorola.flexsuite.ttc\":{\"source\":\"iana\"},\"application/vnd.motorola.flexsuite.wem\":{\"source\":\"iana\"},\"application/vnd.motorola.iprm\":{\"source\":\"iana\"},\"application/vnd.mozilla.xul+xml\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"xul\"]},\"application/vnd.ms-3mfdocument\":{\"source\":\"iana\"},\"application/vnd.ms-artgalry\":{\"source\":\"iana\",\"extensions\":[\"cil\"]},\"application/vnd.ms-asf\":{\"source\":\"iana\"},\"application/vnd.ms-cab-compressed\":{\"source\":\"iana\",\"extensions\":[\"cab\"]},\"application/vnd.ms-color.iccprofile\":{\"source\":\"apache\"},\"application/vnd.ms-excel\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"xls\",\"xlm\",\"xla\",\"xlc\",\"xlt\",\"xlw\"]},\"application/vnd.ms-excel.addin.macroenabled.12\":{\"source\":\"iana\",\"extensions\":[\"xlam\"]},\"application/vnd.ms-excel.sheet.binary.macroenabled.12\":{\"source\":\"iana\",\"extensions\":[\"xlsb\"]},\"application/vnd.ms-excel.sheet.macroenabled.12\":{\"source\":\"iana\",\"extensions\":[\"xlsm\"]},\"application/vnd.ms-excel.template.macroenabled.12\":{\"source\":\"iana\",\"extensions\":[\"xltm\"]},\"application/vnd.ms-fontobject\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"eot\"]},\"application/vnd.ms-htmlhelp\":{\"source\":\"iana\",\"extensions\":[\"chm\"]},\"application/vnd.ms-ims\":{\"source\":\"iana\",\"extensions\":[\"ims\"]},\"application/vnd.ms-lrm\":{\"source\":\"iana\",\"extensions\":[\"lrm\"]},\"application/vnd.ms-office.activex+xml\":{\"source\":\"iana\"},\"application/vnd.ms-officetheme\":{\"source\":\"iana\",\"extensions\":[\"thmx\"]},\"application/vnd.ms-opentype\":{\"source\":\"apache\",\"compressible\":true},\"application/vnd.ms-outlook\":{\"compressible\":false,\"extensions\":[\"msg\"]},\"application/vnd.ms-package.obfuscated-opentype\":{\"source\":\"apache\"},\"application/vnd.ms-pki.seccat\":{\"source\":\"apache\",\"extensions\":[\"cat\"]},\"application/vnd.ms-pki.stl\":{\"source\":\"apache\",\"extensions\":[\"stl\"]},\"application/vnd.ms-playready.initiator+xml\":{\"source\":\"iana\"},\"application/vnd.ms-powerpoint\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"ppt\",\"pps\",\"pot\"]},\"application/vnd.ms-powerpoint.addin.macroenabled.12\":{\"source\":\"iana\",\"extensions\":[\"ppam\"]},\"application/vnd.ms-powerpoint.presentation.macroenabled.12\":{\"source\":\"iana\",\"extensions\":[\"pptm\"]},\"application/vnd.ms-powerpoint.slide.macroenabled.12\":{\"source\":\"iana\",\"extensions\":[\"sldm\"]},\"application/vnd.ms-powerpoint.slideshow.macroenabled.12\":{\"source\":\"iana\",\"extensions\":[\"ppsm\"]},\"application/vnd.ms-powerpoint.template.macroenabled.12\":{\"source\":\"iana\",\"extensions\":[\"potm\"]},\"application/vnd.ms-printdevicecapabilities+xml\":{\"source\":\"iana\"},\"application/vnd.ms-printing.printticket+xml\":{\"source\":\"apache\"},\"application/vnd.ms-printschematicket+xml\":{\"source\":\"iana\"},\"application/vnd.ms-project\":{\"source\":\"iana\",\"extensions\":[\"mpp\",\"mpt\"]},\"application/vnd.ms-tnef\":{\"source\":\"iana\"},\"application/vnd.ms-windows.devicepairing\":{\"source\":\"iana\"},\"application/vnd.ms-windows.nwprinting.oob\":{\"source\":\"iana\"},\"application/vnd.ms-windows.printerpairing\":{\"source\":\"iana\"},\"application/vnd.ms-windows.wsd.oob\":{\"source\":\"iana\"},\"application/vnd.ms-wmdrm.lic-chlg-req\":{\"source\":\"iana\"},\"application/vnd.ms-wmdrm.lic-resp\":{\"source\":\"iana\"},\"application/vnd.ms-wmdrm.meter-chlg-req\":{\"source\":\"iana\"},\"application/vnd.ms-wmdrm.meter-resp\":{\"source\":\"iana\"},\"application/vnd.ms-word.document.macroenabled.12\":{\"source\":\"iana\",\"extensions\":[\"docm\"]},\"application/vnd.ms-word.template.macroenabled.12\":{\"source\":\"iana\",\"extensions\":[\"dotm\"]},\"application/vnd.ms-works\":{\"source\":\"iana\",\"extensions\":[\"wps\",\"wks\",\"wcm\",\"wdb\"]},\"application/vnd.ms-wpl\":{\"source\":\"iana\",\"extensions\":[\"wpl\"]},\"application/vnd.ms-xpsdocument\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"xps\"]},\"application/vnd.msa-disk-image\":{\"source\":\"iana\"},\"application/vnd.mseq\":{\"source\":\"iana\",\"extensions\":[\"mseq\"]},\"application/vnd.msign\":{\"source\":\"iana\"},\"application/vnd.multiad.creator\":{\"source\":\"iana\"},\"application/vnd.multiad.creator.cif\":{\"source\":\"iana\"},\"application/vnd.music-niff\":{\"source\":\"iana\"},\"application/vnd.musician\":{\"source\":\"iana\",\"extensions\":[\"mus\"]},\"application/vnd.muvee.style\":{\"source\":\"iana\",\"extensions\":[\"msty\"]},\"application/vnd.mynfc\":{\"source\":\"iana\",\"extensions\":[\"taglet\"]},\"application/vnd.ncd.control\":{\"source\":\"iana\"},\"application/vnd.ncd.reference\":{\"source\":\"iana\"},\"application/vnd.nearst.inv+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.nervana\":{\"source\":\"iana\"},\"application/vnd.netfpx\":{\"source\":\"iana\"},\"application/vnd.neurolanguage.nlu\":{\"source\":\"iana\",\"extensions\":[\"nlu\"]},\"application/vnd.nintendo.nitro.rom\":{\"source\":\"iana\"},\"application/vnd.nintendo.snes.rom\":{\"source\":\"iana\"},\"application/vnd.nitf\":{\"source\":\"iana\",\"extensions\":[\"ntf\",\"nitf\"]},\"application/vnd.noblenet-directory\":{\"source\":\"iana\",\"extensions\":[\"nnd\"]},\"application/vnd.noblenet-sealer\":{\"source\":\"iana\",\"extensions\":[\"nns\"]},\"application/vnd.noblenet-web\":{\"source\":\"iana\",\"extensions\":[\"nnw\"]},\"application/vnd.nokia.catalogs\":{\"source\":\"iana\"},\"application/vnd.nokia.conml+wbxml\":{\"source\":\"iana\"},\"application/vnd.nokia.conml+xml\":{\"source\":\"iana\"},\"application/vnd.nokia.iptv.config+xml\":{\"source\":\"iana\"},\"application/vnd.nokia.isds-radio-presets\":{\"source\":\"iana\"},\"application/vnd.nokia.landmark+wbxml\":{\"source\":\"iana\"},\"application/vnd.nokia.landmark+xml\":{\"source\":\"iana\"},\"application/vnd.nokia.landmarkcollection+xml\":{\"source\":\"iana\"},\"application/vnd.nokia.n-gage.ac+xml\":{\"source\":\"iana\"},\"application/vnd.nokia.n-gage.data\":{\"source\":\"iana\",\"extensions\":[\"ngdat\"]},\"application/vnd.nokia.n-gage.symbian.install\":{\"source\":\"iana\",\"extensions\":[\"n-gage\"]},\"application/vnd.nokia.ncd\":{\"source\":\"iana\"},\"application/vnd.nokia.pcd+wbxml\":{\"source\":\"iana\"},\"application/vnd.nokia.pcd+xml\":{\"source\":\"iana\"},\"application/vnd.nokia.radio-preset\":{\"source\":\"iana\",\"extensions\":[\"rpst\"]},\"application/vnd.nokia.radio-presets\":{\"source\":\"iana\",\"extensions\":[\"rpss\"]},\"application/vnd.novadigm.edm\":{\"source\":\"iana\",\"extensions\":[\"edm\"]},\"application/vnd.novadigm.edx\":{\"source\":\"iana\",\"extensions\":[\"edx\"]},\"application/vnd.novadigm.ext\":{\"source\":\"iana\",\"extensions\":[\"ext\"]},\"application/vnd.ntt-local.content-share\":{\"source\":\"iana\"},\"application/vnd.ntt-local.file-transfer\":{\"source\":\"iana\"},\"application/vnd.ntt-local.ogw_remote-access\":{\"source\":\"iana\"},\"application/vnd.ntt-local.sip-ta_remote\":{\"source\":\"iana\"},\"application/vnd.ntt-local.sip-ta_tcp_stream\":{\"source\":\"iana\"},\"application/vnd.oasis.opendocument.chart\":{\"source\":\"iana\",\"extensions\":[\"odc\"]},\"application/vnd.oasis.opendocument.chart-template\":{\"source\":\"iana\",\"extensions\":[\"otc\"]},\"application/vnd.oasis.opendocument.database\":{\"source\":\"iana\",\"extensions\":[\"odb\"]},\"application/vnd.oasis.opendocument.formula\":{\"source\":\"iana\",\"extensions\":[\"odf\"]},\"application/vnd.oasis.opendocument.formula-template\":{\"source\":\"iana\",\"extensions\":[\"odft\"]},\"application/vnd.oasis.opendocument.graphics\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"odg\"]},\"application/vnd.oasis.opendocument.graphics-template\":{\"source\":\"iana\",\"extensions\":[\"otg\"]},\"application/vnd.oasis.opendocument.image\":{\"source\":\"iana\",\"extensions\":[\"odi\"]},\"application/vnd.oasis.opendocument.image-template\":{\"source\":\"iana\",\"extensions\":[\"oti\"]},\"application/vnd.oasis.opendocument.presentation\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"odp\"]},\"application/vnd.oasis.opendocument.presentation-template\":{\"source\":\"iana\",\"extensions\":[\"otp\"]},\"application/vnd.oasis.opendocument.spreadsheet\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"ods\"]},\"application/vnd.oasis.opendocument.spreadsheet-template\":{\"source\":\"iana\",\"extensions\":[\"ots\"]},\"application/vnd.oasis.opendocument.text\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"odt\"]},\"application/vnd.oasis.opendocument.text-master\":{\"source\":\"iana\",\"extensions\":[\"odm\"]},\"application/vnd.oasis.opendocument.text-template\":{\"source\":\"iana\",\"extensions\":[\"ott\"]},\"application/vnd.oasis.opendocument.text-web\":{\"source\":\"iana\",\"extensions\":[\"oth\"]},\"application/vnd.obn\":{\"source\":\"iana\"},\"application/vnd.ocf+cbor\":{\"source\":\"iana\"},\"application/vnd.oftn.l10n+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.oipf.contentaccessdownload+xml\":{\"source\":\"iana\"},\"application/vnd.oipf.contentaccessstreaming+xml\":{\"source\":\"iana\"},\"application/vnd.oipf.cspg-hexbinary\":{\"source\":\"iana\"},\"application/vnd.oipf.dae.svg+xml\":{\"source\":\"iana\"},\"application/vnd.oipf.dae.xhtml+xml\":{\"source\":\"iana\"},\"application/vnd.oipf.mippvcontrolmessage+xml\":{\"source\":\"iana\"},\"application/vnd.oipf.pae.gem\":{\"source\":\"iana\"},\"application/vnd.oipf.spdiscovery+xml\":{\"source\":\"iana\"},\"application/vnd.oipf.spdlist+xml\":{\"source\":\"iana\"},\"application/vnd.oipf.ueprofile+xml\":{\"source\":\"iana\"},\"application/vnd.oipf.userprofile+xml\":{\"source\":\"iana\"},\"application/vnd.olpc-sugar\":{\"source\":\"iana\",\"extensions\":[\"xo\"]},\"application/vnd.oma-scws-config\":{\"source\":\"iana\"},\"application/vnd.oma-scws-http-request\":{\"source\":\"iana\"},\"application/vnd.oma-scws-http-response\":{\"source\":\"iana\"},\"application/vnd.oma.bcast.associated-procedure-parameter+xml\":{\"source\":\"iana\"},\"application/vnd.oma.bcast.drm-trigger+xml\":{\"source\":\"iana\"},\"application/vnd.oma.bcast.imd+xml\":{\"source\":\"iana\"},\"application/vnd.oma.bcast.ltkm\":{\"source\":\"iana\"},\"application/vnd.oma.bcast.notification+xml\":{\"source\":\"iana\"},\"application/vnd.oma.bcast.provisioningtrigger\":{\"source\":\"iana\"},\"application/vnd.oma.bcast.sgboot\":{\"source\":\"iana\"},\"application/vnd.oma.bcast.sgdd+xml\":{\"source\":\"iana\"},\"application/vnd.oma.bcast.sgdu\":{\"source\":\"iana\"},\"application/vnd.oma.bcast.simple-symbol-container\":{\"source\":\"iana\"},\"application/vnd.oma.bcast.smartcard-trigger+xml\":{\"source\":\"iana\"},\"application/vnd.oma.bcast.sprov+xml\":{\"source\":\"iana\"},\"application/vnd.oma.bcast.stkm\":{\"source\":\"iana\"},\"application/vnd.oma.cab-address-book+xml\":{\"source\":\"iana\"},\"application/vnd.oma.cab-feature-handler+xml\":{\"source\":\"iana\"},\"application/vnd.oma.cab-pcc+xml\":{\"source\":\"iana\"},\"application/vnd.oma.cab-subs-invite+xml\":{\"source\":\"iana\"},\"application/vnd.oma.cab-user-prefs+xml\":{\"source\":\"iana\"},\"application/vnd.oma.dcd\":{\"source\":\"iana\"},\"application/vnd.oma.dcdc\":{\"source\":\"iana\"},\"application/vnd.oma.dd2+xml\":{\"source\":\"iana\",\"extensions\":[\"dd2\"]},\"application/vnd.oma.drm.risd+xml\":{\"source\":\"iana\"},\"application/vnd.oma.group-usage-list+xml\":{\"source\":\"iana\"},\"application/vnd.oma.lwm2m+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.oma.lwm2m+tlv\":{\"source\":\"iana\"},\"application/vnd.oma.pal+xml\":{\"source\":\"iana\"},\"application/vnd.oma.poc.detailed-progress-report+xml\":{\"source\":\"iana\"},\"application/vnd.oma.poc.final-report+xml\":{\"source\":\"iana\"},\"application/vnd.oma.poc.groups+xml\":{\"source\":\"iana\"},\"application/vnd.oma.poc.invocation-descriptor+xml\":{\"source\":\"iana\"},\"application/vnd.oma.poc.optimized-progress-report+xml\":{\"source\":\"iana\"},\"application/vnd.oma.push\":{\"source\":\"iana\"},\"application/vnd.oma.scidm.messages+xml\":{\"source\":\"iana\"},\"application/vnd.oma.xcap-directory+xml\":{\"source\":\"iana\"},\"application/vnd.omads-email+xml\":{\"source\":\"iana\"},\"application/vnd.omads-file+xml\":{\"source\":\"iana\"},\"application/vnd.omads-folder+xml\":{\"source\":\"iana\"},\"application/vnd.omaloc-supl-init\":{\"source\":\"iana\"},\"application/vnd.onepager\":{\"source\":\"iana\"},\"application/vnd.onepagertamp\":{\"source\":\"iana\"},\"application/vnd.onepagertamx\":{\"source\":\"iana\"},\"application/vnd.onepagertat\":{\"source\":\"iana\"},\"application/vnd.onepagertatp\":{\"source\":\"iana\"},\"application/vnd.onepagertatx\":{\"source\":\"iana\"},\"application/vnd.openblox.game+xml\":{\"source\":\"iana\"},\"application/vnd.openblox.game-binary\":{\"source\":\"iana\"},\"application/vnd.openeye.oeb\":{\"source\":\"iana\"},\"application/vnd.openofficeorg.extension\":{\"source\":\"apache\",\"extensions\":[\"oxt\"]},\"application/vnd.openstreetmap.data+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.custom-properties+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.customxmlproperties+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.drawing+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.drawingml.chart+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.drawingml.chartshapes+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.drawingml.diagramcolors+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.drawingml.diagramdata+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.drawingml.diagramlayout+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.drawingml.diagramstyle+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.extended-properties+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.presentationml.commentauthors+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.presentationml.comments+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.presentationml.handoutmaster+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.presentationml.notesmaster+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.presentationml.notesslide+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.presentationml.presentation\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"pptx\"]},\"application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.presentationml.presprops+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.presentationml.slide\":{\"source\":\"iana\",\"extensions\":[\"sldx\"]},\"application/vnd.openxmlformats-officedocument.presentationml.slide+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.presentationml.slidelayout+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.presentationml.slidemaster+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.presentationml.slideshow\":{\"source\":\"iana\",\"extensions\":[\"ppsx\"]},\"application/vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.presentationml.slideupdateinfo+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.presentationml.tablestyles+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.presentationml.tags+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.presentationml.template\":{\"source\":\"iana\",\"extensions\":[\"potx\"]},\"application/vnd.openxmlformats-officedocument.presentationml.template.main+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.presentationml.viewprops+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.calcchain+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.connections+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.externallink+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.pivotcachedefinition+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.pivotcacherecords+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.pivottable+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.querytable+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.revisionheaders+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.revisionlog+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.sharedstrings+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"xlsx\"]},\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheetmetadata+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.tablesinglecells+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.template\":{\"source\":\"iana\",\"extensions\":[\"xltx\"]},\"application/vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.usernames+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.volatiledependencies+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.theme+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.themeoverride+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.vmldrawing\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.wordprocessingml.document\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"docx\"]},\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.glossary+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.wordprocessingml.fonttable+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.wordprocessingml.template\":{\"source\":\"iana\",\"extensions\":[\"dotx\"]},\"application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-officedocument.wordprocessingml.websettings+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-package.core-properties+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-package.digital-signature-xmlsignature+xml\":{\"source\":\"iana\"},\"application/vnd.openxmlformats-package.relationships+xml\":{\"source\":\"iana\"},\"application/vnd.oracle.resource+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.orange.indata\":{\"source\":\"iana\"},\"application/vnd.osa.netdeploy\":{\"source\":\"iana\"},\"application/vnd.osgeo.mapguide.package\":{\"source\":\"iana\",\"extensions\":[\"mgp\"]},\"application/vnd.osgi.bundle\":{\"source\":\"iana\"},\"application/vnd.osgi.dp\":{\"source\":\"iana\",\"extensions\":[\"dp\"]},\"application/vnd.osgi.subsystem\":{\"source\":\"iana\",\"extensions\":[\"esa\"]},\"application/vnd.otps.ct-kip+xml\":{\"source\":\"iana\"},\"application/vnd.oxli.countgraph\":{\"source\":\"iana\"},\"application/vnd.pagerduty+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.palm\":{\"source\":\"iana\",\"extensions\":[\"pdb\",\"pqa\",\"oprc\"]},\"application/vnd.panoply\":{\"source\":\"iana\"},\"application/vnd.paos+xml\":{\"source\":\"iana\"},\"application/vnd.paos.xml\":{\"source\":\"apache\"},\"application/vnd.patentdive\":{\"source\":\"iana\"},\"application/vnd.pawaafile\":{\"source\":\"iana\",\"extensions\":[\"paw\"]},\"application/vnd.pcos\":{\"source\":\"iana\"},\"application/vnd.pg.format\":{\"source\":\"iana\",\"extensions\":[\"str\"]},\"application/vnd.pg.osasli\":{\"source\":\"iana\",\"extensions\":[\"ei6\"]},\"application/vnd.piaccess.application-licence\":{\"source\":\"iana\"},\"application/vnd.picsel\":{\"source\":\"iana\",\"extensions\":[\"efif\"]},\"application/vnd.pmi.widget\":{\"source\":\"iana\",\"extensions\":[\"wg\"]},\"application/vnd.poc.group-advertisement+xml\":{\"source\":\"iana\"},\"application/vnd.pocketlearn\":{\"source\":\"iana\",\"extensions\":[\"plf\"]},\"application/vnd.powerbuilder6\":{\"source\":\"iana\",\"extensions\":[\"pbd\"]},\"application/vnd.powerbuilder6-s\":{\"source\":\"iana\"},\"application/vnd.powerbuilder7\":{\"source\":\"iana\"},\"application/vnd.powerbuilder7-s\":{\"source\":\"iana\"},\"application/vnd.powerbuilder75\":{\"source\":\"iana\"},\"application/vnd.powerbuilder75-s\":{\"source\":\"iana\"},\"application/vnd.preminet\":{\"source\":\"iana\"},\"application/vnd.previewsystems.box\":{\"source\":\"iana\",\"extensions\":[\"box\"]},\"application/vnd.proteus.magazine\":{\"source\":\"iana\",\"extensions\":[\"mgz\"]},\"application/vnd.publishare-delta-tree\":{\"source\":\"iana\",\"extensions\":[\"qps\"]},\"application/vnd.pvi.ptid1\":{\"source\":\"iana\",\"extensions\":[\"ptid\"]},\"application/vnd.pwg-multiplexed\":{\"source\":\"iana\"},\"application/vnd.pwg-xhtml-print+xml\":{\"source\":\"iana\"},\"application/vnd.qualcomm.brew-app-res\":{\"source\":\"iana\"},\"application/vnd.quarantainenet\":{\"source\":\"iana\"},\"application/vnd.quark.quarkxpress\":{\"source\":\"iana\",\"extensions\":[\"qxd\",\"qxt\",\"qwd\",\"qwt\",\"qxl\",\"qxb\"]},\"application/vnd.quobject-quoxdocument\":{\"source\":\"iana\"},\"application/vnd.radisys.moml+xml\":{\"source\":\"iana\"},\"application/vnd.radisys.msml+xml\":{\"source\":\"iana\"},\"application/vnd.radisys.msml-audit+xml\":{\"source\":\"iana\"},\"application/vnd.radisys.msml-audit-conf+xml\":{\"source\":\"iana\"},\"application/vnd.radisys.msml-audit-conn+xml\":{\"source\":\"iana\"},\"application/vnd.radisys.msml-audit-dialog+xml\":{\"source\":\"iana\"},\"application/vnd.radisys.msml-audit-stream+xml\":{\"source\":\"iana\"},\"application/vnd.radisys.msml-conf+xml\":{\"source\":\"iana\"},\"application/vnd.radisys.msml-dialog+xml\":{\"source\":\"iana\"},\"application/vnd.radisys.msml-dialog-base+xml\":{\"source\":\"iana\"},\"application/vnd.radisys.msml-dialog-fax-detect+xml\":{\"source\":\"iana\"},\"application/vnd.radisys.msml-dialog-fax-sendrecv+xml\":{\"source\":\"iana\"},\"application/vnd.radisys.msml-dialog-group+xml\":{\"source\":\"iana\"},\"application/vnd.radisys.msml-dialog-speech+xml\":{\"source\":\"iana\"},\"application/vnd.radisys.msml-dialog-transform+xml\":{\"source\":\"iana\"},\"application/vnd.rainstor.data\":{\"source\":\"iana\"},\"application/vnd.rapid\":{\"source\":\"iana\"},\"application/vnd.rar\":{\"source\":\"iana\"},\"application/vnd.realvnc.bed\":{\"source\":\"iana\",\"extensions\":[\"bed\"]},\"application/vnd.recordare.musicxml\":{\"source\":\"iana\",\"extensions\":[\"mxl\"]},\"application/vnd.recordare.musicxml+xml\":{\"source\":\"iana\",\"extensions\":[\"musicxml\"]},\"application/vnd.renlearn.rlprint\":{\"source\":\"iana\"},\"application/vnd.restful+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.rig.cryptonote\":{\"source\":\"iana\",\"extensions\":[\"cryptonote\"]},\"application/vnd.rim.cod\":{\"source\":\"apache\",\"extensions\":[\"cod\"]},\"application/vnd.rn-realmedia\":{\"source\":\"apache\",\"extensions\":[\"rm\"]},\"application/vnd.rn-realmedia-vbr\":{\"source\":\"apache\",\"extensions\":[\"rmvb\"]},\"application/vnd.route66.link66+xml\":{\"source\":\"iana\",\"extensions\":[\"link66\"]},\"application/vnd.rs-274x\":{\"source\":\"iana\"},\"application/vnd.ruckus.download\":{\"source\":\"iana\"},\"application/vnd.s3sms\":{\"source\":\"iana\"},\"application/vnd.sailingtracker.track\":{\"source\":\"iana\",\"extensions\":[\"st\"]},\"application/vnd.sbm.cid\":{\"source\":\"iana\"},\"application/vnd.sbm.mid2\":{\"source\":\"iana\"},\"application/vnd.scribus\":{\"source\":\"iana\"},\"application/vnd.sealed.3df\":{\"source\":\"iana\"},\"application/vnd.sealed.csf\":{\"source\":\"iana\"},\"application/vnd.sealed.doc\":{\"source\":\"iana\"},\"application/vnd.sealed.eml\":{\"source\":\"iana\"},\"application/vnd.sealed.mht\":{\"source\":\"iana\"},\"application/vnd.sealed.net\":{\"source\":\"iana\"},\"application/vnd.sealed.ppt\":{\"source\":\"iana\"},\"application/vnd.sealed.tiff\":{\"source\":\"iana\"},\"application/vnd.sealed.xls\":{\"source\":\"iana\"},\"application/vnd.sealedmedia.softseal.html\":{\"source\":\"iana\"},\"application/vnd.sealedmedia.softseal.pdf\":{\"source\":\"iana\"},\"application/vnd.seemail\":{\"source\":\"iana\",\"extensions\":[\"see\"]},\"application/vnd.sema\":{\"source\":\"iana\",\"extensions\":[\"sema\"]},\"application/vnd.semd\":{\"source\":\"iana\",\"extensions\":[\"semd\"]},\"application/vnd.semf\":{\"source\":\"iana\",\"extensions\":[\"semf\"]},\"application/vnd.shana.informed.formdata\":{\"source\":\"iana\",\"extensions\":[\"ifm\"]},\"application/vnd.shana.informed.formtemplate\":{\"source\":\"iana\",\"extensions\":[\"itp\"]},\"application/vnd.shana.informed.interchange\":{\"source\":\"iana\",\"extensions\":[\"iif\"]},\"application/vnd.shana.informed.package\":{\"source\":\"iana\",\"extensions\":[\"ipk\"]},\"application/vnd.sigrok.session\":{\"source\":\"iana\"},\"application/vnd.simtech-mindmapper\":{\"source\":\"iana\",\"extensions\":[\"twd\",\"twds\"]},\"application/vnd.siren+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.smaf\":{\"source\":\"iana\",\"extensions\":[\"mmf\"]},\"application/vnd.smart.notebook\":{\"source\":\"iana\"},\"application/vnd.smart.teacher\":{\"source\":\"iana\",\"extensions\":[\"teacher\"]},\"application/vnd.software602.filler.form+xml\":{\"source\":\"iana\"},\"application/vnd.software602.filler.form-xml-zip\":{\"source\":\"iana\"},\"application/vnd.solent.sdkm+xml\":{\"source\":\"iana\",\"extensions\":[\"sdkm\",\"sdkd\"]},\"application/vnd.spotfire.dxp\":{\"source\":\"iana\",\"extensions\":[\"dxp\"]},\"application/vnd.spotfire.sfs\":{\"source\":\"iana\",\"extensions\":[\"sfs\"]},\"application/vnd.sqlite3\":{\"source\":\"iana\"},\"application/vnd.sss-cod\":{\"source\":\"iana\"},\"application/vnd.sss-dtf\":{\"source\":\"iana\"},\"application/vnd.sss-ntf\":{\"source\":\"iana\"},\"application/vnd.stardivision.calc\":{\"source\":\"apache\",\"extensions\":[\"sdc\"]},\"application/vnd.stardivision.draw\":{\"source\":\"apache\",\"extensions\":[\"sda\"]},\"application/vnd.stardivision.impress\":{\"source\":\"apache\",\"extensions\":[\"sdd\"]},\"application/vnd.stardivision.math\":{\"source\":\"apache\",\"extensions\":[\"smf\"]},\"application/vnd.stardivision.writer\":{\"source\":\"apache\",\"extensions\":[\"sdw\",\"vor\"]},\"application/vnd.stardivision.writer-global\":{\"source\":\"apache\",\"extensions\":[\"sgl\"]},\"application/vnd.stepmania.package\":{\"source\":\"iana\",\"extensions\":[\"smzip\"]},\"application/vnd.stepmania.stepchart\":{\"source\":\"iana\",\"extensions\":[\"sm\"]},\"application/vnd.street-stream\":{\"source\":\"iana\"},\"application/vnd.sun.wadl+xml\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"wadl\"]},\"application/vnd.sun.xml.calc\":{\"source\":\"apache\",\"extensions\":[\"sxc\"]},\"application/vnd.sun.xml.calc.template\":{\"source\":\"apache\",\"extensions\":[\"stc\"]},\"application/vnd.sun.xml.draw\":{\"source\":\"apache\",\"extensions\":[\"sxd\"]},\"application/vnd.sun.xml.draw.template\":{\"source\":\"apache\",\"extensions\":[\"std\"]},\"application/vnd.sun.xml.impress\":{\"source\":\"apache\",\"extensions\":[\"sxi\"]},\"application/vnd.sun.xml.impress.template\":{\"source\":\"apache\",\"extensions\":[\"sti\"]},\"application/vnd.sun.xml.math\":{\"source\":\"apache\",\"extensions\":[\"sxm\"]},\"application/vnd.sun.xml.writer\":{\"source\":\"apache\",\"extensions\":[\"sxw\"]},\"application/vnd.sun.xml.writer.global\":{\"source\":\"apache\",\"extensions\":[\"sxg\"]},\"application/vnd.sun.xml.writer.template\":{\"source\":\"apache\",\"extensions\":[\"stw\"]},\"application/vnd.sus-calendar\":{\"source\":\"iana\",\"extensions\":[\"sus\",\"susp\"]},\"application/vnd.svd\":{\"source\":\"iana\",\"extensions\":[\"svd\"]},\"application/vnd.swiftview-ics\":{\"source\":\"iana\"},\"application/vnd.symbian.install\":{\"source\":\"apache\",\"extensions\":[\"sis\",\"sisx\"]},\"application/vnd.syncml+xml\":{\"source\":\"iana\",\"extensions\":[\"xsm\"]},\"application/vnd.syncml.dm+wbxml\":{\"source\":\"iana\",\"extensions\":[\"bdm\"]},\"application/vnd.syncml.dm+xml\":{\"source\":\"iana\",\"extensions\":[\"xdm\"]},\"application/vnd.syncml.dm.notification\":{\"source\":\"iana\"},\"application/vnd.syncml.dmddf+wbxml\":{\"source\":\"iana\"},\"application/vnd.syncml.dmddf+xml\":{\"source\":\"iana\"},\"application/vnd.syncml.dmtnds+wbxml\":{\"source\":\"iana\"},\"application/vnd.syncml.dmtnds+xml\":{\"source\":\"iana\"},\"application/vnd.syncml.ds.notification\":{\"source\":\"iana\"},\"application/vnd.tableschema+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.tao.intent-module-archive\":{\"source\":\"iana\",\"extensions\":[\"tao\"]},\"application/vnd.tcpdump.pcap\":{\"source\":\"iana\",\"extensions\":[\"pcap\",\"cap\",\"dmp\"]},\"application/vnd.tmd.mediaflex.api+xml\":{\"source\":\"iana\"},\"application/vnd.tml\":{\"source\":\"iana\"},\"application/vnd.tmobile-livetv\":{\"source\":\"iana\",\"extensions\":[\"tmo\"]},\"application/vnd.tri.onesource\":{\"source\":\"iana\"},\"application/vnd.trid.tpt\":{\"source\":\"iana\",\"extensions\":[\"tpt\"]},\"application/vnd.triscape.mxs\":{\"source\":\"iana\",\"extensions\":[\"mxs\"]},\"application/vnd.trueapp\":{\"source\":\"iana\",\"extensions\":[\"tra\"]},\"application/vnd.truedoc\":{\"source\":\"iana\"},\"application/vnd.ubisoft.webplayer\":{\"source\":\"iana\"},\"application/vnd.ufdl\":{\"source\":\"iana\",\"extensions\":[\"ufd\",\"ufdl\"]},\"application/vnd.uiq.theme\":{\"source\":\"iana\",\"extensions\":[\"utz\"]},\"application/vnd.umajin\":{\"source\":\"iana\",\"extensions\":[\"umj\"]},\"application/vnd.unity\":{\"source\":\"iana\",\"extensions\":[\"unityweb\"]},\"application/vnd.uoml+xml\":{\"source\":\"iana\",\"extensions\":[\"uoml\"]},\"application/vnd.uplanet.alert\":{\"source\":\"iana\"},\"application/vnd.uplanet.alert-wbxml\":{\"source\":\"iana\"},\"application/vnd.uplanet.bearer-choice\":{\"source\":\"iana\"},\"application/vnd.uplanet.bearer-choice-wbxml\":{\"source\":\"iana\"},\"application/vnd.uplanet.cacheop\":{\"source\":\"iana\"},\"application/vnd.uplanet.cacheop-wbxml\":{\"source\":\"iana\"},\"application/vnd.uplanet.channel\":{\"source\":\"iana\"},\"application/vnd.uplanet.channel-wbxml\":{\"source\":\"iana\"},\"application/vnd.uplanet.list\":{\"source\":\"iana\"},\"application/vnd.uplanet.list-wbxml\":{\"source\":\"iana\"},\"application/vnd.uplanet.listcmd\":{\"source\":\"iana\"},\"application/vnd.uplanet.listcmd-wbxml\":{\"source\":\"iana\"},\"application/vnd.uplanet.signal\":{\"source\":\"iana\"},\"application/vnd.uri-map\":{\"source\":\"iana\"},\"application/vnd.valve.source.material\":{\"source\":\"iana\"},\"application/vnd.vcx\":{\"source\":\"iana\",\"extensions\":[\"vcx\"]},\"application/vnd.vd-study\":{\"source\":\"iana\"},\"application/vnd.vectorworks\":{\"source\":\"iana\"},\"application/vnd.vel+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.verimatrix.vcas\":{\"source\":\"iana\"},\"application/vnd.vidsoft.vidconference\":{\"source\":\"iana\"},\"application/vnd.visio\":{\"source\":\"iana\",\"extensions\":[\"vsd\",\"vst\",\"vss\",\"vsw\"]},\"application/vnd.visionary\":{\"source\":\"iana\",\"extensions\":[\"vis\"]},\"application/vnd.vividence.scriptfile\":{\"source\":\"iana\"},\"application/vnd.vsf\":{\"source\":\"iana\",\"extensions\":[\"vsf\"]},\"application/vnd.wap.sic\":{\"source\":\"iana\"},\"application/vnd.wap.slc\":{\"source\":\"iana\"},\"application/vnd.wap.wbxml\":{\"source\":\"iana\",\"extensions\":[\"wbxml\"]},\"application/vnd.wap.wmlc\":{\"source\":\"iana\",\"extensions\":[\"wmlc\"]},\"application/vnd.wap.wmlscriptc\":{\"source\":\"iana\",\"extensions\":[\"wmlsc\"]},\"application/vnd.webturbo\":{\"source\":\"iana\",\"extensions\":[\"wtb\"]},\"application/vnd.wfa.p2p\":{\"source\":\"iana\"},\"application/vnd.wfa.wsc\":{\"source\":\"iana\"},\"application/vnd.windows.devicepairing\":{\"source\":\"iana\"},\"application/vnd.wmc\":{\"source\":\"iana\"},\"application/vnd.wmf.bootstrap\":{\"source\":\"iana\"},\"application/vnd.wolfram.mathematica\":{\"source\":\"iana\"},\"application/vnd.wolfram.mathematica.package\":{\"source\":\"iana\"},\"application/vnd.wolfram.player\":{\"source\":\"iana\",\"extensions\":[\"nbp\"]},\"application/vnd.wordperfect\":{\"source\":\"iana\",\"extensions\":[\"wpd\"]},\"application/vnd.wqd\":{\"source\":\"iana\",\"extensions\":[\"wqd\"]},\"application/vnd.wrq-hp3000-labelled\":{\"source\":\"iana\"},\"application/vnd.wt.stf\":{\"source\":\"iana\",\"extensions\":[\"stf\"]},\"application/vnd.wv.csp+wbxml\":{\"source\":\"iana\"},\"application/vnd.wv.csp+xml\":{\"source\":\"iana\"},\"application/vnd.wv.ssp+xml\":{\"source\":\"iana\"},\"application/vnd.xacml+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vnd.xara\":{\"source\":\"iana\",\"extensions\":[\"xar\"]},\"application/vnd.xfdl\":{\"source\":\"iana\",\"extensions\":[\"xfdl\"]},\"application/vnd.xfdl.webform\":{\"source\":\"iana\"},\"application/vnd.xmi+xml\":{\"source\":\"iana\"},\"application/vnd.xmpie.cpkg\":{\"source\":\"iana\"},\"application/vnd.xmpie.dpkg\":{\"source\":\"iana\"},\"application/vnd.xmpie.plan\":{\"source\":\"iana\"},\"application/vnd.xmpie.ppkg\":{\"source\":\"iana\"},\"application/vnd.xmpie.xlim\":{\"source\":\"iana\"},\"application/vnd.yamaha.hv-dic\":{\"source\":\"iana\",\"extensions\":[\"hvd\"]},\"application/vnd.yamaha.hv-script\":{\"source\":\"iana\",\"extensions\":[\"hvs\"]},\"application/vnd.yamaha.hv-voice\":{\"source\":\"iana\",\"extensions\":[\"hvp\"]},\"application/vnd.yamaha.openscoreformat\":{\"source\":\"iana\",\"extensions\":[\"osf\"]},\"application/vnd.yamaha.openscoreformat.osfpvg+xml\":{\"source\":\"iana\",\"extensions\":[\"osfpvg\"]},\"application/vnd.yamaha.remote-setup\":{\"source\":\"iana\"},\"application/vnd.yamaha.smaf-audio\":{\"source\":\"iana\",\"extensions\":[\"saf\"]},\"application/vnd.yamaha.smaf-phrase\":{\"source\":\"iana\",\"extensions\":[\"spf\"]},\"application/vnd.yamaha.through-ngn\":{\"source\":\"iana\"},\"application/vnd.yamaha.tunnel-udpencap\":{\"source\":\"iana\"},\"application/vnd.yaoweme\":{\"source\":\"iana\"},\"application/vnd.yellowriver-custom-menu\":{\"source\":\"iana\",\"extensions\":[\"cmp\"]},\"application/vnd.youtube.yt\":{\"source\":\"iana\"},\"application/vnd.zul\":{\"source\":\"iana\",\"extensions\":[\"zir\",\"zirz\"]},\"application/vnd.zzazz.deck+xml\":{\"source\":\"iana\",\"extensions\":[\"zaz\"]},\"application/voicexml+xml\":{\"source\":\"iana\",\"extensions\":[\"vxml\"]},\"application/voucher-cms+json\":{\"source\":\"iana\",\"compressible\":true},\"application/vq-rtcpxr\":{\"source\":\"iana\"},\"application/wasm\":{\"compressible\":true,\"extensions\":[\"wasm\"]},\"application/watcherinfo+xml\":{\"source\":\"iana\"},\"application/webpush-options+json\":{\"source\":\"iana\",\"compressible\":true},\"application/whoispp-query\":{\"source\":\"iana\"},\"application/whoispp-response\":{\"source\":\"iana\"},\"application/widget\":{\"source\":\"iana\",\"extensions\":[\"wgt\"]},\"application/winhlp\":{\"source\":\"apache\",\"extensions\":[\"hlp\"]},\"application/wita\":{\"source\":\"iana\"},\"application/wordperfect5.1\":{\"source\":\"iana\"},\"application/wsdl+xml\":{\"source\":\"iana\",\"extensions\":[\"wsdl\"]},\"application/wspolicy+xml\":{\"source\":\"iana\",\"extensions\":[\"wspolicy\"]},\"application/x-7z-compressed\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"7z\"]},\"application/x-abiword\":{\"source\":\"apache\",\"extensions\":[\"abw\"]},\"application/x-ace-compressed\":{\"source\":\"apache\",\"extensions\":[\"ace\"]},\"application/x-amf\":{\"source\":\"apache\"},\"application/x-apple-diskimage\":{\"source\":\"apache\",\"extensions\":[\"dmg\"]},\"application/x-arj\":{\"compressible\":false,\"extensions\":[\"arj\"]},\"application/x-authorware-bin\":{\"source\":\"apache\",\"extensions\":[\"aab\",\"x32\",\"u32\",\"vox\"]},\"application/x-authorware-map\":{\"source\":\"apache\",\"extensions\":[\"aam\"]},\"application/x-authorware-seg\":{\"source\":\"apache\",\"extensions\":[\"aas\"]},\"application/x-bcpio\":{\"source\":\"apache\",\"extensions\":[\"bcpio\"]},\"application/x-bdoc\":{\"compressible\":false,\"extensions\":[\"bdoc\"]},\"application/x-bittorrent\":{\"source\":\"apache\",\"extensions\":[\"torrent\"]},\"application/x-blorb\":{\"source\":\"apache\",\"extensions\":[\"blb\",\"blorb\"]},\"application/x-bzip\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"bz\"]},\"application/x-bzip2\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"bz2\",\"boz\"]},\"application/x-cbr\":{\"source\":\"apache\",\"extensions\":[\"cbr\",\"cba\",\"cbt\",\"cbz\",\"cb7\"]},\"application/x-cdlink\":{\"source\":\"apache\",\"extensions\":[\"vcd\"]},\"application/x-cfs-compressed\":{\"source\":\"apache\",\"extensions\":[\"cfs\"]},\"application/x-chat\":{\"source\":\"apache\",\"extensions\":[\"chat\"]},\"application/x-chess-pgn\":{\"source\":\"apache\",\"extensions\":[\"pgn\"]},\"application/x-chrome-extension\":{\"extensions\":[\"crx\"]},\"application/x-cocoa\":{\"source\":\"nginx\",\"extensions\":[\"cco\"]},\"application/x-compress\":{\"source\":\"apache\"},\"application/x-conference\":{\"source\":\"apache\",\"extensions\":[\"nsc\"]},\"application/x-cpio\":{\"source\":\"apache\",\"extensions\":[\"cpio\"]},\"application/x-csh\":{\"source\":\"apache\",\"extensions\":[\"csh\"]},\"application/x-deb\":{\"compressible\":false},\"application/x-debian-package\":{\"source\":\"apache\",\"extensions\":[\"deb\",\"udeb\"]},\"application/x-dgc-compressed\":{\"source\":\"apache\",\"extensions\":[\"dgc\"]},\"application/x-director\":{\"source\":\"apache\",\"extensions\":[\"dir\",\"dcr\",\"dxr\",\"cst\",\"cct\",\"cxt\",\"w3d\",\"fgd\",\"swa\"]},\"application/x-doom\":{\"source\":\"apache\",\"extensions\":[\"wad\"]},\"application/x-dtbncx+xml\":{\"source\":\"apache\",\"extensions\":[\"ncx\"]},\"application/x-dtbook+xml\":{\"source\":\"apache\",\"extensions\":[\"dtb\"]},\"application/x-dtbresource+xml\":{\"source\":\"apache\",\"extensions\":[\"res\"]},\"application/x-dvi\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"dvi\"]},\"application/x-envoy\":{\"source\":\"apache\",\"extensions\":[\"evy\"]},\"application/x-eva\":{\"source\":\"apache\",\"extensions\":[\"eva\"]},\"application/x-font-bdf\":{\"source\":\"apache\",\"extensions\":[\"bdf\"]},\"application/x-font-dos\":{\"source\":\"apache\"},\"application/x-font-framemaker\":{\"source\":\"apache\"},\"application/x-font-ghostscript\":{\"source\":\"apache\",\"extensions\":[\"gsf\"]},\"application/x-font-libgrx\":{\"source\":\"apache\"},\"application/x-font-linux-psf\":{\"source\":\"apache\",\"extensions\":[\"psf\"]},\"application/x-font-pcf\":{\"source\":\"apache\",\"extensions\":[\"pcf\"]},\"application/x-font-snf\":{\"source\":\"apache\",\"extensions\":[\"snf\"]},\"application/x-font-speedo\":{\"source\":\"apache\"},\"application/x-font-sunos-news\":{\"source\":\"apache\"},\"application/x-font-type1\":{\"source\":\"apache\",\"extensions\":[\"pfa\",\"pfb\",\"pfm\",\"afm\"]},\"application/x-font-vfont\":{\"source\":\"apache\"},\"application/x-freearc\":{\"source\":\"apache\",\"extensions\":[\"arc\"]},\"application/x-futuresplash\":{\"source\":\"apache\",\"extensions\":[\"spl\"]},\"application/x-gca-compressed\":{\"source\":\"apache\",\"extensions\":[\"gca\"]},\"application/x-glulx\":{\"source\":\"apache\",\"extensions\":[\"ulx\"]},\"application/x-gnumeric\":{\"source\":\"apache\",\"extensions\":[\"gnumeric\"]},\"application/x-gramps-xml\":{\"source\":\"apache\",\"extensions\":[\"gramps\"]},\"application/x-gtar\":{\"source\":\"apache\",\"extensions\":[\"gtar\"]},\"application/x-gzip\":{\"source\":\"apache\"},\"application/x-hdf\":{\"source\":\"apache\",\"extensions\":[\"hdf\"]},\"application/x-httpd-php\":{\"compressible\":true,\"extensions\":[\"php\"]},\"application/x-install-instructions\":{\"source\":\"apache\",\"extensions\":[\"install\"]},\"application/x-iso9660-image\":{\"source\":\"apache\",\"extensions\":[\"iso\"]},\"application/x-java-archive-diff\":{\"source\":\"nginx\",\"extensions\":[\"jardiff\"]},\"application/x-java-jnlp-file\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"jnlp\"]},\"application/x-javascript\":{\"compressible\":true},\"application/x-latex\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"latex\"]},\"application/x-lua-bytecode\":{\"extensions\":[\"luac\"]},\"application/x-lzh-compressed\":{\"source\":\"apache\",\"extensions\":[\"lzh\",\"lha\"]},\"application/x-makeself\":{\"source\":\"nginx\",\"extensions\":[\"run\"]},\"application/x-mie\":{\"source\":\"apache\",\"extensions\":[\"mie\"]},\"application/x-mobipocket-ebook\":{\"source\":\"apache\",\"extensions\":[\"prc\",\"mobi\"]},\"application/x-mpegurl\":{\"compressible\":false},\"application/x-ms-application\":{\"source\":\"apache\",\"extensions\":[\"application\"]},\"application/x-ms-shortcut\":{\"source\":\"apache\",\"extensions\":[\"lnk\"]},\"application/x-ms-wmd\":{\"source\":\"apache\",\"extensions\":[\"wmd\"]},\"application/x-ms-wmz\":{\"source\":\"apache\",\"extensions\":[\"wmz\"]},\"application/x-ms-xbap\":{\"source\":\"apache\",\"extensions\":[\"xbap\"]},\"application/x-msaccess\":{\"source\":\"apache\",\"extensions\":[\"mdb\"]},\"application/x-msbinder\":{\"source\":\"apache\",\"extensions\":[\"obd\"]},\"application/x-mscardfile\":{\"source\":\"apache\",\"extensions\":[\"crd\"]},\"application/x-msclip\":{\"source\":\"apache\",\"extensions\":[\"clp\"]},\"application/x-msdos-program\":{\"extensions\":[\"exe\"]},\"application/x-msdownload\":{\"source\":\"apache\",\"extensions\":[\"exe\",\"dll\",\"com\",\"bat\",\"msi\"]},\"application/x-msmediaview\":{\"source\":\"apache\",\"extensions\":[\"mvb\",\"m13\",\"m14\"]},\"application/x-msmetafile\":{\"source\":\"apache\",\"extensions\":[\"wmf\",\"wmz\",\"emf\",\"emz\"]},\"application/x-msmoney\":{\"source\":\"apache\",\"extensions\":[\"mny\"]},\"application/x-mspublisher\":{\"source\":\"apache\",\"extensions\":[\"pub\"]},\"application/x-msschedule\":{\"source\":\"apache\",\"extensions\":[\"scd\"]},\"application/x-msterminal\":{\"source\":\"apache\",\"extensions\":[\"trm\"]},\"application/x-mswrite\":{\"source\":\"apache\",\"extensions\":[\"wri\"]},\"application/x-netcdf\":{\"source\":\"apache\",\"extensions\":[\"nc\",\"cdf\"]},\"application/x-ns-proxy-autoconfig\":{\"compressible\":true,\"extensions\":[\"pac\"]},\"application/x-nzb\":{\"source\":\"apache\",\"extensions\":[\"nzb\"]},\"application/x-perl\":{\"source\":\"nginx\",\"extensions\":[\"pl\",\"pm\"]},\"application/x-pilot\":{\"source\":\"nginx\",\"extensions\":[\"prc\",\"pdb\"]},\"application/x-pkcs12\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"p12\",\"pfx\"]},\"application/x-pkcs7-certificates\":{\"source\":\"apache\",\"extensions\":[\"p7b\",\"spc\"]},\"application/x-pkcs7-certreqresp\":{\"source\":\"apache\",\"extensions\":[\"p7r\"]},\"application/x-rar-compressed\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"rar\"]},\"application/x-redhat-package-manager\":{\"source\":\"nginx\",\"extensions\":[\"rpm\"]},\"application/x-research-info-systems\":{\"source\":\"apache\",\"extensions\":[\"ris\"]},\"application/x-sea\":{\"source\":\"nginx\",\"extensions\":[\"sea\"]},\"application/x-sh\":{\"source\":\"apache\",\"compressible\":true,\"extensions\":[\"sh\"]},\"application/x-shar\":{\"source\":\"apache\",\"extensions\":[\"shar\"]},\"application/x-shockwave-flash\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"swf\"]},\"application/x-silverlight-app\":{\"source\":\"apache\",\"extensions\":[\"xap\"]},\"application/x-sql\":{\"source\":\"apache\",\"extensions\":[\"sql\"]},\"application/x-stuffit\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"sit\"]},\"application/x-stuffitx\":{\"source\":\"apache\",\"extensions\":[\"sitx\"]},\"application/x-subrip\":{\"source\":\"apache\",\"extensions\":[\"srt\"]},\"application/x-sv4cpio\":{\"source\":\"apache\",\"extensions\":[\"sv4cpio\"]},\"application/x-sv4crc\":{\"source\":\"apache\",\"extensions\":[\"sv4crc\"]},\"application/x-t3vm-image\":{\"source\":\"apache\",\"extensions\":[\"t3\"]},\"application/x-tads\":{\"source\":\"apache\",\"extensions\":[\"gam\"]},\"application/x-tar\":{\"source\":\"apache\",\"compressible\":true,\"extensions\":[\"tar\"]},\"application/x-tcl\":{\"source\":\"apache\",\"extensions\":[\"tcl\",\"tk\"]},\"application/x-tex\":{\"source\":\"apache\",\"extensions\":[\"tex\"]},\"application/x-tex-tfm\":{\"source\":\"apache\",\"extensions\":[\"tfm\"]},\"application/x-texinfo\":{\"source\":\"apache\",\"extensions\":[\"texinfo\",\"texi\"]},\"application/x-tgif\":{\"source\":\"apache\",\"extensions\":[\"obj\"]},\"application/x-ustar\":{\"source\":\"apache\",\"extensions\":[\"ustar\"]},\"application/x-virtualbox-hdd\":{\"compressible\":true,\"extensions\":[\"hdd\"]},\"application/x-virtualbox-ova\":{\"compressible\":true,\"extensions\":[\"ova\"]},\"application/x-virtualbox-ovf\":{\"compressible\":true,\"extensions\":[\"ovf\"]},\"application/x-virtualbox-vbox\":{\"compressible\":true,\"extensions\":[\"vbox\"]},\"application/x-virtualbox-vbox-extpack\":{\"compressible\":false,\"extensions\":[\"vbox-extpack\"]},\"application/x-virtualbox-vdi\":{\"compressible\":true,\"extensions\":[\"vdi\"]},\"application/x-virtualbox-vhd\":{\"compressible\":true,\"extensions\":[\"vhd\"]},\"application/x-virtualbox-vmdk\":{\"compressible\":true,\"extensions\":[\"vmdk\"]},\"application/x-wais-source\":{\"source\":\"apache\",\"extensions\":[\"src\"]},\"application/x-web-app-manifest+json\":{\"compressible\":true,\"extensions\":[\"webapp\"]},\"application/x-www-form-urlencoded\":{\"source\":\"iana\",\"compressible\":true},\"application/x-x509-ca-cert\":{\"source\":\"apache\",\"extensions\":[\"der\",\"crt\",\"pem\"]},\"application/x-xfig\":{\"source\":\"apache\",\"extensions\":[\"fig\"]},\"application/x-xliff+xml\":{\"source\":\"apache\",\"extensions\":[\"xlf\"]},\"application/x-xpinstall\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"xpi\"]},\"application/x-xz\":{\"source\":\"apache\",\"extensions\":[\"xz\"]},\"application/x-zmachine\":{\"source\":\"apache\",\"extensions\":[\"z1\",\"z2\",\"z3\",\"z4\",\"z5\",\"z6\",\"z7\",\"z8\"]},\"application/x400-bp\":{\"source\":\"iana\"},\"application/xacml+xml\":{\"source\":\"iana\"},\"application/xaml+xml\":{\"source\":\"apache\",\"extensions\":[\"xaml\"]},\"application/xcap-att+xml\":{\"source\":\"iana\"},\"application/xcap-caps+xml\":{\"source\":\"iana\"},\"application/xcap-diff+xml\":{\"source\":\"iana\",\"extensions\":[\"xdf\"]},\"application/xcap-el+xml\":{\"source\":\"iana\"},\"application/xcap-error+xml\":{\"source\":\"iana\"},\"application/xcap-ns+xml\":{\"source\":\"iana\"},\"application/xcon-conference-info+xml\":{\"source\":\"iana\"},\"application/xcon-conference-info-diff+xml\":{\"source\":\"iana\"},\"application/xenc+xml\":{\"source\":\"iana\",\"extensions\":[\"xenc\"]},\"application/xhtml+xml\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"xhtml\",\"xht\"]},\"application/xhtml-voice+xml\":{\"source\":\"apache\"},\"application/xml\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"xml\",\"xsl\",\"xsd\",\"rng\"]},\"application/xml-dtd\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"dtd\"]},\"application/xml-external-parsed-entity\":{\"source\":\"iana\"},\"application/xml-patch+xml\":{\"source\":\"iana\"},\"application/xmpp+xml\":{\"source\":\"iana\"},\"application/xop+xml\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"xop\"]},\"application/xproc+xml\":{\"source\":\"apache\",\"extensions\":[\"xpl\"]},\"application/xslt+xml\":{\"source\":\"iana\",\"extensions\":[\"xslt\"]},\"application/xspf+xml\":{\"source\":\"apache\",\"extensions\":[\"xspf\"]},\"application/xv+xml\":{\"source\":\"iana\",\"extensions\":[\"mxml\",\"xhvml\",\"xvml\",\"xvm\"]},\"application/yang\":{\"source\":\"iana\",\"extensions\":[\"yang\"]},\"application/yang-data+json\":{\"source\":\"iana\",\"compressible\":true},\"application/yang-data+xml\":{\"source\":\"iana\"},\"application/yang-patch+json\":{\"source\":\"iana\",\"compressible\":true},\"application/yang-patch+xml\":{\"source\":\"iana\"},\"application/yin+xml\":{\"source\":\"iana\",\"extensions\":[\"yin\"]},\"application/zip\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"zip\"]},\"application/zlib\":{\"source\":\"iana\"},\"audio/1d-interleaved-parityfec\":{\"source\":\"iana\"},\"audio/32kadpcm\":{\"source\":\"iana\"},\"audio/3gpp\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"3gpp\"]},\"audio/3gpp2\":{\"source\":\"iana\"},\"audio/ac3\":{\"source\":\"iana\"},\"audio/adpcm\":{\"source\":\"apache\",\"extensions\":[\"adp\"]},\"audio/amr\":{\"source\":\"iana\"},\"audio/amr-wb\":{\"source\":\"iana\"},\"audio/amr-wb+\":{\"source\":\"iana\"},\"audio/aptx\":{\"source\":\"iana\"},\"audio/asc\":{\"source\":\"iana\"},\"audio/atrac-advanced-lossless\":{\"source\":\"iana\"},\"audio/atrac-x\":{\"source\":\"iana\"},\"audio/atrac3\":{\"source\":\"iana\"},\"audio/basic\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"au\",\"snd\"]},\"audio/bv16\":{\"source\":\"iana\"},\"audio/bv32\":{\"source\":\"iana\"},\"audio/clearmode\":{\"source\":\"iana\"},\"audio/cn\":{\"source\":\"iana\"},\"audio/dat12\":{\"source\":\"iana\"},\"audio/dls\":{\"source\":\"iana\"},\"audio/dsr-es201108\":{\"source\":\"iana\"},\"audio/dsr-es202050\":{\"source\":\"iana\"},\"audio/dsr-es202211\":{\"source\":\"iana\"},\"audio/dsr-es202212\":{\"source\":\"iana\"},\"audio/dv\":{\"source\":\"iana\"},\"audio/dvi4\":{\"source\":\"iana\"},\"audio/eac3\":{\"source\":\"iana\"},\"audio/encaprtp\":{\"source\":\"iana\"},\"audio/evrc\":{\"source\":\"iana\"},\"audio/evrc-qcp\":{\"source\":\"iana\"},\"audio/evrc0\":{\"source\":\"iana\"},\"audio/evrc1\":{\"source\":\"iana\"},\"audio/evrcb\":{\"source\":\"iana\"},\"audio/evrcb0\":{\"source\":\"iana\"},\"audio/evrcb1\":{\"source\":\"iana\"},\"audio/evrcnw\":{\"source\":\"iana\"},\"audio/evrcnw0\":{\"source\":\"iana\"},\"audio/evrcnw1\":{\"source\":\"iana\"},\"audio/evrcwb\":{\"source\":\"iana\"},\"audio/evrcwb0\":{\"source\":\"iana\"},\"audio/evrcwb1\":{\"source\":\"iana\"},\"audio/evs\":{\"source\":\"iana\"},\"audio/fwdred\":{\"source\":\"iana\"},\"audio/g711-0\":{\"source\":\"iana\"},\"audio/g719\":{\"source\":\"iana\"},\"audio/g722\":{\"source\":\"iana\"},\"audio/g7221\":{\"source\":\"iana\"},\"audio/g723\":{\"source\":\"iana\"},\"audio/g726-16\":{\"source\":\"iana\"},\"audio/g726-24\":{\"source\":\"iana\"},\"audio/g726-32\":{\"source\":\"iana\"},\"audio/g726-40\":{\"source\":\"iana\"},\"audio/g728\":{\"source\":\"iana\"},\"audio/g729\":{\"source\":\"iana\"},\"audio/g7291\":{\"source\":\"iana\"},\"audio/g729d\":{\"source\":\"iana\"},\"audio/g729e\":{\"source\":\"iana\"},\"audio/gsm\":{\"source\":\"iana\"},\"audio/gsm-efr\":{\"source\":\"iana\"},\"audio/gsm-hr-08\":{\"source\":\"iana\"},\"audio/ilbc\":{\"source\":\"iana\"},\"audio/ip-mr_v2.5\":{\"source\":\"iana\"},\"audio/isac\":{\"source\":\"apache\"},\"audio/l16\":{\"source\":\"iana\"},\"audio/l20\":{\"source\":\"iana\"},\"audio/l24\":{\"source\":\"iana\",\"compressible\":false},\"audio/l8\":{\"source\":\"iana\"},\"audio/lpc\":{\"source\":\"iana\"},\"audio/melp\":{\"source\":\"iana\"},\"audio/melp1200\":{\"source\":\"iana\"},\"audio/melp2400\":{\"source\":\"iana\"},\"audio/melp600\":{\"source\":\"iana\"},\"audio/midi\":{\"source\":\"apache\",\"extensions\":[\"mid\",\"midi\",\"kar\",\"rmi\"]},\"audio/mobile-xmf\":{\"source\":\"iana\"},\"audio/mp3\":{\"compressible\":false,\"extensions\":[\"mp3\"]},\"audio/mp4\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"m4a\",\"mp4a\"]},\"audio/mp4a-latm\":{\"source\":\"iana\"},\"audio/mpa\":{\"source\":\"iana\"},\"audio/mpa-robust\":{\"source\":\"iana\"},\"audio/mpeg\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"mpga\",\"mp2\",\"mp2a\",\"mp3\",\"m2a\",\"m3a\"]},\"audio/mpeg4-generic\":{\"source\":\"iana\"},\"audio/musepack\":{\"source\":\"apache\"},\"audio/ogg\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"oga\",\"ogg\",\"spx\"]},\"audio/opus\":{\"source\":\"iana\"},\"audio/parityfec\":{\"source\":\"iana\"},\"audio/pcma\":{\"source\":\"iana\"},\"audio/pcma-wb\":{\"source\":\"iana\"},\"audio/pcmu\":{\"source\":\"iana\"},\"audio/pcmu-wb\":{\"source\":\"iana\"},\"audio/prs.sid\":{\"source\":\"iana\"},\"audio/qcelp\":{\"source\":\"iana\"},\"audio/raptorfec\":{\"source\":\"iana\"},\"audio/red\":{\"source\":\"iana\"},\"audio/rtp-enc-aescm128\":{\"source\":\"iana\"},\"audio/rtp-midi\":{\"source\":\"iana\"},\"audio/rtploopback\":{\"source\":\"iana\"},\"audio/rtx\":{\"source\":\"iana\"},\"audio/s3m\":{\"source\":\"apache\",\"extensions\":[\"s3m\"]},\"audio/silk\":{\"source\":\"apache\",\"extensions\":[\"sil\"]},\"audio/smv\":{\"source\":\"iana\"},\"audio/smv-qcp\":{\"source\":\"iana\"},\"audio/smv0\":{\"source\":\"iana\"},\"audio/sp-midi\":{\"source\":\"iana\"},\"audio/speex\":{\"source\":\"iana\"},\"audio/t140c\":{\"source\":\"iana\"},\"audio/t38\":{\"source\":\"iana\"},\"audio/telephone-event\":{\"source\":\"iana\"},\"audio/tone\":{\"source\":\"iana\"},\"audio/uemclip\":{\"source\":\"iana\"},\"audio/ulpfec\":{\"source\":\"iana\"},\"audio/vdvi\":{\"source\":\"iana\"},\"audio/vmr-wb\":{\"source\":\"iana\"},\"audio/vnd.3gpp.iufp\":{\"source\":\"iana\"},\"audio/vnd.4sb\":{\"source\":\"iana\"},\"audio/vnd.audiokoz\":{\"source\":\"iana\"},\"audio/vnd.celp\":{\"source\":\"iana\"},\"audio/vnd.cisco.nse\":{\"source\":\"iana\"},\"audio/vnd.cmles.radio-events\":{\"source\":\"iana\"},\"audio/vnd.cns.anp1\":{\"source\":\"iana\"},\"audio/vnd.cns.inf1\":{\"source\":\"iana\"},\"audio/vnd.dece.audio\":{\"source\":\"iana\",\"extensions\":[\"uva\",\"uvva\"]},\"audio/vnd.digital-winds\":{\"source\":\"iana\",\"extensions\":[\"eol\"]},\"audio/vnd.dlna.adts\":{\"source\":\"iana\"},\"audio/vnd.dolby.heaac.1\":{\"source\":\"iana\"},\"audio/vnd.dolby.heaac.2\":{\"source\":\"iana\"},\"audio/vnd.dolby.mlp\":{\"source\":\"iana\"},\"audio/vnd.dolby.mps\":{\"source\":\"iana\"},\"audio/vnd.dolby.pl2\":{\"source\":\"iana\"},\"audio/vnd.dolby.pl2x\":{\"source\":\"iana\"},\"audio/vnd.dolby.pl2z\":{\"source\":\"iana\"},\"audio/vnd.dolby.pulse.1\":{\"source\":\"iana\"},\"audio/vnd.dra\":{\"source\":\"iana\",\"extensions\":[\"dra\"]},\"audio/vnd.dts\":{\"source\":\"iana\",\"extensions\":[\"dts\"]},\"audio/vnd.dts.hd\":{\"source\":\"iana\",\"extensions\":[\"dtshd\"]},\"audio/vnd.dvb.file\":{\"source\":\"iana\"},\"audio/vnd.everad.plj\":{\"source\":\"iana\"},\"audio/vnd.hns.audio\":{\"source\":\"iana\"},\"audio/vnd.lucent.voice\":{\"source\":\"iana\",\"extensions\":[\"lvp\"]},\"audio/vnd.ms-playready.media.pya\":{\"source\":\"iana\",\"extensions\":[\"pya\"]},\"audio/vnd.nokia.mobile-xmf\":{\"source\":\"iana\"},\"audio/vnd.nortel.vbk\":{\"source\":\"iana\"},\"audio/vnd.nuera.ecelp4800\":{\"source\":\"iana\",\"extensions\":[\"ecelp4800\"]},\"audio/vnd.nuera.ecelp7470\":{\"source\":\"iana\",\"extensions\":[\"ecelp7470\"]},\"audio/vnd.nuera.ecelp9600\":{\"source\":\"iana\",\"extensions\":[\"ecelp9600\"]},\"audio/vnd.octel.sbc\":{\"source\":\"iana\"},\"audio/vnd.presonus.multitrack\":{\"source\":\"iana\"},\"audio/vnd.qcelp\":{\"source\":\"iana\"},\"audio/vnd.rhetorex.32kadpcm\":{\"source\":\"iana\"},\"audio/vnd.rip\":{\"source\":\"iana\",\"extensions\":[\"rip\"]},\"audio/vnd.rn-realaudio\":{\"compressible\":false},\"audio/vnd.sealedmedia.softseal.mpeg\":{\"source\":\"iana\"},\"audio/vnd.vmx.cvsd\":{\"source\":\"iana\"},\"audio/vnd.wave\":{\"compressible\":false},\"audio/vorbis\":{\"source\":\"iana\",\"compressible\":false},\"audio/vorbis-config\":{\"source\":\"iana\"},\"audio/wav\":{\"compressible\":false,\"extensions\":[\"wav\"]},\"audio/wave\":{\"compressible\":false,\"extensions\":[\"wav\"]},\"audio/webm\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"weba\"]},\"audio/x-aac\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"aac\"]},\"audio/x-aiff\":{\"source\":\"apache\",\"extensions\":[\"aif\",\"aiff\",\"aifc\"]},\"audio/x-caf\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"caf\"]},\"audio/x-flac\":{\"source\":\"apache\",\"extensions\":[\"flac\"]},\"audio/x-m4a\":{\"source\":\"nginx\",\"extensions\":[\"m4a\"]},\"audio/x-matroska\":{\"source\":\"apache\",\"extensions\":[\"mka\"]},\"audio/x-mpegurl\":{\"source\":\"apache\",\"extensions\":[\"m3u\"]},\"audio/x-ms-wax\":{\"source\":\"apache\",\"extensions\":[\"wax\"]},\"audio/x-ms-wma\":{\"source\":\"apache\",\"extensions\":[\"wma\"]},\"audio/x-pn-realaudio\":{\"source\":\"apache\",\"extensions\":[\"ram\",\"ra\"]},\"audio/x-pn-realaudio-plugin\":{\"source\":\"apache\",\"extensions\":[\"rmp\"]},\"audio/x-realaudio\":{\"source\":\"nginx\",\"extensions\":[\"ra\"]},\"audio/x-tta\":{\"source\":\"apache\"},\"audio/x-wav\":{\"source\":\"apache\",\"extensions\":[\"wav\"]},\"audio/xm\":{\"source\":\"apache\",\"extensions\":[\"xm\"]},\"chemical/x-cdx\":{\"source\":\"apache\",\"extensions\":[\"cdx\"]},\"chemical/x-cif\":{\"source\":\"apache\",\"extensions\":[\"cif\"]},\"chemical/x-cmdf\":{\"source\":\"apache\",\"extensions\":[\"cmdf\"]},\"chemical/x-cml\":{\"source\":\"apache\",\"extensions\":[\"cml\"]},\"chemical/x-csml\":{\"source\":\"apache\",\"extensions\":[\"csml\"]},\"chemical/x-pdb\":{\"source\":\"apache\"},\"chemical/x-xyz\":{\"source\":\"apache\",\"extensions\":[\"xyz\"]},\"font/collection\":{\"source\":\"iana\",\"extensions\":[\"ttc\"]},\"font/otf\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"otf\"]},\"font/sfnt\":{\"source\":\"iana\"},\"font/ttf\":{\"source\":\"iana\",\"extensions\":[\"ttf\"]},\"font/woff\":{\"source\":\"iana\",\"extensions\":[\"woff\"]},\"font/woff2\":{\"source\":\"iana\",\"extensions\":[\"woff2\"]},\"image/aces\":{\"source\":\"iana\"},\"image/apng\":{\"compressible\":false,\"extensions\":[\"apng\"]},\"image/bmp\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"bmp\"]},\"image/cgm\":{\"source\":\"iana\",\"extensions\":[\"cgm\"]},\"image/dicom-rle\":{\"source\":\"iana\"},\"image/emf\":{\"source\":\"iana\"},\"image/fits\":{\"source\":\"iana\"},\"image/g3fax\":{\"source\":\"iana\",\"extensions\":[\"g3\"]},\"image/gif\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"gif\"]},\"image/ief\":{\"source\":\"iana\",\"extensions\":[\"ief\"]},\"image/jls\":{\"source\":\"iana\"},\"image/jp2\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"jp2\",\"jpg2\"]},\"image/jpeg\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"jpeg\",\"jpg\",\"jpe\"]},\"image/jpm\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"jpm\"]},\"image/jpx\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"jpx\",\"jpf\"]},\"image/ktx\":{\"source\":\"iana\",\"extensions\":[\"ktx\"]},\"image/naplps\":{\"source\":\"iana\"},\"image/pjpeg\":{\"compressible\":false},\"image/png\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"png\"]},\"image/prs.btif\":{\"source\":\"iana\",\"extensions\":[\"btif\"]},\"image/prs.pti\":{\"source\":\"iana\"},\"image/pwg-raster\":{\"source\":\"iana\"},\"image/sgi\":{\"source\":\"apache\",\"extensions\":[\"sgi\"]},\"image/svg+xml\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"svg\",\"svgz\"]},\"image/t38\":{\"source\":\"iana\"},\"image/tiff\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"tiff\",\"tif\"]},\"image/tiff-fx\":{\"source\":\"iana\"},\"image/vnd.adobe.photoshop\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"psd\"]},\"image/vnd.airzip.accelerator.azv\":{\"source\":\"iana\"},\"image/vnd.cns.inf2\":{\"source\":\"iana\"},\"image/vnd.dece.graphic\":{\"source\":\"iana\",\"extensions\":[\"uvi\",\"uvvi\",\"uvg\",\"uvvg\"]},\"image/vnd.djvu\":{\"source\":\"iana\",\"extensions\":[\"djvu\",\"djv\"]},\"image/vnd.dvb.subtitle\":{\"source\":\"iana\",\"extensions\":[\"sub\"]},\"image/vnd.dwg\":{\"source\":\"iana\",\"extensions\":[\"dwg\"]},\"image/vnd.dxf\":{\"source\":\"iana\",\"extensions\":[\"dxf\"]},\"image/vnd.fastbidsheet\":{\"source\":\"iana\",\"extensions\":[\"fbs\"]},\"image/vnd.fpx\":{\"source\":\"iana\",\"extensions\":[\"fpx\"]},\"image/vnd.fst\":{\"source\":\"iana\",\"extensions\":[\"fst\"]},\"image/vnd.fujixerox.edmics-mmr\":{\"source\":\"iana\",\"extensions\":[\"mmr\"]},\"image/vnd.fujixerox.edmics-rlc\":{\"source\":\"iana\",\"extensions\":[\"rlc\"]},\"image/vnd.globalgraphics.pgb\":{\"source\":\"iana\"},\"image/vnd.microsoft.icon\":{\"source\":\"iana\"},\"image/vnd.mix\":{\"source\":\"iana\"},\"image/vnd.mozilla.apng\":{\"source\":\"iana\"},\"image/vnd.ms-modi\":{\"source\":\"iana\",\"extensions\":[\"mdi\"]},\"image/vnd.ms-photo\":{\"source\":\"apache\",\"extensions\":[\"wdp\"]},\"image/vnd.net-fpx\":{\"source\":\"iana\",\"extensions\":[\"npx\"]},\"image/vnd.radiance\":{\"source\":\"iana\"},\"image/vnd.sealed.png\":{\"source\":\"iana\"},\"image/vnd.sealedmedia.softseal.gif\":{\"source\":\"iana\"},\"image/vnd.sealedmedia.softseal.jpg\":{\"source\":\"iana\"},\"image/vnd.svf\":{\"source\":\"iana\"},\"image/vnd.tencent.tap\":{\"source\":\"iana\"},\"image/vnd.valve.source.texture\":{\"source\":\"iana\"},\"image/vnd.wap.wbmp\":{\"source\":\"iana\",\"extensions\":[\"wbmp\"]},\"image/vnd.xiff\":{\"source\":\"iana\",\"extensions\":[\"xif\"]},\"image/vnd.zbrush.pcx\":{\"source\":\"iana\"},\"image/webp\":{\"source\":\"apache\",\"extensions\":[\"webp\"]},\"image/wmf\":{\"source\":\"iana\"},\"image/x-3ds\":{\"source\":\"apache\",\"extensions\":[\"3ds\"]},\"image/x-cmu-raster\":{\"source\":\"apache\",\"extensions\":[\"ras\"]},\"image/x-cmx\":{\"source\":\"apache\",\"extensions\":[\"cmx\"]},\"image/x-freehand\":{\"source\":\"apache\",\"extensions\":[\"fh\",\"fhc\",\"fh4\",\"fh5\",\"fh7\"]},\"image/x-icon\":{\"source\":\"apache\",\"compressible\":true,\"extensions\":[\"ico\"]},\"image/x-jng\":{\"source\":\"nginx\",\"extensions\":[\"jng\"]},\"image/x-mrsid-image\":{\"source\":\"apache\",\"extensions\":[\"sid\"]},\"image/x-ms-bmp\":{\"source\":\"nginx\",\"compressible\":true,\"extensions\":[\"bmp\"]},\"image/x-pcx\":{\"source\":\"apache\",\"extensions\":[\"pcx\"]},\"image/x-pict\":{\"source\":\"apache\",\"extensions\":[\"pic\",\"pct\"]},\"image/x-portable-anymap\":{\"source\":\"apache\",\"extensions\":[\"pnm\"]},\"image/x-portable-bitmap\":{\"source\":\"apache\",\"extensions\":[\"pbm\"]},\"image/x-portable-graymap\":{\"source\":\"apache\",\"extensions\":[\"pgm\"]},\"image/x-portable-pixmap\":{\"source\":\"apache\",\"extensions\":[\"ppm\"]},\"image/x-rgb\":{\"source\":\"apache\",\"extensions\":[\"rgb\"]},\"image/x-tga\":{\"source\":\"apache\",\"extensions\":[\"tga\"]},\"image/x-xbitmap\":{\"source\":\"apache\",\"extensions\":[\"xbm\"]},\"image/x-xcf\":{\"compressible\":false},\"image/x-xpixmap\":{\"source\":\"apache\",\"extensions\":[\"xpm\"]},\"image/x-xwindowdump\":{\"source\":\"apache\",\"extensions\":[\"xwd\"]},\"message/cpim\":{\"source\":\"iana\"},\"message/delivery-status\":{\"source\":\"iana\"},\"message/disposition-notification\":{\"source\":\"iana\",\"extensions\":[\"disposition-notification\"]},\"message/external-body\":{\"source\":\"iana\"},\"message/feedback-report\":{\"source\":\"iana\"},\"message/global\":{\"source\":\"iana\",\"extensions\":[\"u8msg\"]},\"message/global-delivery-status\":{\"source\":\"iana\",\"extensions\":[\"u8dsn\"]},\"message/global-disposition-notification\":{\"source\":\"iana\",\"extensions\":[\"u8mdn\"]},\"message/global-headers\":{\"source\":\"iana\",\"extensions\":[\"u8hdr\"]},\"message/http\":{\"source\":\"iana\",\"compressible\":false},\"message/imdn+xml\":{\"source\":\"iana\",\"compressible\":true},\"message/news\":{\"source\":\"iana\"},\"message/partial\":{\"source\":\"iana\",\"compressible\":false},\"message/rfc822\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"eml\",\"mime\"]},\"message/s-http\":{\"source\":\"iana\"},\"message/sip\":{\"source\":\"iana\"},\"message/sipfrag\":{\"source\":\"iana\"},\"message/tracking-status\":{\"source\":\"iana\"},\"message/vnd.si.simp\":{\"source\":\"iana\"},\"message/vnd.wfa.wsc\":{\"source\":\"iana\",\"extensions\":[\"wsc\"]},\"model/3mf\":{\"source\":\"iana\"},\"model/gltf+json\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"gltf\"]},\"model/gltf-binary\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"glb\"]},\"model/iges\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"igs\",\"iges\"]},\"model/mesh\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"msh\",\"mesh\",\"silo\"]},\"model/vnd.collada+xml\":{\"source\":\"iana\",\"extensions\":[\"dae\"]},\"model/vnd.dwf\":{\"source\":\"iana\",\"extensions\":[\"dwf\"]},\"model/vnd.flatland.3dml\":{\"source\":\"iana\"},\"model/vnd.gdl\":{\"source\":\"iana\",\"extensions\":[\"gdl\"]},\"model/vnd.gs-gdl\":{\"source\":\"apache\"},\"model/vnd.gs.gdl\":{\"source\":\"iana\"},\"model/vnd.gtw\":{\"source\":\"iana\",\"extensions\":[\"gtw\"]},\"model/vnd.moml+xml\":{\"source\":\"iana\"},\"model/vnd.mts\":{\"source\":\"iana\",\"extensions\":[\"mts\"]},\"model/vnd.opengex\":{\"source\":\"iana\"},\"model/vnd.parasolid.transmit.binary\":{\"source\":\"iana\"},\"model/vnd.parasolid.transmit.text\":{\"source\":\"iana\"},\"model/vnd.rosette.annotated-data-model\":{\"source\":\"iana\"},\"model/vnd.valve.source.compiled-map\":{\"source\":\"iana\"},\"model/vnd.vtu\":{\"source\":\"iana\",\"extensions\":[\"vtu\"]},\"model/vrml\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"wrl\",\"vrml\"]},\"model/x3d+binary\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"x3db\",\"x3dbz\"]},\"model/x3d+fastinfoset\":{\"source\":\"iana\"},\"model/x3d+vrml\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"x3dv\",\"x3dvz\"]},\"model/x3d+xml\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"x3d\",\"x3dz\"]},\"model/x3d-vrml\":{\"source\":\"iana\"},\"multipart/alternative\":{\"source\":\"iana\",\"compressible\":false},\"multipart/appledouble\":{\"source\":\"iana\"},\"multipart/byteranges\":{\"source\":\"iana\"},\"multipart/digest\":{\"source\":\"iana\"},\"multipart/encrypted\":{\"source\":\"iana\",\"compressible\":false},\"multipart/form-data\":{\"source\":\"iana\",\"compressible\":false},\"multipart/header-set\":{\"source\":\"iana\"},\"multipart/mixed\":{\"source\":\"iana\",\"compressible\":false},\"multipart/multilingual\":{\"source\":\"iana\"},\"multipart/parallel\":{\"source\":\"iana\"},\"multipart/related\":{\"source\":\"iana\",\"compressible\":false},\"multipart/report\":{\"source\":\"iana\"},\"multipart/signed\":{\"source\":\"iana\",\"compressible\":false},\"multipart/vnd.bint.med-plus\":{\"source\":\"iana\"},\"multipart/voice-message\":{\"source\":\"iana\"},\"multipart/x-mixed-replace\":{\"source\":\"iana\"},\"text/1d-interleaved-parityfec\":{\"source\":\"iana\"},\"text/cache-manifest\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"appcache\",\"manifest\"]},\"text/calendar\":{\"source\":\"iana\",\"extensions\":[\"ics\",\"ifb\"]},\"text/calender\":{\"compressible\":true},\"text/cmd\":{\"compressible\":true},\"text/coffeescript\":{\"extensions\":[\"coffee\",\"litcoffee\"]},\"text/css\":{\"source\":\"iana\",\"charset\":\"UTF-8\",\"compressible\":true,\"extensions\":[\"css\"]},\"text/csv\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"csv\"]},\"text/csv-schema\":{\"source\":\"iana\"},\"text/directory\":{\"source\":\"iana\"},\"text/dns\":{\"source\":\"iana\"},\"text/ecmascript\":{\"source\":\"iana\"},\"text/encaprtp\":{\"source\":\"iana\"},\"text/enriched\":{\"source\":\"iana\"},\"text/fwdred\":{\"source\":\"iana\"},\"text/grammar-ref-list\":{\"source\":\"iana\"},\"text/html\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"html\",\"htm\",\"shtml\"]},\"text/jade\":{\"extensions\":[\"jade\"]},\"text/javascript\":{\"source\":\"iana\",\"compressible\":true},\"text/jcr-cnd\":{\"source\":\"iana\"},\"text/jsx\":{\"compressible\":true,\"extensions\":[\"jsx\"]},\"text/less\":{\"extensions\":[\"less\"]},\"text/markdown\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"markdown\",\"md\"]},\"text/mathml\":{\"source\":\"nginx\",\"extensions\":[\"mml\"]},\"text/mizar\":{\"source\":\"iana\"},\"text/n3\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"n3\"]},\"text/parameters\":{\"source\":\"iana\"},\"text/parityfec\":{\"source\":\"iana\"},\"text/plain\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"txt\",\"text\",\"conf\",\"def\",\"list\",\"log\",\"in\",\"ini\"]},\"text/provenance-notation\":{\"source\":\"iana\"},\"text/prs.fallenstein.rst\":{\"source\":\"iana\"},\"text/prs.lines.tag\":{\"source\":\"iana\",\"extensions\":[\"dsc\"]},\"text/prs.prop.logic\":{\"source\":\"iana\"},\"text/raptorfec\":{\"source\":\"iana\"},\"text/red\":{\"source\":\"iana\"},\"text/rfc822-headers\":{\"source\":\"iana\"},\"text/richtext\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"rtx\"]},\"text/rtf\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"rtf\"]},\"text/rtp-enc-aescm128\":{\"source\":\"iana\"},\"text/rtploopback\":{\"source\":\"iana\"},\"text/rtx\":{\"source\":\"iana\"},\"text/sgml\":{\"source\":\"iana\",\"extensions\":[\"sgml\",\"sgm\"]},\"text/shex\":{\"extensions\":[\"shex\"]},\"text/slim\":{\"extensions\":[\"slim\",\"slm\"]},\"text/strings\":{\"source\":\"iana\"},\"text/stylus\":{\"extensions\":[\"stylus\",\"styl\"]},\"text/t140\":{\"source\":\"iana\"},\"text/tab-separated-values\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"tsv\"]},\"text/troff\":{\"source\":\"iana\",\"extensions\":[\"t\",\"tr\",\"roff\",\"man\",\"me\",\"ms\"]},\"text/turtle\":{\"source\":\"iana\",\"extensions\":[\"ttl\"]},\"text/ulpfec\":{\"source\":\"iana\"},\"text/uri-list\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"uri\",\"uris\",\"urls\"]},\"text/vcard\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"vcard\"]},\"text/vnd.a\":{\"source\":\"iana\"},\"text/vnd.abc\":{\"source\":\"iana\"},\"text/vnd.ascii-art\":{\"source\":\"iana\"},\"text/vnd.curl\":{\"source\":\"iana\",\"extensions\":[\"curl\"]},\"text/vnd.curl.dcurl\":{\"source\":\"apache\",\"extensions\":[\"dcurl\"]},\"text/vnd.curl.mcurl\":{\"source\":\"apache\",\"extensions\":[\"mcurl\"]},\"text/vnd.curl.scurl\":{\"source\":\"apache\",\"extensions\":[\"scurl\"]},\"text/vnd.debian.copyright\":{\"source\":\"iana\"},\"text/vnd.dmclientscript\":{\"source\":\"iana\"},\"text/vnd.dvb.subtitle\":{\"source\":\"iana\",\"extensions\":[\"sub\"]},\"text/vnd.esmertec.theme-descriptor\":{\"source\":\"iana\"},\"text/vnd.fly\":{\"source\":\"iana\",\"extensions\":[\"fly\"]},\"text/vnd.fmi.flexstor\":{\"source\":\"iana\",\"extensions\":[\"flx\"]},\"text/vnd.graphviz\":{\"source\":\"iana\",\"extensions\":[\"gv\"]},\"text/vnd.in3d.3dml\":{\"source\":\"iana\",\"extensions\":[\"3dml\"]},\"text/vnd.in3d.spot\":{\"source\":\"iana\",\"extensions\":[\"spot\"]},\"text/vnd.iptc.newsml\":{\"source\":\"iana\"},\"text/vnd.iptc.nitf\":{\"source\":\"iana\"},\"text/vnd.latex-z\":{\"source\":\"iana\"},\"text/vnd.motorola.reflex\":{\"source\":\"iana\"},\"text/vnd.ms-mediapackage\":{\"source\":\"iana\"},\"text/vnd.net2phone.commcenter.command\":{\"source\":\"iana\"},\"text/vnd.radisys.msml-basic-layout\":{\"source\":\"iana\"},\"text/vnd.si.uricatalogue\":{\"source\":\"iana\"},\"text/vnd.sun.j2me.app-descriptor\":{\"source\":\"iana\",\"extensions\":[\"jad\"]},\"text/vnd.trolltech.linguist\":{\"source\":\"iana\"},\"text/vnd.wap.si\":{\"source\":\"iana\"},\"text/vnd.wap.sl\":{\"source\":\"iana\"},\"text/vnd.wap.wml\":{\"source\":\"iana\",\"extensions\":[\"wml\"]},\"text/vnd.wap.wmlscript\":{\"source\":\"iana\",\"extensions\":[\"wmls\"]},\"text/vtt\":{\"charset\":\"UTF-8\",\"compressible\":true,\"extensions\":[\"vtt\"]},\"text/x-asm\":{\"source\":\"apache\",\"extensions\":[\"s\",\"asm\"]},\"text/x-c\":{\"source\":\"apache\",\"extensions\":[\"c\",\"cc\",\"cxx\",\"cpp\",\"h\",\"hh\",\"dic\"]},\"text/x-component\":{\"source\":\"nginx\",\"extensions\":[\"htc\"]},\"text/x-fortran\":{\"source\":\"apache\",\"extensions\":[\"f\",\"for\",\"f77\",\"f90\"]},\"text/x-gwt-rpc\":{\"compressible\":true},\"text/x-handlebars-template\":{\"extensions\":[\"hbs\"]},\"text/x-java-source\":{\"source\":\"apache\",\"extensions\":[\"java\"]},\"text/x-jquery-tmpl\":{\"compressible\":true},\"text/x-lua\":{\"extensions\":[\"lua\"]},\"text/x-markdown\":{\"compressible\":true,\"extensions\":[\"mkd\"]},\"text/x-nfo\":{\"source\":\"apache\",\"extensions\":[\"nfo\"]},\"text/x-opml\":{\"source\":\"apache\",\"extensions\":[\"opml\"]},\"text/x-org\":{\"compressible\":true,\"extensions\":[\"org\"]},\"text/x-pascal\":{\"source\":\"apache\",\"extensions\":[\"p\",\"pas\"]},\"text/x-processing\":{\"compressible\":true,\"extensions\":[\"pde\"]},\"text/x-sass\":{\"extensions\":[\"sass\"]},\"text/x-scss\":{\"extensions\":[\"scss\"]},\"text/x-setext\":{\"source\":\"apache\",\"extensions\":[\"etx\"]},\"text/x-sfv\":{\"source\":\"apache\",\"extensions\":[\"sfv\"]},\"text/x-suse-ymp\":{\"compressible\":true,\"extensions\":[\"ymp\"]},\"text/x-uuencode\":{\"source\":\"apache\",\"extensions\":[\"uu\"]},\"text/x-vcalendar\":{\"source\":\"apache\",\"extensions\":[\"vcs\"]},\"text/x-vcard\":{\"source\":\"apache\",\"extensions\":[\"vcf\"]},\"text/xml\":{\"source\":\"iana\",\"compressible\":true,\"extensions\":[\"xml\"]},\"text/xml-external-parsed-entity\":{\"source\":\"iana\"},\"text/yaml\":{\"extensions\":[\"yaml\",\"yml\"]},\"video/1d-interleaved-parityfec\":{\"source\":\"iana\"},\"video/3gpp\":{\"source\":\"iana\",\"extensions\":[\"3gp\",\"3gpp\"]},\"video/3gpp-tt\":{\"source\":\"iana\"},\"video/3gpp2\":{\"source\":\"iana\",\"extensions\":[\"3g2\"]},\"video/bmpeg\":{\"source\":\"iana\"},\"video/bt656\":{\"source\":\"iana\"},\"video/celb\":{\"source\":\"iana\"},\"video/dv\":{\"source\":\"iana\"},\"video/encaprtp\":{\"source\":\"iana\"},\"video/h261\":{\"source\":\"iana\",\"extensions\":[\"h261\"]},\"video/h263\":{\"source\":\"iana\",\"extensions\":[\"h263\"]},\"video/h263-1998\":{\"source\":\"iana\"},\"video/h263-2000\":{\"source\":\"iana\"},\"video/h264\":{\"source\":\"iana\",\"extensions\":[\"h264\"]},\"video/h264-rcdo\":{\"source\":\"iana\"},\"video/h264-svc\":{\"source\":\"iana\"},\"video/h265\":{\"source\":\"iana\"},\"video/iso.segment\":{\"source\":\"iana\"},\"video/jpeg\":{\"source\":\"iana\",\"extensions\":[\"jpgv\"]},\"video/jpeg2000\":{\"source\":\"iana\"},\"video/jpm\":{\"source\":\"apache\",\"extensions\":[\"jpm\",\"jpgm\"]},\"video/mj2\":{\"source\":\"iana\",\"extensions\":[\"mj2\",\"mjp2\"]},\"video/mp1s\":{\"source\":\"iana\"},\"video/mp2p\":{\"source\":\"iana\"},\"video/mp2t\":{\"source\":\"iana\",\"extensions\":[\"ts\"]},\"video/mp4\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"mp4\",\"mp4v\",\"mpg4\"]},\"video/mp4v-es\":{\"source\":\"iana\"},\"video/mpeg\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"mpeg\",\"mpg\",\"mpe\",\"m1v\",\"m2v\"]},\"video/mpeg4-generic\":{\"source\":\"iana\"},\"video/mpv\":{\"source\":\"iana\"},\"video/nv\":{\"source\":\"iana\"},\"video/ogg\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"ogv\"]},\"video/parityfec\":{\"source\":\"iana\"},\"video/pointer\":{\"source\":\"iana\"},\"video/quicktime\":{\"source\":\"iana\",\"compressible\":false,\"extensions\":[\"qt\",\"mov\"]},\"video/raptorfec\":{\"source\":\"iana\"},\"video/raw\":{\"source\":\"iana\"},\"video/rtp-enc-aescm128\":{\"source\":\"iana\"},\"video/rtploopback\":{\"source\":\"iana\"},\"video/rtx\":{\"source\":\"iana\"},\"video/smpte291\":{\"source\":\"iana\"},\"video/smpte292m\":{\"source\":\"iana\"},\"video/ulpfec\":{\"source\":\"iana\"},\"video/vc1\":{\"source\":\"iana\"},\"video/vnd.cctv\":{\"source\":\"iana\"},\"video/vnd.dece.hd\":{\"source\":\"iana\",\"extensions\":[\"uvh\",\"uvvh\"]},\"video/vnd.dece.mobile\":{\"source\":\"iana\",\"extensions\":[\"uvm\",\"uvvm\"]},\"video/vnd.dece.mp4\":{\"source\":\"iana\"},\"video/vnd.dece.pd\":{\"source\":\"iana\",\"extensions\":[\"uvp\",\"uvvp\"]},\"video/vnd.dece.sd\":{\"source\":\"iana\",\"extensions\":[\"uvs\",\"uvvs\"]},\"video/vnd.dece.video\":{\"source\":\"iana\",\"extensions\":[\"uvv\",\"uvvv\"]},\"video/vnd.directv.mpeg\":{\"source\":\"iana\"},\"video/vnd.directv.mpeg-tts\":{\"source\":\"iana\"},\"video/vnd.dlna.mpeg-tts\":{\"source\":\"iana\"},\"video/vnd.dvb.file\":{\"source\":\"iana\",\"extensions\":[\"dvb\"]},\"video/vnd.fvt\":{\"source\":\"iana\",\"extensions\":[\"fvt\"]},\"video/vnd.hns.video\":{\"source\":\"iana\"},\"video/vnd.iptvforum.1dparityfec-1010\":{\"source\":\"iana\"},\"video/vnd.iptvforum.1dparityfec-2005\":{\"source\":\"iana\"},\"video/vnd.iptvforum.2dparityfec-1010\":{\"source\":\"iana\"},\"video/vnd.iptvforum.2dparityfec-2005\":{\"source\":\"iana\"},\"video/vnd.iptvforum.ttsavc\":{\"source\":\"iana\"},\"video/vnd.iptvforum.ttsmpeg2\":{\"source\":\"iana\"},\"video/vnd.motorola.video\":{\"source\":\"iana\"},\"video/vnd.motorola.videop\":{\"source\":\"iana\"},\"video/vnd.mpegurl\":{\"source\":\"iana\",\"extensions\":[\"mxu\",\"m4u\"]},\"video/vnd.ms-playready.media.pyv\":{\"source\":\"iana\",\"extensions\":[\"pyv\"]},\"video/vnd.nokia.interleaved-multimedia\":{\"source\":\"iana\"},\"video/vnd.nokia.mp4vr\":{\"source\":\"iana\"},\"video/vnd.nokia.videovoip\":{\"source\":\"iana\"},\"video/vnd.objectvideo\":{\"source\":\"iana\"},\"video/vnd.radgamettools.bink\":{\"source\":\"iana\"},\"video/vnd.radgamettools.smacker\":{\"source\":\"iana\"},\"video/vnd.sealed.mpeg1\":{\"source\":\"iana\"},\"video/vnd.sealed.mpeg4\":{\"source\":\"iana\"},\"video/vnd.sealed.swf\":{\"source\":\"iana\"},\"video/vnd.sealedmedia.softseal.mov\":{\"source\":\"iana\"},\"video/vnd.uvvu.mp4\":{\"source\":\"iana\",\"extensions\":[\"uvu\",\"uvvu\"]},\"video/vnd.vivo\":{\"source\":\"iana\",\"extensions\":[\"viv\"]},\"video/vp8\":{\"source\":\"iana\"},\"video/webm\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"webm\"]},\"video/x-f4v\":{\"source\":\"apache\",\"extensions\":[\"f4v\"]},\"video/x-fli\":{\"source\":\"apache\",\"extensions\":[\"fli\"]},\"video/x-flv\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"flv\"]},\"video/x-m4v\":{\"source\":\"apache\",\"extensions\":[\"m4v\"]},\"video/x-matroska\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"mkv\",\"mk3d\",\"mks\"]},\"video/x-mng\":{\"source\":\"apache\",\"extensions\":[\"mng\"]},\"video/x-ms-asf\":{\"source\":\"apache\",\"extensions\":[\"asf\",\"asx\"]},\"video/x-ms-vob\":{\"source\":\"apache\",\"extensions\":[\"vob\"]},\"video/x-ms-wm\":{\"source\":\"apache\",\"extensions\":[\"wm\"]},\"video/x-ms-wmv\":{\"source\":\"apache\",\"compressible\":false,\"extensions\":[\"wmv\"]},\"video/x-ms-wmx\":{\"source\":\"apache\",\"extensions\":[\"wmx\"]},\"video/x-ms-wvx\":{\"source\":\"apache\",\"extensions\":[\"wvx\"]},\"video/x-msvideo\":{\"source\":\"apache\",\"extensions\":[\"avi\"]},\"video/x-sgi-movie\":{\"source\":\"apache\",\"extensions\":[\"movie\"]},\"video/x-smv\":{\"source\":\"apache\",\"extensions\":[\"smv\"]},\"x-conference/x-cooltalk\":{\"source\":\"apache\",\"extensions\":[\"ice\"]},\"x-shader/x-fragment\":{\"compressible\":true},\"x-shader/x-vertex\":{\"compressible\":true}}");
 
 /***/ }),
 
@@ -35648,6 +32910,14 @@ module.exports = require("os");;
 
 "use strict";
 module.exports = require("path");;
+
+/***/ }),
+
+/***/ 4213:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("punycode");;
 
 /***/ }),
 
