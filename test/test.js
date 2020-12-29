@@ -83,7 +83,6 @@ describe('linkinator action', () => {
     assert.ok(setOutputStub.called);
   });
 
-
   it('should handle multiple paths', async () => {
     const inputStub = sinon.stub(core, 'getInput');
     inputStub.withArgs('paths').returns('test/fixtures/test.md, test/fixtures/test2.md');
