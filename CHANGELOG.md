@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.0.11](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.10...v1.0.11) (2020-12-30)
+
+
+### Bug Fixes
+
+* support comma and spaces in linksToSkip ([#31](https://www.github.com/JustinBeckwith/linkinator-action/issues/31)) ([b1d2c6a](https://www.github.com/JustinBeckwith/linkinator-action/commit/b1d2c6a6d3728367a96da21fa2b98f4a62cc0648))
+
 ### [1.0.10](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.9...v1.0.10) (2020-12-22)
 
 
