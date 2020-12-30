@@ -53,9 +53,8 @@ jobs:
 ## Outputs
 - `results` - An object with the results of the run.
 
+## Debugging
+To view skipped links, failure details, and more debugging information [enable step debug logging](https://docs.github.com/en/free-pro-team@latest/actions/managing-workflow-runs/enabling-debug-logging#enabling-step-debug-logging).
+
 ## License
 [MIT](LICENSE)
-
-[THIS IS A LINK THAT DO NOT EXIST](https://fake.local)
-[THIS IS A LINK THAT DO NOT EXIST](https://fake.local2)
-[THIS IS A LINK THAT DO NOT EXIST](https://fake.local3)
