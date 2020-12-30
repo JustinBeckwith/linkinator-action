@@ -56,3 +56,7 @@ jobs:
 
 ## License
 [MIT](LICENSE)
+
+[THIS IS A LINK THAT DO NOT EXIST](https://fake.local)
+[THIS IS A LINK THAT DO NOT EXIST](https://fake.local2)
+[THIS IS A LINK THAT DO NOT EXIST](https://fake.local3)
