@@ -16198,7 +16198,11 @@ function getLinks(source, baseUrl) {
     const attrs = Object.keys(linksAttr);
     for (const attr of attrs) {
         const elements = linksAttr[attr].map(tag => `${tag}[${attr}]`).join(',');
-        $(elements).each((i, element) => {
+        $(elements).each((i, ele) => {
+            const element = ele;
+            if (!element.attribs) {
+                return;
+            }
             const values = parseAttr(attr, element.attribs[attr]);
             // ignore href properties for link tags where rel is likely to fail
             const relValuesToIgnore = ['dns-prefetch', 'preconnect'];
