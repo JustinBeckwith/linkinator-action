@@ -1,4 +1,5 @@
 const core = require('@actions/core');
+const chalk = require('chalk');
 const { LinkChecker, LinkState } = require('linkinator');
 
 const LogLevel = {
@@ -6,7 +7,7 @@ const LogLevel = {
   INFO: 1,
   WARNING: 2,
   ERROR: 3,
-  NONE: 4,
+  NONE: 4
 };
 
 async function main () {
@@ -22,36 +23,33 @@ async function main () {
         '')),
       timeout: Number(qq('timeout', 0)),
       markdown: Boolean(qq('markdown', true)),
-      serverRoot: qq('serverRoot', undefined),
+      serverRoot: qq('serverRoot', undefined)
     };
 
     const verbosity = LogLevel[(core.getInput('verbosity') || 'WARNING').toUpperCase()];
+    console.log(verbosity);
 
     const checker = new LinkChecker()
       .on('pagestart', url => {
-        console.log(`Scanning ${url}`);
+        core.info(`Scanning ${url}`);
+      })
+      .on('link', link => {
+        switch (link.state) {
+          case LinkState.BROKEN:
+            core.error(`[${chalk.red(link.status.toString())}] ${chalk.gray(link.url)}`);
+            break;
+          case LinkState.OK:
+            core.info(`[${chalk.green(link.status.toString())}] ${chalk.gray(link.url)}`);
+            break;
+          case LinkState.SKIPPED:
+            core.debug(`[${chalk.grey('SKP')}] ${chalk.gray(link.url)}`);
+            break;
+        }
       });
 
     const result = await checker.check(options);
-    const filteredResults = result.links.filter(link => {
-      switch (link.state) {
-        case LinkState.OK:
-          return verbosity <= LogLevel.WARNING;
-        case LinkState.BROKEN:
-          if (verbosity > LogLevel.DEBUG) {
-            link.failureDetails = undefined;
-          }
-          return verbosity <= LogLevel.ERROR;
-        case LinkState.SKIPPED:
-          return verbosity <= LogLevel.INFO;
-      }
-    });
     if (!result.passed) {
       const brokenLinks = result.links.filter(x => x.state === 'BROKEN');
-      const skippedLinks = result.links.filter(x => x.state === 'SKIPPED');
-      const okLinks = result.links.filter(x => x.state === 'OK');
-
-      if (verbosity > LogLevel[''])
       let failureOutput = `Detected ${brokenLinks.length} broken links.`;
       for (const link of brokenLinks) {
         failureOutput += `\n [${link.status}] ${link.url}`;
@@ -59,7 +57,7 @@ async function main () {
       core.setFailed(failureOutput);
       return;
     }
-    console.log(`Scanned total of ${result.links.length} links!`);
+    core.info(`Scanned total of ${result.links.length} links!`);
     core.setOutput('results', result);
   } catch (err) {
     core.setFailed(`Linkinator exception: \n${err.message}\n${err.stack}`);
