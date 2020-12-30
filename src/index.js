@@ -1,5 +1,4 @@
 const core = require('@actions/core');
-const chalk = require('chalk');
 const { LinkChecker, LinkState } = require('linkinator');
 
 const LogLevel = {
@@ -36,18 +35,19 @@ async function main () {
       .on('link', link => {
         switch (link.state) {
           case LinkState.BROKEN:
-            core.error(`[${chalk.red(link.status.toString())}] ${chalk.gray(link.url)}`);
+            core.error(`[${link.status.toString()}] ${link.url}`);
             break;
           case LinkState.OK:
-            core.info(`[${chalk.green(link.status.toString())}] ${chalk.gray(link.url)}`);
+            core.info(`[${link.status.toString()}] ${link.url}`);
             break;
           case LinkState.SKIPPED:
-            core.debug(`[${chalk.grey('SKP')}] ${chalk.gray(link.url)}`);
+            core.debug(`[SKP] ${link.url}`);
             break;
         }
       });
 
     const result = await checker.check(options);
+    core.info(`Scanned total of ${result.links.length} links!`);
     if (!result.passed) {
       const brokenLinks = result.links.filter(x => x.state === 'BROKEN');
       let failureOutput = `Detected ${brokenLinks.length} broken links.`;
@@ -55,9 +55,7 @@ async function main () {
         failureOutput += `\n [${link.status}] ${link.url}`;
       }
       core.setFailed(failureOutput);
-      return;
     }
-    core.info(`Scanned total of ${result.links.length} links!`);
     core.setOutput('results', result);
   } catch (err) {
     core.setFailed(`Linkinator exception: \n${err.message}\n${err.stack}`);
