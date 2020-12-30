@@ -32762,7 +32762,8 @@ async function main () {
       });
 
     const result = await checker.check(options);
-    core.info(`Scanned total of ${result.links.length} links!`);
+    const nonSkippedLinks = result.links.filter(x => x.state !== 'SKIPPED');
+    core.info(`Scanned total of ${nonSkippedLinks.length} links!`);
     if (!result.passed) {
       const brokenLinks = result.links.filter(x => x.state === 'BROKEN');
       let failureOutput = `Detected ${brokenLinks.length} broken links.`;
