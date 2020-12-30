@@ -1,14 +1,6 @@
 const core = require('@actions/core');
 const { LinkChecker, LinkState } = require('linkinator');
 
-const LogLevel = {
-  DEBUG: 0,
-  INFO: 1,
-  WARNING: 2,
-  ERROR: 3,
-  NONE: 4
-};
-
 async function main () {
   try {
     // The options returned from `getInput` appear to always be strings.
@@ -24,9 +16,6 @@ async function main () {
       markdown: Boolean(qq('markdown', true)),
       serverRoot: qq('serverRoot', undefined)
     };
-
-    const verbosity = LogLevel[(core.getInput('verbosity') || 'WARNING').toUpperCase()];
-    console.log(verbosity);
 
     const checker = new LinkChecker()
       .on('pagestart', url => {
@@ -53,6 +42,7 @@ async function main () {
       let failureOutput = `Detected ${brokenLinks.length} broken links.`;
       for (const link of brokenLinks) {
         failureOutput += `\n [${link.status}] ${link.url}`;
+        core.debug(JSON.stringify(link.failureDetails, null, 2));
       }
       core.setFailed(failureOutput);
     }

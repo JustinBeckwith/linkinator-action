@@ -49,7 +49,6 @@ jobs:
 - `timeout` - Request timeout in ms.  Defaults to 0 (no timeout).
 - `markdown` - Automatically parse and scan markdown if scanning from a location on disk. Defaults to `true`.
 - `serverRoot` - When scanning a locally directory, customize the location on disk where the server is started.  Defaults to the root of your GitHub repository.
-- `verbosity` - Override the default verbosity for this command. Available options are 'debug', 'info', 'warning', 'error', and 'none'.  Defaults to 'warning'.
 
 ## Outputs
 - `results` - An object with the results of the run.
