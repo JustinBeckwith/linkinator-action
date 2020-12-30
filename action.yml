@@ -16,6 +16,8 @@ inputs:
     default: false
   linksToSkip:
     description: 'List of urls in regexy form to not include in the check.'
+  skip:
+    description: 'List of urls in regexy form to not include in the check.'
   timeout:
     description: 'Request timeout in ms.  Defaults to 0 (no timeout).'
     default: 0

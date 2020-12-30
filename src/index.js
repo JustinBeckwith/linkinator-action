@@ -1,5 +1,5 @@
 const core = require('@actions/core');
-const { LinkChecker } = require('linkinator');
+const { LinkChecker, LinkState } = require('linkinator');
 
 async function main () {
   try {
@@ -19,20 +19,33 @@ async function main () {
 
     const checker = new LinkChecker()
       .on('pagestart', url => {
-        console.log(`Scanning ${url}`);
+        core.info(`Scanning ${url}`);
+      })
+      .on('link', link => {
+        switch (link.state) {
+          case LinkState.BROKEN:
+            core.error(`[${link.status.toString()}] ${link.url}`);
+            break;
+          case LinkState.OK:
+            core.info(`[${link.status.toString()}] ${link.url}`);
+            break;
+          case LinkState.SKIPPED:
+            core.debug(`[SKP] ${link.url}`);
+            break;
+        }
       });
 
     const result = await checker.check(options);
+    core.info(`Scanned total of ${result.links.length} links!`);
     if (!result.passed) {
       const brokenLinks = result.links.filter(x => x.state === 'BROKEN');
       let failureOutput = `Detected ${brokenLinks.length} broken links.`;
       for (const link of brokenLinks) {
         failureOutput += `\n [${link.status}] ${link.url}`;
+        core.debug(JSON.stringify(link.failureDetails, null, 2));
       }
       core.setFailed(failureOutput);
-      return;
     }
-    console.log(`Scanned total of ${result.links.length} links!`);
     core.setOutput('results', result);
   } catch (err) {
     core.setFailed(`Linkinator exception: \n${err.message}\n${err.stack}`);

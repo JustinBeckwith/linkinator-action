@@ -34,14 +34,13 @@ describe('linkinator action', () => {
     const inputStub = sinon.stub(core, 'getInput');
     inputStub.withArgs('paths').returns('test/fixtures/test.md');
     inputStub.returns('');
-    const setOutputStub = sinon.stub(core, 'setOutput');
+    sinon.stub(core, 'setOutput');
     const setFailedStub = sinon.stub(core, 'setFailed');
     const scope = nock('http://fake.local')
       .head('/').reply(404)
       .head('/fake').reply(404);
     await action();
     assert.ok(inputStub.called);
-    assert.ok(setOutputStub.notCalled);
     assert.ok(setFailedStub.called);
     scope.done();
   });
