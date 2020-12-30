@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.1.1](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.1.0...v1.1.1) (2020-12-30)
+
+
+### Bug Fixes
+
+* only report non-skipped links in total ([#36](https://www.github.com/JustinBeckwith/linkinator-action/issues/36)) ([4e8623b](https://www.github.com/JustinBeckwith/linkinator-action/commit/4e8623b487127e7333914912aa55c75ac2bab45d))
+
 ## [1.1.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.0.10...v1.1.0) (2020-12-30)
 
 
