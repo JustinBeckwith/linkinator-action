@@ -5302,7 +5302,7 @@ function ContentDisposition (type, parameters) {
 
 /***/ }),
 
-/***/ 6016:
+/***/ 6863:
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -5600,7 +5600,7 @@ function reduceRules(a, b) {
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.compileGeneralSelector = void 0;
-var attributes_1 = __webpack_require__(6016);
+var attributes_1 = __webpack_require__(6863);
 var pseudo_selectors_1 = __webpack_require__(9312);
 /*
  * All available rules
@@ -5903,7 +5903,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.filters = void 0;
 var nth_check_1 = __importDefault(__webpack_require__(1260));
 var boolbase_1 = __webpack_require__(4159);
-var attributes_1 = __webpack_require__(6016);
+var attributes_1 = __webpack_require__(6863);
 var checkAttrib = attributes_1.attributeRules.equals;
 function getAttribFunc(name, value) {
     var data = {
@@ -11285,7 +11285,7 @@ Url.replace = function Url$Replace() {
 
 /***/ }),
 
-/***/ 6863:
+/***/ 7290:
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 module.exports = realpath
@@ -12438,7 +12438,7 @@ function childrenIgnored (self, path) {
 module.exports = glob
 
 var fs = __webpack_require__(5747)
-var rp = __webpack_require__(6863)
+var rp = __webpack_require__(7290)
 var minimatch = __webpack_require__(3973)
 var Minimatch = minimatch.Minimatch
 var inherits = __webpack_require__(4124)
@@ -13196,7 +13196,7 @@ module.exports = globSync
 globSync.GlobSync = GlobSync
 
 var fs = __webpack_require__(5747)
-var rp = __webpack_require__(6863)
+var rp = __webpack_require__(7290)
 var minimatch = __webpack_require__(3973)
 var Minimatch = minimatch.Minimatch
 var Glob = __webpack_require__(1957).Glob
@@ -15763,16 +15763,11 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.check = exports.LinkChecker = exports.headers = exports.LinkState = void 0;
 const events_1 = __webpack_require__(8614);
 const url_1 = __webpack_require__(8835);
-const fs = __webpack_require__(5747);
-const util = __webpack_require__(1669);
-const path = __webpack_require__(5622);
 const gaxios_1 = __webpack_require__(9555);
-const p_queue_1 = __webpack_require__(8983);
-const globby = __webpack_require__(1957);
+const queue_1 = __webpack_require__(5624);
 const links_1 = __webpack_require__(4024);
 const server_1 = __webpack_require__(8277);
-const stat = util.promisify(fs.stat);
-const glob = util.promisify(globby);
+const options_1 = __webpack_require__(3386);
 var LinkState;
 (function (LinkState) {
     LinkState["OK"] = "OK";
@@ -15793,7 +15788,7 @@ class LinkChecker extends events_1.EventEmitter {
      * @param options Options to use while checking for 404s
      */
     async check(opts) {
-        const options = await this.processOptions(opts);
+        const options = await options_1.processOptions(opts);
         if (!Array.isArray(options.path)) {
             options.path = [options.path];
         }
@@ -15818,11 +15813,12 @@ class LinkChecker extends events_1.EventEmitter {
         if (process.env.LINKINATOR_DEBUG) {
             console.log(options);
         }
-        const queue = new p_queue_1.default({
+        const queue = new queue_1.Queue({
             concurrency: options.concurrency || 100,
         });
         const results = new Array();
         const initCache = new Set();
+        const delayCache = new Map();
         for (const path of options.path) {
             const url = new url_1.URL(path);
             initCache.add(url.href);
@@ -15833,8 +15829,10 @@ class LinkChecker extends events_1.EventEmitter {
                     checkOptions: options,
                     results,
                     cache: initCache,
+                    delayCache,
                     queue,
                     rootPath: path,
+                    retry: !!opts.retry,
                 });
             });
         }
@@ -15847,109 +15845,6 @@ class LinkChecker extends events_1.EventEmitter {
             server.destroy();
         }
         return result;
-    }
-    /**
-     * Validate the provided flags all work with each other.
-     * @param options CheckOptions passed in from the CLI (or API)
-     */
-    async processOptions(opts) {
-        const options = Object.assign({}, opts);
-        // ensure at least one path is provided
-        if (options.path.length === 0) {
-            throw new Error('At least one path must be provided');
-        }
-        // normalize options.path to an array of strings
-        if (!Array.isArray(options.path)) {
-            options.path = [options.path];
-        }
-        // disable directory listings by default
-        if (options.directoryListing === undefined) {
-            options.directoryListing = false;
-        }
-        // Ensure we do not mix http:// and file system paths.  The paths passed in
-        // must all be filesystem paths, or HTTP paths.
-        let isUrlType = undefined;
-        for (const path of options.path) {
-            const innerIsUrlType = path.startsWith('http');
-            if (isUrlType === undefined) {
-                isUrlType = innerIsUrlType;
-            }
-            else if (innerIsUrlType !== isUrlType) {
-                throw new Error('Paths cannot be mixed between HTTP and local filesystem paths.');
-            }
-        }
-        // if there is a server root, make sure there are no HTTP paths
-        if (options.serverRoot && isUrlType) {
-            throw new Error("'serverRoot' cannot be defined when the 'path' points to an HTTP endpoint.");
-        }
-        if (options.serverRoot) {
-            options.serverRoot = path.normalize(options.serverRoot);
-        }
-        // expand globs into paths
-        if (!isUrlType) {
-            const paths = [];
-            for (const filePath of options.path) {
-                // The glob path provided is relative to the serverRoot. For example,
-                // if the serverRoot is test/fixtures/nested, and the glob is "*/*.html",
-                // The glob needs to be calculated from the serverRoot directory.
-                const fullPath = options.serverRoot
-                    ? path.join(options.serverRoot, filePath)
-                    : filePath;
-                const expandedPaths = await glob(fullPath);
-                if (expandedPaths.length === 0) {
-                    throw new Error(`The provided glob "${filePath}" returned 0 results. The current working directory is "${process.cwd()}".`);
-                }
-                // After resolving the globs, the paths need to be returned to their
-                // original form, without the serverRoot included in the path.
-                for (let p of expandedPaths) {
-                    p = path.normalize(p);
-                    if (options.serverRoot) {
-                        const contractedPath = p
-                            .split(path.sep)
-                            .slice(options.serverRoot.split(path.sep).length)
-                            .join(path.sep);
-                        paths.push(contractedPath);
-                    }
-                    else {
-                        paths.push(p);
-                    }
-                }
-            }
-            options.path = paths;
-        }
-        // enable markdown if someone passes a flag/glob right at it
-        if (options.markdown === undefined) {
-            for (const p of options.path) {
-                if (path.extname(p).toLowerCase() === '.md') {
-                    options.markdown = true;
-                }
-            }
-        }
-        // Figure out which directory should be used as the root for the web server,
-        // and how that impacts the path to the file for the first request.
-        if (!options.serverRoot && !isUrlType) {
-            // if the serverRoot wasn't defined, and there are multiple paths, just
-            // use process.cwd().
-            if (options.path.length > 1) {
-                options.serverRoot = process.cwd();
-            }
-            else {
-                // if there's a single path, try to be smart and figure it out
-                const s = await stat(options.path[0]);
-                options.serverRoot = options.path[0];
-                if (s.isFile()) {
-                    const pathParts = options.path[0].split(path.sep);
-                    options.path = [path.sep + pathParts[pathParts.length - 1]];
-                    options.serverRoot =
-                        pathParts.slice(0, pathParts.length - 1).join(path.sep) || '.';
-                }
-                else {
-                    options.serverRoot = options.path[0];
-                    options.path = '/';
-                }
-            }
-        }
-        return options;
     }
     /**
      * Crawl a given url with the provided options.
@@ -16002,6 +15897,18 @@ class LinkChecker extends events_1.EventEmitter {
                 return;
             }
         }
+        // Check if this host has been marked for delay due to 429
+        if (opts.delayCache.has(opts.url.host)) {
+            const timeout = opts.delayCache.get(opts.url.host);
+            if (timeout > Date.now()) {
+                opts.queue.add(async () => {
+                    await this.crawl(opts);
+                }, {
+                    delay: timeout - Date.now(),
+                });
+                return;
+            }
+        }
         // Perform a HEAD or GET request based on the need to crawl
         let status = 0;
         let state = LinkState.BROKEN;
@@ -16018,6 +15925,9 @@ class LinkChecker extends events_1.EventEmitter {
                 validateStatus: () => true,
                 timeout: opts.checkOptions.timeout,
             });
+            if (this.shouldRetryAfter(res, opts)) {
+                return;
+            }
             // If we got an HTTP 405, the server may not like HEAD. GET instead!
             if (res.status === 405) {
                 res = await gaxios_1.request({
@@ -16028,6 +15938,9 @@ class LinkChecker extends events_1.EventEmitter {
                     validateStatus: () => true,
                     timeout: opts.checkOptions.timeout,
                 });
+                if (this.shouldRetryAfter(res, opts)) {
+                    return;
+                }
             }
         }
         catch (err) {
@@ -16048,6 +15961,9 @@ class LinkChecker extends events_1.EventEmitter {
                     headers: exports.headers,
                     timeout: opts.checkOptions.timeout,
                 });
+                if (this.shouldRetryAfter(res, opts)) {
+                    return;
+                }
             }
         }
         catch (ex) {
@@ -16113,16 +16029,67 @@ class LinkChecker extends events_1.EventEmitter {
                             url: result.url,
                             crawl,
                             cache: opts.cache,
+                            delayCache: opts.delayCache,
                             results: opts.results,
                             checkOptions: opts.checkOptions,
                             queue: opts.queue,
                             parent: opts.url.href,
                             rootPath: opts.rootPath,
+                            retry: opts.retry,
                         });
                     });
                 }
             }
         }
+    }
+    /**
+     * Check the incoming response for a `retry-after` header.  If present,
+     * and if the status was an HTTP 429, calculate the date at which this
+     * request should be retried. Ensure the delayCache knows that we're
+     * going to wait on requests for this entire host.
+     * @param res GaxiosResponse returned from the request
+     * @param opts CrawlOptions used during this request
+     */
+    shouldRetryAfter(res, opts) {
+        if (!opts.retry) {
+            return false;
+        }
+        const retryAfterRaw = res.headers['retry-after'];
+        if (res.status !== 429 || !retryAfterRaw) {
+            return false;
+        }
+        // The `retry-after` header can come in either <seconds> or
+        // A specific date to go check.
+        let retryAfter = Number(retryAfterRaw) * 1000 + Date.now();
+        if (isNaN(retryAfter)) {
+            retryAfter = Date.parse(retryAfterRaw);
+            if (isNaN(retryAfter)) {
+                return false;
+            }
+        }
+        // check to see if there is already a request to wait for this host
+        if (opts.delayCache.has(opts.url.host)) {
+            // use whichever time is higher in the cache
+            const currentTimeout = opts.delayCache.get(opts.url.host);
+            if (retryAfter > currentTimeout) {
+                opts.delayCache.set(opts.url.host, retryAfter);
+            }
+        }
+        else {
+            opts.delayCache.set(opts.url.host, retryAfter);
+        }
+        opts.queue.add(async () => {
+            await this.crawl(opts);
+        }, {
+            delay: retryAfter - Date.now(),
+        });
+        const retryDetails = {
+            url: opts.url.href,
+            status: res.status,
+            secondsUntilRetry: Math.round((retryAfter - Date.now()) / 1000),
+        };
+        this.emit('retry', retryDetails);
+        return true;
     }
 }
 exports.LinkChecker = LinkChecker;
@@ -16269,6 +16236,177 @@ function parseLink(link, baseUrl) {
     }
 }
 //# sourceMappingURL=links.js.map
+
+/***/ }),
+
+/***/ 3386:
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.processOptions = void 0;
+const fs = __webpack_require__(5747);
+const util = __webpack_require__(1669);
+const path = __webpack_require__(5622);
+const globby = __webpack_require__(1957);
+const stat = util.promisify(fs.stat);
+const glob = util.promisify(globby);
+/**
+ * Validate the provided flags all work with each other.
+ * @param options CheckOptions passed in from the CLI (or API)
+ */
+async function processOptions(opts) {
+    const options = Object.assign({}, opts);
+    // ensure at least one path is provided
+    if (options.path.length === 0) {
+        throw new Error('At least one path must be provided');
+    }
+    // normalize options.path to an array of strings
+    if (!Array.isArray(options.path)) {
+        options.path = [options.path];
+    }
+    // disable directory listings by default
+    if (options.directoryListing === undefined) {
+        options.directoryListing = false;
+    }
+    // Ensure we do not mix http:// and file system paths.  The paths passed in
+    // must all be filesystem paths, or HTTP paths.
+    let isUrlType = undefined;
+    for (const path of options.path) {
+        const innerIsUrlType = path.startsWith('http');
+        if (isUrlType === undefined) {
+            isUrlType = innerIsUrlType;
+        }
+        else if (innerIsUrlType !== isUrlType) {
+            throw new Error('Paths cannot be mixed between HTTP and local filesystem paths.');
+        }
+    }
+    // if there is a server root, make sure there are no HTTP paths
+    if (options.serverRoot && isUrlType) {
+        throw new Error("'serverRoot' cannot be defined when the 'path' points to an HTTP endpoint.");
+    }
+    if (options.serverRoot) {
+        options.serverRoot = path.normalize(options.serverRoot);
+    }
+    // expand globs into paths
+    if (!isUrlType) {
+        const paths = [];
+        for (const filePath of options.path) {
+            // The glob path provided is relative to the serverRoot. For example,
+            // if the serverRoot is test/fixtures/nested, and the glob is "*/*.html",
+            // The glob needs to be calculated from the serverRoot directory.
+            const fullPath = options.serverRoot
+                ? path.join(options.serverRoot, filePath)
+                : filePath;
+            const expandedPaths = await glob(fullPath);
+            if (expandedPaths.length === 0) {
+                throw new Error(`The provided glob "${filePath}" returned 0 results. The current working directory is "${process.cwd()}".`);
+            }
+            // After resolving the globs, the paths need to be returned to their
+            // original form, without the serverRoot included in the path.
+            for (let p of expandedPaths) {
+                p = path.normalize(p);
+                if (options.serverRoot) {
+                    const contractedPath = p
+                        .split(path.sep)
+                        .slice(options.serverRoot.split(path.sep).length)
+                        .join(path.sep);
+                    paths.push(contractedPath);
+                }
+                else {
+                    paths.push(p);
+                }
+            }
+        }
+        options.path = paths;
+    }
+    // enable markdown if someone passes a flag/glob right at it
+    if (options.markdown === undefined) {
+        for (const p of options.path) {
+            if (path.extname(p).toLowerCase() === '.md') {
+                options.markdown = true;
+            }
+        }
+    }
+    // Figure out which directory should be used as the root for the web server,
+    // and how that impacts the path to the file for the first request.
+    if (!options.serverRoot && !isUrlType) {
+        // if the serverRoot wasn't defined, and there are multiple paths, just
+        // use process.cwd().
+        if (options.path.length > 1) {
+            options.serverRoot = process.cwd();
+        }
+        else {
+            // if there's a single path, try to be smart and figure it out
+            const s = await stat(options.path[0]);
+            options.serverRoot = options.path[0];
+            if (s.isFile()) {
+                const pathParts = options.path[0].split(path.sep);
+                options.path = [path.sep + pathParts[pathParts.length - 1]];
+                options.serverRoot =
+                    pathParts.slice(0, pathParts.length - 1).join(path.sep) || '.';
+            }
+            else {
+                options.serverRoot = options.path[0];
+                options.path = '/';
+            }
+        }
+    }
+    return options;
+}
+exports.processOptions = processOptions;
+//# sourceMappingURL=options.js.map
+
+/***/ }),
+
+/***/ 5624:
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Queue = void 0;
+const p_queue_1 = __webpack_require__(8983);
+class Queue {
+    constructor(options) {
+        this.activeTimers = 0;
+        this.q = new p_queue_1.default({
+            concurrency: options.concurrency,
+        });
+    }
+    add(fn, options) {
+        if (options === null || options === void 0 ? void 0 : options.delay) {
+            setTimeout(() => {
+                this.q.add(fn);
+                this.activeTimers--;
+            }, options.delay);
+            this.activeTimers++;
+        }
+        else {
+            this.q.add(fn);
+        }
+    }
+    async onIdle() {
+        await this.q.onIdle();
+        await new Promise(resolve => {
+            if (this.activeTimers === 0) {
+                resolve();
+                return;
+            }
+            const timer = setInterval(async () => {
+                if (this.activeTimers === 0) {
+                    await this.q.onIdle();
+                    clearInterval(timer);
+                    resolve();
+                    return;
+                }
+            }, 500);
+        });
+    }
+}
+exports.Queue = Queue;
+//# sourceMappingURL=queue.js.map
 
 /***/ }),
 
