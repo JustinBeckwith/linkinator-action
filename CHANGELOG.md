@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.1.3...v1.2.0) (2021-01-10)
+
+
+### Features
+
+* add directoryListing flag ([#43](https://www.github.com/JustinBeckwith/linkinator-action/issues/43)) ([0224d59](https://www.github.com/JustinBeckwith/linkinator-action/commit/0224d5963c60d07eb5fd6bce503ef9f1b9fe3184))
+
 ### [1.1.3](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.1.2...v1.1.3) (2021-01-06)
 
 
