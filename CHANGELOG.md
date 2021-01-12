@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.3.1](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.3.0...v1.3.1) (2021-01-12)
+
+
+### Bug Fixes
+
+* **deps:** update dependency linkinator to v2.13.1 ([#48](https://www.github.com/JustinBeckwith/linkinator-action/issues/48)) ([a4a929f](https://www.github.com/JustinBeckwith/linkinator-action/commit/a4a929f7160ae57842b70258da53a0529be6d34c))
+
 ## [1.3.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.2.0...v1.3.0) (2021-01-12)
 
 
