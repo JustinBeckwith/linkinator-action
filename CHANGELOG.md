@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.2.0...v1.3.0) (2021-01-12)
+
+
+### Features
+
+* expose retry feature in linkinator ([#45](https://www.github.com/JustinBeckwith/linkinator-action/issues/45)) ([99741ff](https://www.github.com/JustinBeckwith/linkinator-action/commit/99741fffc8d6c583c4cf4dcae249864f850ceab7))
+
 ## [1.2.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.1.3...v1.2.0) (2021-01-10)
 
 
