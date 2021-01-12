@@ -38,6 +38,10 @@ inputs:
     description: 'Include an automatic directory index file when linking to a directory.'
     default: 'false'
     required: false
+  retry:
+    description: 'Automatically retry requests that return HTTP 429 responses and include a "retry-after" header.'
+    default: 'false'
+    required: false
 outputs:
   results:
     description: 'The full results of the scan.'
