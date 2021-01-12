@@ -32883,7 +32883,8 @@ async function main () {
       timeout: Number(qq('timeout', 0)),
       markdown: Boolean(qq('markdown', true)),
       serverRoot: qq('serverRoot', undefined),
-      directoryListing: Boolean(qq('directoryListing', false))
+      directoryListing: Boolean(qq('directoryListing', false)),
+      retry: Boolean(qq('retry', false))
     };
 
     const checker = new LinkChecker()
