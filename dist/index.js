@@ -15763,6 +15763,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.check = exports.LinkChecker = exports.headers = exports.LinkState = void 0;
 const events_1 = __nccwpck_require__(8614);
 const url_1 = __nccwpck_require__(8835);
+const path = __nccwpck_require__(5622);
 const gaxios_1 = __nccwpck_require__(9555);
 const queue_1 = __nccwpck_require__(5624);
 const links_1 = __nccwpck_require__(4024);
@@ -15809,6 +15810,7 @@ class LinkChecker extends events_1.EventEmitter {
                 }
                 options.path[i] = `http://localhost:${port}/${options.path[i]}`;
             }
+            options.staticHttpServerHost = `http://localhost:${port}/`;
         }
         if (process.env.LINKINATOR_DEBUG) {
             console.log(options);
@@ -15858,10 +15860,10 @@ class LinkChecker extends events_1.EventEmitter {
         const proto = opts.url.protocol;
         if (proto !== 'http:' && proto !== 'https:') {
             const r = {
-                url: opts.url.href,
+                url: mapUrl(opts.url.href, opts.checkOptions),
                 status: 0,
                 state: LinkState.SKIPPED,
-                parent: opts.parent,
+                parent: mapUrl(opts.parent, opts.checkOptions),
             };
             opts.results.push(r);
             this.emit('link', r);
@@ -15871,7 +15873,7 @@ class LinkChecker extends events_1.EventEmitter {
         if (typeof opts.checkOptions.linksToSkip === 'function' &&
             (await opts.checkOptions.linksToSkip(opts.url.href))) {
             const result = {
-                url: opts.url.href,
+                url: mapUrl(opts.url.href, opts.checkOptions),
                 state: LinkState.SKIPPED,
                 parent: opts.parent,
             };
@@ -15888,9 +15890,9 @@ class LinkChecker extends events_1.EventEmitter {
                 .filter(match => !!match);
             if (skips.length > 0) {
                 const result = {
-                    url: opts.url.href,
+                    url: mapUrl(opts.url.href, opts.checkOptions),
                     state: LinkState.SKIPPED,
-                    parent: opts.parent,
+                    parent: mapUrl(opts.parent, opts.checkOptions),
                 };
                 opts.results.push(result);
                 this.emit('link', result);
@@ -15983,10 +15985,10 @@ class LinkChecker extends events_1.EventEmitter {
             failures.push(res);
         }
         const result = {
-            url: opts.url.href,
+            url: mapUrl(opts.url.href, opts.checkOptions),
             status,
             state,
-            parent: opts.parent,
+            parent: mapUrl(opts.parent, opts.checkOptions),
             failureDetails: failures,
         };
         opts.results.push(result);
@@ -16000,10 +16002,10 @@ class LinkChecker extends events_1.EventEmitter {
                 // creating a new URL obj, treat it as a broken link.
                 if (!result.url) {
                     const r = {
-                        url: result.link,
+                        url: mapUrl(result.link, opts.checkOptions),
                         status: 0,
                         state: LinkState.BROKEN,
-                        parent: opts.url.href,
+                        parent: mapUrl(opts.url.href, opts.checkOptions),
                     };
                     opts.results.push(r);
                     this.emit('link', r);
@@ -16112,6 +16114,33 @@ function isHtml(response) {
     const contentType = response.headers['content-type'] || '';
     return (!!contentType.match(/text\/html/g) ||
         !!contentType.match(/application\/xhtml\+xml/g));
+}
+/**
+ * When running a local static web server for the user, translate paths from
+ * the Url generated back to something closer to a local filesystem path.
+ * @example
+ *    http://localhost:0000/test/route/README.md => test/route/README.md
+ * @param url The url that was checked
+ * @param options Original CheckOptions passed into the client
+ */
+function mapUrl(url, options) {
+    var _a, _b;
+    if (!url) {
+        return url;
+    }
+    let newUrl = url;
+    // trim the starting http://localhost:0000 if we stood up a local static server
+    if (((_a = options === null || options === void 0 ? void 0 : options.staticHttpServerHost) === null || _a === void 0 ? void 0 : _a.length) && (url === null || url === void 0 ? void 0 : url.startsWith(options.staticHttpServerHost))) {
+        newUrl = url.slice(options.staticHttpServerHost.length);
+        // add the full filesystem path back if we trimmed it
+        if ((_b = options === null || options === void 0 ? void 0 : options.syntheticServerRoot) === null || _b === void 0 ? void 0 : _b.length) {
+            newUrl = path.join(options.syntheticServerRoot, newUrl);
+        }
+        if (newUrl === '') {
+            newUrl = `.${path.sep}`;
+        }
+    }
+    return newUrl;
 }
 //# sourceMappingURL=index.js.map
 
@@ -16351,6 +16380,7 @@ async function processOptions(opts) {
                 options.serverRoot = options.path[0];
                 options.path = '/';
             }
+            options.syntheticServerRoot = options.serverRoot;
         }
     }
     return options;
