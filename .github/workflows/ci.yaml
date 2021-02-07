@@ -12,7 +12,6 @@ jobs:
       - uses: ./
         with:
           skip: "CHANGELOG.md"
-          verbosity: "ERROR"
       - uses: ./
         with:
           paths: test/fixtures/test.md
