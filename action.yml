@@ -42,6 +42,10 @@ inputs:
     description: 'Automatically retry requests that return HTTP 429 responses and include a "retry-after" header.'
     default: 'false'
     required: false
+  verbosity:
+    description: 'Override the default verbosity for this command. Available options are "DEBUG", "INFO", "WARNING", "ERROR", and "NONE".  Defaults to "WARNING".'
+    default: 'WARNING'
+    required: false
 outputs:
   results:
     description: 'The full results of the scan.'

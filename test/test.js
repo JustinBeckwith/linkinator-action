@@ -98,4 +98,22 @@ describe('linkinator action', () => {
     assert.ok(setOutputStub.called);
     scope.done();
   });
+
+  it('should respect verbosity set to ERROR', async () => {
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
+    inputStub.withArgs('verbosity').returns('ERROR');
+    inputStub.returns('');
+    const setOutputStub = sinon.stub(core, 'setOutput');
+    sinon.stub(core, 'setFailed').callsFake(output => {
+      throw new Error(output);
+    });
+    const scope = nock('http://fake.local')
+      .head('/').reply(200)
+      .head('/fake').reply(200);
+    await action();
+    assert.ok(inputStub.called);
+    assert.ok(setOutputStub.called);
+    scope.done();
+  });
 });
