@@ -32,10 +32,10 @@ async function main () {
             logger.error(`[${link.status.toString()}] ${link.url}`);
             break;
           case LinkState.OK:
-            logger.info(`[${link.status.toString()}] ${link.url}`);
+            logger.warn(`[${link.status.toString()}] ${link.url}`);
             break;
           case LinkState.SKIPPED:
-            logger.debug(`[SKP] ${link.url}`);
+            logger.info(`[SKP] ${link.url}`);
             break;
         }
       });
@@ -45,10 +45,15 @@ async function main () {
     core.info(`Scanned total of ${nonSkippedLinks.length} links!`);
     if (!result.passed) {
       const brokenLinks = result.links.filter(x => x.state === 'BROKEN');
+      let failureOutput = `Detected ${brokenLinks.length} broken links.`;
       for (const link of brokenLinks) {
+        // Only show the rollup of failures if verbosity is hiding ok links.
+        // If all you see is erros, getting a list of errors twice don't look right.
+        if (verbosity < LogLevel.ERROR) {
+          failureOutput += `\n [${link.status}] ${link.url}`;
+        }
         logger.debug(JSON.stringify(link.failureDetails, null, 2));
       }
-      const failureOutput = `Detected ${brokenLinks.length} broken links.`;
       core.setFailed(failureOutput);
     }
     core.setOutput('results', result);
@@ -97,7 +102,7 @@ class Logger {
 
   debug (message) {
     if (this.level <= LogLevel.DEBUG) {
-      core.debug(message);
+      core.info(message);
     }
   }
 
@@ -109,7 +114,7 @@ class Logger {
 
   warn (message) {
     if (this.level <= LogLevel.WARNING) {
-      core.log(message);
+      core.info(message);
     }
   }
 

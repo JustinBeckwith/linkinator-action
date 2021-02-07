@@ -20,6 +20,7 @@ describe('linkinator action', () => {
     inputStub.returns('');
     const setOutputStub = sinon.stub(core, 'setOutput');
     const setFailedStub = sinon.stub(core, 'setFailed');
+    const infoStub = sinon.stub(core, 'info');
     const scope = nock('http://fake.local')
       .head('/').reply(200)
       .head('/fake').reply(200);
@@ -27,6 +28,7 @@ describe('linkinator action', () => {
     assert.ok(inputStub.called);
     assert.ok(setOutputStub.called);
     assert.ok(setFailedStub.notCalled);
+    assert.ok(infoStub.called);
     scope.done();
   });
 
@@ -35,6 +37,8 @@ describe('linkinator action', () => {
     inputStub.withArgs('paths').returns('test/fixtures/test.md');
     inputStub.returns('');
     sinon.stub(core, 'setOutput');
+    const errorStub = sinon.stub(core, 'error');
+    const infoStub = sinon.stub(core, 'info');
     const setFailedStub = sinon.stub(core, 'setFailed');
     const scope = nock('http://fake.local')
       .head('/').reply(404)
@@ -42,6 +46,8 @@ describe('linkinator action', () => {
     await action();
     assert.ok(inputStub.called);
     assert.ok(setFailedStub.called);
+    assert.ok(infoStub.called);
+    assert.ok(errorStub.called);
     scope.done();
   });
 
@@ -59,12 +65,14 @@ describe('linkinator action', () => {
     inputStub.withArgs('paths').returns('test/fixtures/test.md');
     inputStub.withArgs('linksToSkip').returns('http://fake.local,http://fake.local/fake');
     inputStub.returns('');
+    const infoStub = sinon.stub(core, 'info');
     const setOutputStub = sinon.stub(core, 'setOutput');
     sinon.stub(core, 'setFailed').callsFake(output => {
       throw new Error(output);
     });
     await action();
     assert.ok(inputStub.called);
+    assert.ok(infoStub.called);
     assert.ok(setOutputStub.called);
   });
 
@@ -73,12 +81,14 @@ describe('linkinator action', () => {
     inputStub.withArgs('paths').returns('test/fixtures/test.md');
     inputStub.withArgs('skip').returns('http://fake.local http://fake.local/fake');
     inputStub.returns('');
+    const infoStub = sinon.stub(core, 'info');
     const setOutputStub = sinon.stub(core, 'setOutput');
     sinon.stub(core, 'setFailed').callsFake(output => {
       throw new Error(output);
     });
     await action();
     assert.ok(inputStub.called);
+    assert.ok(infoStub.called);
     assert.ok(setOutputStub.called);
   });
 
@@ -87,6 +97,7 @@ describe('linkinator action', () => {
     inputStub.withArgs('paths').returns('test/fixtures/test.md, test/fixtures/test2.md');
     inputStub.returns('');
     const setOutputStub = sinon.stub(core, 'setOutput');
+    const infoStub = sinon.stub(core, 'info');
     sinon.stub(core, 'setFailed').callsFake(output => {
       throw new Error(output);
     });
@@ -95,6 +106,7 @@ describe('linkinator action', () => {
       .head('/fake').reply(200);
     await action();
     assert.ok(inputStub.called);
+    assert.ok(infoStub.called);
     assert.ok(setOutputStub.called);
     scope.done();
   });
@@ -105,15 +117,77 @@ describe('linkinator action', () => {
     inputStub.withArgs('verbosity').returns('ERROR');
     inputStub.returns('');
     const setOutputStub = sinon.stub(core, 'setOutput');
-    sinon.stub(core, 'setFailed').callsFake(output => {
-      throw new Error(output);
-    });
+    const setFailedStub = sinon.stub(core, 'setFailed');
+    const infoStub = sinon.stub(core, 'info');
+    const errorStub = sinon.stub(core, 'error');
     const scope = nock('http://fake.local')
       .head('/').reply(200)
-      .head('/fake').reply(200);
+      .head('/fake').reply(500);
     await action();
     assert.ok(inputStub.called);
-    assert.ok(setOutputStub.called);
+    assert.ok(setOutputStub.calledOnce);
+    assert.ok(setFailedStub.calledOnce);
+
+    // ensure `Scanning ...` is always shown
+    assert.strictEqual(infoStub.getCalls().filter(x => {
+      return x.args[0].startsWith('Scanning ');
+    }).length, 1);
+
+    // Ensure total count is always shown
+    assert.strictEqual(setFailedStub.getCalls().filter(x => {
+      return x.args[0] === 'Detected 1 broken links.';
+    }).length, 1);
+
+    // Ensure `core.error` is called for each failure
+    assert.ok(errorStub.calledOnce);
+    const expected = '[500] http://fake.local/fake';
+    assert.strictEqual(errorStub.getCalls()[0].args[0], expected);
+
+    scope.done();
+  });
+
+  it('should show skipped links when verbosity is INFO', async () => {
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
+    inputStub.withArgs('skip').returns('http://fake.local/fake');
+    inputStub.withArgs('verbosity').returns('INFO');
+    inputStub.returns('');
+    const setOutputStub = sinon.stub(core, 'setOutput');
+    const setFailedStub = sinon.stub(core, 'setFailed');
+    const infoStub = sinon.stub(core, 'info');
+    const errorStub = sinon.stub(core, 'error');
+    const scope = nock('http://fake.local').head('/').reply(200);
+    await action();
+    assert.ok(inputStub.called);
+    assert.ok(setOutputStub.calledOnce);
+    assert.ok(setFailedStub.notCalled);
+    assert.ok(errorStub.notCalled);
+    assert.strictEqual(infoStub.getCalls().length, 5);
+    const expected = '[SKP] http://fake.local/fake';
+    assert.ok(infoStub.getCalls().find(x => x.args[0] === expected));
+    scope.done();
+  });
+
+  it('should show failure details when verbosity is DEBUG', async () => {
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
+    inputStub.withArgs('verbosity').returns('DEBUG');
+    inputStub.returns('');
+    const setOutputStub = sinon.stub(core, 'setOutput');
+    const setFailedStub = sinon.stub(core, 'setFailed');
+    const infoStub = sinon.stub(core, 'info');
+    const errorStub = sinon.stub(core, 'error');
+    const scope = nock('http://fake.local')
+      .head('/').reply(200)
+      .head('/fake').reply(500);
+    await action();
+    assert.ok(inputStub.called);
+    assert.ok(infoStub.called);
+    assert.ok(setOutputStub.calledOnce);
+    assert.ok(setFailedStub.calledOnce);
+    assert.ok(errorStub.calledOnce);
+    const expected = /No match for request/;
+    assert.ok(infoStub.getCalls().find(x => expected.test(x.args[0])));
     scope.done();
   });
 });
