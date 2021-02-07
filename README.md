@@ -1,5 +1,5 @@
 # linkinator-action
-> A happy little GitHub Action that checks your README.md and other markdown for broken links.  Uses [linkinator](https://github.com/JustinBeckwith/linkinator) under the hood.
+> A happy little GitHub Action that checks your README.md and other markdown for broken links.  Uses [linkinator](https://github.com/JustinBeckwith/linkinator-is-sobroke) under the hood.
 
 ## Example usage
 With no arguments, this will scan your `README.md` in the root of the GitHub repository:
