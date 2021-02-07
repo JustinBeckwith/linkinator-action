@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.3.1...v1.4.0) (2021-02-07)
+
+
+### Features
+
+* add verbosity flag ([#54](https://www.github.com/JustinBeckwith/linkinator-action/issues/54)) ([4de01e9](https://www.github.com/JustinBeckwith/linkinator-action/commit/4de01e94c48ec91299d37d7119a9496271cc056c))
+
+
+### Bug Fixes
+
+* **deps:** upgrade to linkinator 2.13.3 ([#51](https://www.github.com/JustinBeckwith/linkinator-action/issues/51)) ([e42ba53](https://www.github.com/JustinBeckwith/linkinator-action/commit/e42ba53be79acb572820b2c4347fd1492751a29e))
+
 ### [1.3.1](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.3.0...v1.3.1) (2021-01-12)
 
 
