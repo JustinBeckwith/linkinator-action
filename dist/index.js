@@ -29122,6 +29122,9 @@ async function main () {
       retry: Boolean(qq('retry', false))
     };
 
+    const verbosity = getVerbosity();
+    const logger = new Logger(verbosity);
+
     const checker = new LinkChecker()
       .on('pagestart', url => {
         core.info(`Scanning ${url}`);
@@ -29129,13 +29132,13 @@ async function main () {
       .on('link', link => {
         switch (link.state) {
           case LinkState.BROKEN:
-            core.error(`[${link.status.toString()}] ${link.url}`);
+            logger.error(`[${link.status.toString()}] ${link.url}`);
             break;
           case LinkState.OK:
-            core.info(`[${link.status.toString()}] ${link.url}`);
+            logger.warn(`[${link.status.toString()}] ${link.url}`);
             break;
           case LinkState.SKIPPED:
-            core.debug(`[SKP] ${link.url}`);
+            logger.info(`[SKP] ${link.url}`);
             break;
         }
       });
@@ -29147,8 +29150,12 @@ async function main () {
       const brokenLinks = result.links.filter(x => x.state === 'BROKEN');
       let failureOutput = `Detected ${brokenLinks.length} broken links.`;
       for (const link of brokenLinks) {
-        failureOutput += `\n [${link.status}] ${link.url}`;
-        core.debug(JSON.stringify(link.failureDetails, null, 2));
+        // Only show the rollup of failures if verbosity is hiding ok links.
+        // If all you see is erros, getting a list of errors twice don't look right.
+        if (verbosity < LogLevel.ERROR) {
+          failureOutput += `\n [${link.status}] ${link.url}`;
+        }
+        logger.debug(JSON.stringify(link.failureDetails, null, 2));
       }
       core.setFailed(failureOutput);
     }
@@ -29166,6 +29173,59 @@ function qq (propName, defaultValue) {
 
 function parseList (input) {
   return input.split(/[\s,]+/).map(x => x.trim()).filter(x => !!x);
+}
+
+function getVerbosity () {
+  const verbosity = qq('verbosity', 'WARNING').toUpperCase();
+  const options = Object.keys(LogLevel);
+  if (!options.includes(verbosity)) {
+    throw new Error(
+      `Invalid flag: VERBOSITY must be one of [${options.join(',')}]`
+    );
+  }
+  return LogLevel[verbosity];
+}
+
+// This was lifted from linkinator. We use `core.` instead of `console.`
+// which made re-use more work than it was worth.
+// https://github.com/JustinBeckwith/linkinator/blob/main/src/logger.ts
+
+const LogLevel = {
+  DEBUG: 0,
+  INFO: 1,
+  WARNING: 2,
+  ERROR: 3,
+  NONE: 4
+};
+
+class Logger {
+  constructor (level) {
+    this.level = level;
+  }
+
+  debug (message) {
+    if (this.level <= LogLevel.DEBUG) {
+      core.info(message);
+    }
+  }
+
+  info (message) {
+    if (this.level <= LogLevel.INFO) {
+      core.info(message);
+    }
+  }
+
+  warn (message) {
+    if (this.level <= LogLevel.WARNING) {
+      core.info(message);
+    }
+  }
+
+  error (message) {
+    if (this.level <= LogLevel.ERROR) {
+      core.error(message);
+    }
+  }
 }
 
 if (require.main === require.cache[eval('__filename')]) {

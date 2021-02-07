@@ -51,6 +51,7 @@ jobs:
 - `serverRoot` - When scanning a locally directory, customize the location on disk where the server is started.  Defaults to the root of your GitHub repository.
 - `directoryListing` - Include an automatic directory index file when linking to a directory. Defaults to `false`.
 - `retry` - Automatically retry requests that return HTTP 429 responses and include a `retry-after` header.
+- `verbosity` - Override the default verbosity for this command. Available options are "DEBUG", "INFO", "WARNING", "ERROR", and "NONE".  Defaults to "WARNING".
 
 ## Outputs
 - `results` - An object with the results of the run.
