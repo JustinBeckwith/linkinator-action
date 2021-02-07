@@ -24,7 +24,7 @@ async function main () {
 
     const checker = new LinkChecker()
       .on('pagestart', url => {
-        logger.error(`Scanning ${url}`);
+        core.info(`Scanning ${url}`);
       })
       .on('link', link => {
         switch (link.state) {
@@ -42,14 +42,13 @@ async function main () {
 
     const result = await checker.check(options);
     const nonSkippedLinks = result.links.filter(x => x.state !== 'SKIPPED');
-    logger.error(`Scanned total of ${nonSkippedLinks.length} links!`);
+    core.info(`Scanned total of ${nonSkippedLinks.length} links!`);
     if (!result.passed) {
       const brokenLinks = result.links.filter(x => x.state === 'BROKEN');
-      let failureOutput = `Detected ${brokenLinks.length} broken links.`;
       for (const link of brokenLinks) {
-        failureOutput += `\n [${link.status}] ${link.url}`;
         logger.debug(JSON.stringify(link.failureDetails, null, 2));
       }
+      const failureOutput = `Detected ${brokenLinks.length} broken links.`;
       core.setFailed(failureOutput);
     }
     core.setOutput('results', result);
