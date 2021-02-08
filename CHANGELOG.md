@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.4.0...v1.5.0) (2021-02-08)
+
+
+### Features
+
+* add support for config files ([#56](https://www.github.com/JustinBeckwith/linkinator-action/issues/56)) ([ab9ea17](https://www.github.com/JustinBeckwith/linkinator-action/commit/ab9ea17fa65324856b77a4a4d52a4f1b52abd60d))
+
 ## [1.4.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.3.1...v1.4.0) (2021-02-07)
 
 
