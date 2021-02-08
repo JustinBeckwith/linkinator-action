@@ -85,7 +85,10 @@ function parseString (input) {
 
 function parseList (input) {
   const value = core.getInput(input) || undefined;
-  return value?.split(/[\s,]+/).map(x => x.trim()).filter(x => !!x);
+  if (value) {
+    return value.split(/[\s,]+/).map(x => x.trim()).filter(x => !!x);
+  }
+  return undefined;
 }
 
 function parseNumber (input) {
