@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.5.1](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.5.0...v1.5.1) (2021-02-08)
+
+
+### Bug Fixes
+
+* do not log for each scan start ([#58](https://www.github.com/JustinBeckwith/linkinator-action/issues/58)) ([a56ed85](https://www.github.com/JustinBeckwith/linkinator-action/commit/a56ed85fb623e4ffe22bfdece8f1445a9aeb5e25))
+
 ## [1.5.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.4.0...v1.5.0) (2021-02-08)
 
 
