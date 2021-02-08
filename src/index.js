@@ -40,9 +40,6 @@ async function main () {
     const logger = new Logger(verbosity);
 
     const checker = new LinkChecker()
-      .on('pagestart', url => {
-        core.info(`Scanning ${url}`);
-      })
       .on('link', link => {
         switch (link.state) {
           case LinkState.BROKEN:
@@ -57,6 +54,7 @@ async function main () {
         }
       });
 
+    core.info(`Scanning ${config.path.join(', ')}`);
     const result = await checker.check(config);
     const nonSkippedLinks = result.links.filter(x => x.state !== 'SKIPPED');
     core.info(`Scanned total of ${nonSkippedLinks.length} links!`);
