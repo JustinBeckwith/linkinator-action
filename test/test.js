@@ -3,7 +3,7 @@ const core = require('@actions/core');
 const { describe, it, afterEach } = require('mocha');
 const sinon = require('sinon');
 const nock = require('nock');
-const action = require('../src/index.js');
+const { action, getFullConfig } = require('../src/index.js');
 
 nock.disableNetConnect();
 nock.enableNetConnect('localhost');
@@ -189,5 +189,32 @@ describe('linkinator action', () => {
     const expected = /No match for request/;
     assert.ok(infoStub.getCalls().find(x => expected.test(x.args[0])));
     scope.done();
+  });
+
+  it('should respect local config with overrides', async () => {
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
+    inputStub.withArgs('config').returns('test/fixtures/config.json');
+    inputStub.withArgs('concurrency').returns('100');
+    inputStub.withArgs('recurse').returns('true');
+    inputStub.withArgs('verbosity').returns('ERROR');
+    inputStub.returns('');
+    const config = await getFullConfig();
+    assert.strictEqual(config.retry, true);
+    assert.strictEqual(config.verbosity, 'ERROR');
+    assert.strictEqual(config.concurrency, 100);
+    assert.strictEqual(config.markdown, true);
+    assert.strictEqual(config.recurse, true);
+    assert.ok(inputStub.called);
+  });
+
+  it('should throw for invalid verbosity', async () => {
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
+    inputStub.withArgs('verbosity').returns('NOT_VALID');
+    inputStub.returns('');
+    const setFailedStub = sinon.stub(core, 'setFailed');
+    await action();
+    assert.ok(/must be one of/.test(setFailedStub.getCalls()[0].args[0]));
   });
 });
