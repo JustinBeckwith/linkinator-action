@@ -46,6 +46,9 @@ inputs:
     description: 'Override the default verbosity for this command. Available options are "DEBUG", "INFO", "WARNING", "ERROR", and "NONE".  Defaults to "WARNING".'
     default: 'WARNING'
     required: false
+  config:
+    description: Path to a config file to use. Looks for `linkinator.config.json` by default. Options defined via the GitHub Action config will take precedence.
+    required: false
 outputs:
   results:
     description: 'The full results of the scan.'

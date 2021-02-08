@@ -1,25 +1,42 @@
 const core = require('@actions/core');
 const { LinkChecker, LinkState } = require('linkinator');
+const { getConfig } = require('linkinator/build/src/config');
+
+async function getFullConfig () {
+  const defaults = {
+    path: '*.md',
+    concurrency: 100,
+    recurse: false,
+    skip: [],
+    timeout: 0,
+    markdown: true,
+    retry: false,
+    verbosity: 'WARNING'
+  };
+  // The options returned from `getInput` appear to always be strings.
+  const actionsConfig = {
+    path: parseList('paths'),
+    concurrency: parseNumber('concurrency'),
+    recurse: parseBoolean('recurse'),
+    skip: parseList('linksToSkip') || parseList('skip'),
+    timeout: parseNumber('timeout'),
+    markdown: parseBoolean('markdown'),
+    serverRoot: parseString('serverRoot'),
+    directoryListing: parseBoolean('directoryListing'),
+    retry: parseBoolean('retry'),
+    verbosity: parseString('verbosity'),
+    config: parseString('config')
+  };
+  const fileConfig = await getConfig(actionsConfig);
+  const config = Object.assign({}, defaults, fileConfig);
+  config.linksToSkip = config.skip;
+  return config;
+}
 
 async function main () {
   try {
-    // The options returned from `getInput` appear to always be strings.
-    const options = {
-      path: parseList(qq('paths', '*.md')),
-      concurrency: Number(qq('concurrency', 100)),
-      recurse: Boolean(qq('recurse', false)),
-      linksToSkip: parseList(
-        core.getInput('linksToSkip') ||
-        core.getInput('skip' ||
-        '')),
-      timeout: Number(qq('timeout', 0)),
-      markdown: Boolean(qq('markdown', true)),
-      serverRoot: qq('serverRoot', undefined),
-      directoryListing: Boolean(qq('directoryListing', false)),
-      retry: Boolean(qq('retry', false))
-    };
-
-    const verbosity = getVerbosity();
+    const config = await getFullConfig();
+    const verbosity = getVerbosity(config.verbosity);
     const logger = new Logger(verbosity);
 
     const checker = new LinkChecker()
@@ -40,7 +57,7 @@ async function main () {
         }
       });
 
-    const result = await checker.check(options);
+    const result = await checker.check(config);
     const nonSkippedLinks = result.links.filter(x => x.state !== 'SKIPPED');
     core.info(`Scanned total of ${nonSkippedLinks.length} links!`);
     if (!result.passed) {
@@ -62,18 +79,36 @@ async function main () {
   }
 }
 
-function qq (propName, defaultValue) {
-  return core.getInput(propName) === ''
-    ? defaultValue
-    : core.getInput(propName);
+function parseString (input) {
+  return core.getInput(input) || undefined;
 }
 
 function parseList (input) {
-  return input.split(/[\s,]+/).map(x => x.trim()).filter(x => !!x);
+  const value = core.getInput(input) || undefined;
+  if (value) {
+    return value.split(/[\s,]+/).map(x => x.trim()).filter(x => !!x);
+  }
+  return undefined;
 }
 
-function getVerbosity () {
-  const verbosity = qq('verbosity', 'WARNING').toUpperCase();
+function parseNumber (input) {
+  const value = core.getInput(input) || undefined;
+  if (value) {
+    return Number(value);
+  }
+  return undefined;
+}
+
+function parseBoolean (input) {
+  const value = core.getInput(input) || undefined;
+  if (value) {
+    return Boolean(value);
+  }
+  return undefined;
+}
+
+function getVerbosity (verbosity) {
+  verbosity = verbosity.toUpperCase();
   const options = Object.keys(LogLevel);
   if (!options.includes(verbosity)) {
     throw new Error(
@@ -129,5 +164,6 @@ if (require.main === module) {
   main();
 } else {
   // export for tests
-  module.exports = main;
+  module.exports.action = main;
+  module.exports.getFullConfig = getFullConfig;
 }

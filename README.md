@@ -43,6 +43,7 @@ jobs:
 
 ## Inputs
 - `paths` - Paths to scan for 404s. Defaults to `*.md`.
+- `config` - Path to a config file to use. Looks for `linkinator.config.json` by default. Options defined via the GitHub Action config will take precedence.
 - `concurrency` - The number of connections to make simultaneously. Defaults to `100`.
 - `recurse` - Recursively follow links on the same root domain.  Defaults to `false`.
 - `linksToSkip` - List of urls in regexy form to not include in the check. (`skip` is also accepted)
