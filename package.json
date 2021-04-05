@@ -30,7 +30,7 @@
     "linkinator": "2.13.6"
   },
   "devDependencies": {
-    "@vercel/ncc": "^0.27.0",
+    "@vercel/ncc": "^0.28.0",
     "c8": "^7.3.5",
     "mocha": "^8.2.1",
     "nock": "^13.0.5",
