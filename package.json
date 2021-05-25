@@ -35,7 +35,7 @@
     "mocha": "^8.2.1",
     "nock": "^13.0.5",
     "semistandard": "^16.0.0",
-    "sinon": "^10.0.0"
+    "sinon": "^11.0.0"
   },
   "semistandard": {
     "ignore": [
