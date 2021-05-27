@@ -29200,7 +29200,7 @@ async function main () {
         // Only show the rollup of failures if verbosity is hiding ok links.
         // If all you see is erros, getting a list of errors twice don't look right.
         if (verbosity < LogLevel.ERROR) {
-          failureOutput += `\n [${link.status}] ${link.url}`;
+          failureOutput += `\n [${link.status}] url: ${link.url}, parent: ${link.parent}`;
         }
         logger.debug(JSON.stringify(link.failureDetails, null, 2));
       }
