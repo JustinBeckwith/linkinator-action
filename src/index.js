@@ -27,6 +27,16 @@ async function getFullConfig () {
     verbosity: parseString('verbosity'),
     config: parseString('config')
   };
+  const urlRewriteSearch = parseString('urlRewriteSearch');
+  const urlRewriteReplace = parseString('urlRewriteReplace');
+  if (urlRewriteSearch && urlRewriteReplace) {
+    actionsConfig.urlRewriteExpressions = [
+      {
+        pattern: urlRewriteSearch,
+        replacement: urlRewriteReplace
+      }
+    ];
+  }
   const fileConfig = await getConfig(actionsConfig);
   const config = Object.assign({}, defaults, fileConfig);
   config.linksToSkip = config.skip;
