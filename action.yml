@@ -49,6 +49,12 @@ inputs:
   config:
     description: Path to a config file to use. Looks for `linkinator.config.json` by default. Options defined via the GitHub Action config will take precedence.
     required: false
+  urlRewriteSearch:
+    description: Pattern to search for in urls.  Must be used with `urlRewriteReplace`.
+    required: false
+  urlRewriteReplace:
+    description: Expression used to replace search content.  Must be used with `urlRewriteSearch`.
+    required: false
 outputs:
   results:
     description: 'The full results of the scan.'

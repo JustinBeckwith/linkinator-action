@@ -919,14 +919,14 @@ function expand(str, isTop) {
 
 /***/ }),
 
-/***/ 39:
+/***/ 8513:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.groupSelectors = exports.getDocumentRoot = void 0;
-var positionals_1 = __nccwpck_require__(5595);
+var positionals_1 = __nccwpck_require__(9159);
 function getDocumentRoot(node) {
     while (node.parent)
         node = node.parent;
@@ -952,7 +952,7 @@ exports.groupSelectors = groupSelectors;
 
 /***/ }),
 
-/***/ 4225:
+/***/ 5409:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
@@ -987,20 +987,23 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __spreadArrays = (this && this.__spreadArrays) || function () {
-    for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
-    for (var r = Array(s), k = 0, i = 0; i < il; i++)
-        for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
-            r[k] = a[j];
-    return r;
+var __spreadArray = (this && this.__spreadArray) || function (to, from) {
+    for (var i = 0, il = from.length, j = to.length; i < il; i++, j++)
+        to[j] = from[i];
+    return to;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.select = exports.filter = void 0;
+exports.select = exports.filter = exports.some = exports.is = exports.aliases = exports.pseudos = exports.filters = void 0;
 var css_what_1 = __nccwpck_require__(9218);
 var css_select_1 = __nccwpck_require__(4508);
 var DomUtils = __importStar(__nccwpck_require__(1754));
-var helpers_1 = __nccwpck_require__(39);
-var positionals_1 = __nccwpck_require__(5595);
+var helpers_1 = __nccwpck_require__(8513);
+var positionals_1 = __nccwpck_require__(9159);
+// Re-export pseudo extension points
+var css_select_2 = __nccwpck_require__(4508);
+Object.defineProperty(exports, "filters", ({ enumerable: true, get: function () { return css_select_2.filters; } }));
+Object.defineProperty(exports, "pseudos", ({ enumerable: true, get: function () { return css_select_2.pseudos; } }));
+Object.defineProperty(exports, "aliases", ({ enumerable: true, get: function () { return css_select_2.aliases; } }));
 /** Used to indicate a scope should be filtered. Might be ignored when filtering. */
 var SCOPE_PSEUDO = {
     type: "pseudo",
@@ -1010,6 +1013,20 @@ var SCOPE_PSEUDO = {
 /** Used for actually filtering for scope. */
 var CUSTOM_SCOPE_PSEUDO = __assign({}, SCOPE_PSEUDO);
 var UNIVERSAL_SELECTOR = { type: "universal", namespace: null };
+function is(element, selector, options) {
+    if (options === void 0) { options = {}; }
+    return some([element], selector, options);
+}
+exports.is = is;
+function some(elements, selector, options) {
+    if (options === void 0) { options = {}; }
+    if (typeof selector === "function")
+        return elements.some(selector);
+    var _a = helpers_1.groupSelectors(css_what_1.parse(selector, options)), plain = _a[0], filtered = _a[1];
+    return ((plain.length > 0 && elements.some(css_select_1._compileToken(plain, options))) ||
+        filtered.some(function (sel) { return filterBySelector(sel, elements, options).length > 0; }));
+}
+exports.some = some;
 function filterByPosition(filter, elems, data, options) {
     var num = typeof data === "string" ? parseInt(data, 10) : NaN;
     switch (filter) {
@@ -1038,15 +1055,13 @@ function filterByPosition(filter, elems, data, options) {
 }
 function filter(selector, elements, options) {
     if (options === void 0) { options = {}; }
-    return DomUtils.uniqueSort(filterParsed(css_what_1.parse(selector, options), elements, options));
+    return filterParsed(css_what_1.parse(selector, options), elements, options);
 }
 exports.filter = filter;
 /**
  * Filter a set of elements by a selector.
  *
- * If there are multiple selectors, this can
- * return elements multiple times; use `uniqueSort`
- * to eliminate duplicates afterwards.
+ * Will return elements in the original order.
  *
  * @param selector Selector to filter by.
  * @param elements Elements to filter.
@@ -1056,33 +1071,70 @@ function filterParsed(selector, elements, options) {
     if (elements.length === 0)
         return [];
     var _a = helpers_1.groupSelectors(selector), plainSelectors = _a[0], filteredSelectors = _a[1];
-    var results = [];
+    var found;
     if (plainSelectors.length) {
-        results.push(filterElements(elements, plainSelectors, options));
-    }
-    for (var _i = 0, filteredSelectors_1 = filteredSelectors; _i < filteredSelectors_1.length; _i++) {
-        var filteredSelector = filteredSelectors_1[_i];
-        if (filteredSelector.some(css_what_1.isTraversal)) {
-            /*
-             * Get one root node, run selector with the scope
-             * set to all of our nodes.
-             */
-            var root = helpers_1.getDocumentRoot(elements[0]);
-            var sel = __spreadArrays(filteredSelector, [CUSTOM_SCOPE_PSEUDO]);
-            results.push(findFilterElements(root, sel, options, true, elements));
+        var filtered = filterElements(elements, plainSelectors, options);
+        // If there are no filters, just return
+        if (filteredSelectors.length === 0) {
+            return filtered;
         }
-        else {
-            // Performance optimization: If we don't have to traverse, just filter set.
-            results.push(findFilterElements(elements, filteredSelector, options, false));
+        // Otherwise, we have to do some filtering
+        if (filtered.length) {
+            found = new Set(filtered);
         }
     }
-    if (results.length === 1) {
-        return results[0];
+    for (var i = 0; i < filteredSelectors.length && (found === null || found === void 0 ? void 0 : found.size) !== elements.length; i++) {
+        var filteredSelector = filteredSelectors[i];
+        var missing = found
+            ? elements.filter(function (e) { return DomUtils.isTag(e) && !found.has(e); })
+            : elements;
+        if (missing.length === 0)
+            break;
+        var filtered = filterBySelector(filteredSelector, elements, options);
+        if (filtered.length) {
+            if (!found) {
+                /*
+                 * If we haven't found anything before the last selector,
+                 * just return what we found now.
+                 */
+                if (i === filteredSelectors.length - 1) {
+                    return filtered;
+                }
+                found = new Set(filtered);
+            }
+            else {
+                filtered.forEach(function (el) { return found.add(el); });
+            }
+        }
     }
-    return results.reduce(function (arr, rest) { return __spreadArrays(arr, rest); }, []);
+    return typeof found !== "undefined"
+        ? (found.size === elements.length
+            ? elements
+            : // Filter elements to preserve order
+                elements.filter(function (el) {
+                    return found.has(el);
+                }))
+        : [];
+}
+function filterBySelector(selector, elements, options) {
+    var _a;
+    if (selector.some(css_what_1.isTraversal)) {
+        /*
+         * Get root node, run selector with the scope
+         * set to all of our nodes.
+         */
+        var root = (_a = options.root) !== null && _a !== void 0 ? _a : helpers_1.getDocumentRoot(elements[0]);
+        var sel = __spreadArray(__spreadArray([], selector), [CUSTOM_SCOPE_PSEUDO]);
+        return findFilterElements(root, sel, options, true, elements);
+    }
+    // Performance optimization: If we don't have to traverse, just filter set.
+    return findFilterElements(elements, selector, options, false);
 }
 function select(selector, root, options) {
     if (options === void 0) { options = {}; }
+    if (typeof selector === "function") {
+        return find(root, selector);
+    }
     var _a = helpers_1.groupSelectors(css_what_1.parse(selector, options)), plain = _a[0], filtered = _a[1];
     var results = filtered.map(function (sel) {
         return findFilterElements(root, sel, options, true);
@@ -1096,7 +1148,7 @@ function select(selector, root, options) {
         return results[0];
     }
     // Sort results, filtering for duplicates
-    return DomUtils.uniqueSort(results.reduce(function (a, b) { return __spreadArrays(a, b); }));
+    return DomUtils.uniqueSort(results.reduce(function (a, b) { return __spreadArray(__spreadArray([], a), b); }));
 }
 exports.select = select;
 // Traversals that are treated differently in css-select.
@@ -1139,13 +1191,10 @@ function findFilterElements(root, selector, options, queryForSelector, scopeCont
     var elemsNoLimit = sub.length === 0 && !Array.isArray(root)
         ? DomUtils.getChildren(root).filter(DomUtils.isTag)
         : sub.length === 0 || (sub.length === 1 && sub[0] === SCOPE_PSEUDO)
-            ? Array.isArray(root)
-                ? root
-                : [root]
+            ? (Array.isArray(root) ? root : [root]).filter(DomUtils.isTag)
             : queryForSelector || sub.some(css_what_1.isTraversal)
                 ? findElements(root, [sub], subOpts, limit)
-                : // We know that this cannot be reached with root not being an array.
-                    filterElements(root, [sub], subOpts);
+                : filterElements(root, [sub], subOpts);
     var elems = elemsNoLimit.slice(0, limit);
     var result = filterByPosition(filter.name, elems, filter.data, options);
     if (result.length === 0 || selector.length === filterIndex + 1) {
@@ -1188,21 +1237,26 @@ function findFilterElements(root, selector, options, queryForSelector, scopeCont
 function findElements(root, sel, options, limit) {
     if (limit === 0)
         return [];
-    // @ts-expect-error TS seems to mess up the type here ¯\_(ツ)_/¯
     var query = css_select_1._compileToken(sel, options, root);
+    return find(root, query, limit);
+}
+function find(root, query, limit) {
+    if (limit === void 0) { limit = Infinity; }
     var elems = css_select_1.prepareContext(root, DomUtils, query.shouldTestNextSiblings);
     return DomUtils.find(function (node) { return DomUtils.isTag(node) && query(node); }, elems, true, limit);
 }
 function filterElements(elements, sel, options) {
-    // @ts-expect-error TS seems to mess up the type here ¯\_(ツ)_/¯
+    var els = (Array.isArray(elements) ? elements : [elements]).filter(DomUtils.isTag);
+    if (els.length === 0)
+        return els;
     var query = css_select_1._compileToken(sel, options);
-    return elements.filter(query);
+    return els.filter(query);
 }
 
 
 /***/ }),
 
-/***/ 5595:
+/***/ 9159:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -1252,766 +1306,601 @@ exports.getLimit = getLimit;
 
 /***/ }),
 
-/***/ 3094:
-/***/ ((module, exports, __nccwpck_require__) => {
-
-/**
- * @module cheerio
- * @borrows static.load as load
- * @borrows static.html as html
- * @borrows static.text as text
- * @borrows static.xml as xml
- */
-var staticMethods = __nccwpck_require__(2);
-
-exports = module.exports = __nccwpck_require__(641);
-
-/**
- * An identifier describing the version of Cheerio which has been executed.
- *
- * @type {string}
- */
-exports.version = __nccwpck_require__(1526).version;
-
-exports.load = staticMethods.load;
-exports.html = staticMethods.html;
-exports.text = staticMethods.text;
-exports.xml = staticMethods.xml;
-
-/**
- * In order to promote consistency with the jQuery library, users are
- * encouraged to instead use the static method of the same name.
- *
- * @example
- *     var $ = cheerio.load('<div><p></p></div>');
- *     $.contains($('div').get(0), $('p').get(0)); // true
- *     $.contains($('p').get(0), $('div').get(0)); // false
- *
- * @function
- * @returns {boolean}
- * @deprecated
- */
-exports.contains = staticMethods.contains;
-
-/**
- * In order to promote consistency with the jQuery library, users are
- * encouraged to instead use the static method of the same name.
- *
- * @example
- *     var $ = cheerio.load('');
- *     $.merge([1, 2], [3, 4]) // [1, 2, 3, 4]
- *
- * @function
- * @deprecated
- */
-exports.merge = staticMethods.merge;
-
-/**
- * In order to promote consistency with the jQuery library, users are
- * encouraged to instead use the static method of the same name as it is
- * defined on the "loaded" Cheerio factory function.
- *
- * @example
- *     var $ = cheerio.load('');
- *     $.parseHTML('<b>markup</b>');
- *
- * @function
- * @deprecated See {@link static/parseHTML}.
- */
-exports.parseHTML = staticMethods.parseHTML;
-
-/**
- * Users seeking to access the top-level element of a parsed document should
- * instead use the `root` static method of a "loaded" Cheerio function.
- *
- * @example
- *     var $ = cheerio.load('');
- *     $.root();
- *
- * @function
- * @deprecated
- */
-exports.root = staticMethods.root;
-
-
-/***/ }),
-
 /***/ 8596:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
 
 /**
  * Methods for getting and modifying attributes.
  *
  * @module cheerio/attributes
  */
-
-var text = __nccwpck_require__(2).text;
-var utils = __nccwpck_require__(1183);
-var isTag = utils.isTag;
-var domEach = utils.domEach;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.toggleClass = exports.removeClass = exports.addClass = exports.hasClass = exports.removeAttr = exports.val = exports.data = exports.prop = exports.attr = void 0;
+var static_1 = __nccwpck_require__(2);
+var utils_1 = __nccwpck_require__(1183);
 var hasOwn = Object.prototype.hasOwnProperty;
-var camelCase = utils.camelCase;
-var cssCase = utils.cssCase;
 var rspace = /\s+/;
 var dataAttrPrefix = 'data-';
-// Lookup table for coercing string data-* attributes to their corresponding
-// JavaScript primitives
+/*
+ * Lookup table for coercing string data-* attributes to their corresponding
+ * JavaScript primitives
+ */
 var primitives = {
-  null: null,
-  true: true,
-  false: false,
+    null: null,
+    true: true,
+    false: false,
 };
 // Attributes that are booleans
 var rboolean = /^(?:autofocus|autoplay|async|checked|controls|defer|disabled|hidden|loop|multiple|open|readonly|required|scoped|selected)$/i;
 // Matches strings that look like JSON objects or arrays
-var rbrace = /^(?:\{[\w\W]*\}|\[[\w\W]*\])$/;
-
-var getAttr = function (elem, name) {
-  if (!elem || !isTag(elem)) return;
-
-  if (!elem.attribs) {
-    elem.attribs = {};
-  }
-
-  // Return the entire attribs object if no attribute specified
-  if (!name) {
-    return elem.attribs;
-  }
-
-  if (hasOwn.call(elem.attribs, name)) {
-    // Get the (decoded) attribute
-    return rboolean.test(name) ? name : elem.attribs[name];
-  }
-
-  // Mimic the DOM and return text content as value for `option's`
-  if (elem.name === 'option' && name === 'value') {
-    return text(elem.children);
-  }
-
-  // Mimic DOM with default value for radios/checkboxes
-  if (
-    elem.name === 'input' &&
-    (elem.attribs.type === 'radio' || elem.attribs.type === 'checkbox') &&
-    name === 'value'
-  ) {
-    return 'on';
-  }
-};
-
-var setAttr = function (el, name, value) {
-  if (value === null) {
-    removeAttribute(el, name);
-  } else {
-    el.attribs[name] = value + '';
-  }
-};
-
+var rbrace = /^{[^]*}$|^\[[^]*]$/;
+function getAttr(elem, name, xmlMode) {
+    var _a;
+    if (!elem || !utils_1.isTag(elem))
+        return undefined;
+    (_a = elem.attribs) !== null && _a !== void 0 ? _a : (elem.attribs = {});
+    // Return the entire attribs object if no attribute specified
+    if (!name) {
+        return elem.attribs;
+    }
+    if (hasOwn.call(elem.attribs, name)) {
+        // Get the (decoded) attribute
+        return !xmlMode && rboolean.test(name) ? name : elem.attribs[name];
+    }
+    // Mimic the DOM and return text content as value for `option's`
+    if (elem.name === 'option' && name === 'value') {
+        return static_1.text(elem.children);
+    }
+    // Mimic DOM with default value for radios/checkboxes
+    if (elem.name === 'input' &&
+        (elem.attribs.type === 'radio' || elem.attribs.type === 'checkbox') &&
+        name === 'value') {
+        return 'on';
+    }
+    return undefined;
+}
 /**
- * Method for getting and setting attributes. Gets the attribute value for only
- * the first element in the matched set. If you set an attribute's value to
- * `null`, you remove that attribute. You may also pass a `map` and `function`
- * like jQuery.
+ * Sets the value of an attribute. The attribute will be deleted if the value is `null`.
  *
- * @example
- *
- * $('ul').attr('id')
- * //=> fruits
- *
- * $('.apple').attr('id', 'favorite').html()
- * //=> <li class="apple" id="favorite">Apple</li>
- *
- * @param {string} name - Name of the attribute.
- * @param {string} [value] - If specified sets the value of the attribute.
- *
- * @see {@link http://api.jquery.com/attr/}
+ * @private
+ * @param el - The element to set the attribute on.
+ * @param name - The attribute's name.
+ * @param value - The attribute's value.
  */
-exports.attr = function (name, value) {
-  // Set the value (with attr map support)
-  if (typeof name === 'object' || value !== undefined) {
-    if (typeof value === 'function') {
-      return domEach(this, function (i, el) {
-        setAttr(el, name, value.call(el, i, el.attribs[name]));
-      });
+function setAttr(el, name, value) {
+    if (value === null) {
+        removeAttribute(el, name);
     }
-    return domEach(this, function (i, el) {
-      if (!isTag(el)) return;
-
-      if (typeof name === 'object') {
-        Object.keys(name).forEach(function (objName) {
-          var objValue = name[objName];
-          setAttr(el, objName, objValue);
-        });
-      } else {
-        setAttr(el, name, value);
-      }
-    });
-  }
-
-  return getAttr(this[0], name);
-};
-
-var getProp = function (el, name) {
-  if (!el || !isTag(el)) return;
-
-  return name in el
-    ? el[name]
-    : rboolean.test(name)
-    ? getAttr(el, name) !== undefined
-    : getAttr(el, name);
-};
-
-var setProp = function (el, name, value) {
-  el[name] = rboolean.test(name) ? !!value : value;
-};
-
-/**
- * Method for getting and setting properties. Gets the property value for only
- * the first element in the matched set.
- *
- * @example
- *
- * $('input[type="checkbox"]').prop('checked')
- * //=> false
- *
- * $('input[type="checkbox"]').prop('checked', true).val()
- * //=> ok
- *
- * @param {string} name - Name of the property.
- * @param {any} [value] - If specified set the property to this.
- *
- * @see {@link http://api.jquery.com/prop/}
- */
-exports.prop = function (name, value) {
-  var i = 0;
-  var property;
-
-  if (typeof name === 'string' && value === undefined) {
-    switch (name) {
-      case 'style':
-        property = this.css();
-
-        Object.keys(property).forEach(function (p) {
-          property[i++] = p;
-        });
-
-        property.length = i;
-
-        break;
-      case 'tagName':
-      case 'nodeName':
-        property = this[0].name.toUpperCase();
-        break;
-      case 'outerHTML':
-        property = this.clone().wrap('<container />').parent().html();
-        break;
-      default:
-        property = getProp(this[0], name);
+    else {
+        el.attribs[name] = "" + value;
     }
-
-    return property;
-  }
-
-  if (typeof name === 'object' || value !== undefined) {
-    if (typeof value === 'function') {
-      return domEach(this, function (j, el) {
-        setProp(el, name, value.call(el, j, getProp(el, name)));
-      });
-    }
-
-    return domEach(this, function (__, el) {
-      if (!isTag(el)) return;
-
-      if (typeof name === 'object') {
-        Object.keys(name).forEach(function (key) {
-          var val = name[key];
-          setProp(el, key, val);
-        });
-      } else {
-        setProp(el, name, value);
-      }
-    });
-  }
-};
-
-var setData = function (el, name, value) {
-  if (!el.data) {
-    el.data = {};
-  }
-
-  if (typeof name === 'object') return Object.assign(el.data, name);
-  if (typeof name === 'string' && value !== undefined) {
-    el.data[name] = value;
-  }
-};
-
-// Read the specified attribute from the equivalent HTML5 `data-*` attribute,
-// and (if present) cache the value in the node's internal data store. If no
-// attribute name is specified, read *all* HTML5 `data-*` attributes in this
-// manner.
-var readData = function (el, name) {
-  var readAll = arguments.length === 1;
-  var domNames;
-  var domName;
-  var jsNames;
-  var jsName;
-  var value;
-  var idx;
-  var length;
-
-  if (readAll) {
-    domNames = Object.keys(el.attribs).filter(function (attrName) {
-      return attrName.slice(0, dataAttrPrefix.length) === dataAttrPrefix;
-    });
-    jsNames = domNames.map(function (_domName) {
-      return camelCase(_domName.slice(dataAttrPrefix.length));
-    });
-  } else {
-    domNames = [dataAttrPrefix + cssCase(name)];
-    jsNames = [name];
-  }
-
-  for (idx = 0, length = domNames.length; idx < length; ++idx) {
-    domName = domNames[idx];
-    jsName = jsNames[idx];
-    if (hasOwn.call(el.attribs, domName) && !hasOwn.call(el.data, jsName)) {
-      value = el.attribs[domName];
-
-      if (hasOwn.call(primitives, value)) {
-        value = primitives[value];
-      } else if (value === String(Number(value))) {
-        value = Number(value);
-      } else if (rbrace.test(value)) {
-        try {
-          value = JSON.parse(value);
-        } catch (e) {
-          /* ignore */
+}
+function attr(name, value) {
+    // Set the value (with attr map support)
+    if (typeof name === 'object' || value !== undefined) {
+        if (typeof value === 'function') {
+            if (typeof name !== 'string') {
+                {
+                    throw new Error('Bad combination of arguments.');
+                }
+            }
+            return utils_1.domEach(this, function (el, i) {
+                if (utils_1.isTag(el))
+                    setAttr(el, name, value.call(el, i, el.attribs[name]));
+            });
         }
-      }
-
-      el.data[jsName] = value;
+        return utils_1.domEach(this, function (el) {
+            if (!utils_1.isTag(el))
+                return;
+            if (typeof name === 'object') {
+                Object.keys(name).forEach(function (objName) {
+                    var objValue = name[objName];
+                    setAttr(el, objName, objValue);
+                });
+            }
+            else {
+                setAttr(el, name, value);
+            }
+        });
     }
-  }
-
-  return readAll ? el.data : value;
-};
-
+    return arguments.length > 1
+        ? this
+        : getAttr(this[0], name, this.options.xmlMode);
+}
+exports.attr = attr;
 /**
- * Method for getting and setting data attributes. Gets or sets the data
- * attribute value for only the first element in the matched set.
+ * Gets a node's prop.
  *
- * @example
- *
- * $('<div data-apple-color="red"></div>').data()
- * //=> { appleColor: 'red' }
- *
- * $('<div data-apple-color="red"></div>').data('apple-color')
- * //=> 'red'
- *
- * const apple = $('.apple').data('kind', 'mac')
- * apple.data('kind')
- * //=> 'mac'
- *
- * @param {string} name - Name of the attribute.
- * @param {any} [value] - If specified new value.
- *
- * @see {@link http://api.jquery.com/data/}
+ * @private
+ * @category Attributes
+ * @param el - Elenent to get the prop of.
+ * @param name - Name of the prop.
+ * @returns The prop's value.
  */
-exports.data = function (name, value) {
-  var elem = this[0];
-
-  if (!elem || !isTag(elem)) return;
-
-  if (!elem.data) {
-    elem.data = {};
-  }
-
-  // Return the entire data object if no data specified
-  if (!name) {
-    return readData(elem);
-  }
-
-  // Set the value (with attr map support)
-  if (typeof name === 'object' || value !== undefined) {
-    domEach(this, function (i, el) {
-      setData(el, name, value);
-    });
-    return this;
-  } else if (hasOwn.call(elem.data, name)) {
-    return elem.data[name];
-  }
-
-  return readData(elem, name);
-};
-
+function getProp(el, name, xmlMode) {
+    if (!el || !utils_1.isTag(el))
+        return;
+    return name in el
+        ? // @ts-expect-error TS doesn't like us accessing the value directly here.
+            el[name]
+        : !xmlMode && rboolean.test(name)
+            ? getAttr(el, name, false) !== undefined
+            : getAttr(el, name, xmlMode);
+}
 /**
- * Method for getting and setting the value of input, select, and textarea.
- * Note: Support for `map`, and `function` has not been added yet.
+ * Sets the value of a prop.
  *
- * @example
- *
- * $('input[type="text"]').val()
- * //=> input_text
- *
- * $('input[type="text"]').val('test').html()
- * //=> <input type="text" value="test"/>
- *
- * @param {string} [value] - If specified new value.
- *
- * @see {@link http://api.jquery.com/val/}
+ * @private
+ * @param el - The element to set the prop on.
+ * @param name - The prop's name.
+ * @param value - The prop's value.
  */
-exports.val = function (value) {
-  var querying = arguments.length === 0;
-  var element = this[0];
-
-  if (!element) return;
-
-  switch (element.name) {
-    case 'textarea':
-      return this.text(value);
-    case 'input':
-      if (this.attr('type') === 'radio') {
-        if (querying) {
-          return this.attr('value');
+function setProp(el, name, value, xmlMode) {
+    if (name in el) {
+        // @ts-expect-error Overriding value
+        el[name] = value;
+    }
+    else {
+        setAttr(el, name, !xmlMode && rboolean.test(name) ? (value ? '' : null) : "" + value);
+    }
+}
+function prop(name, value) {
+    var _this = this;
+    if (typeof name === 'string' && value === undefined) {
+        switch (name) {
+            case 'style': {
+                var property_1 = this.css();
+                var keys = Object.keys(property_1);
+                keys.forEach(function (p, i) {
+                    property_1[i] = p;
+                });
+                property_1.length = keys.length;
+                return property_1;
+            }
+            case 'tagName':
+            case 'nodeName': {
+                var el = this[0];
+                return utils_1.isTag(el) ? el.name.toUpperCase() : undefined;
+            }
+            case 'outerHTML':
+                return this.clone().wrap('<container />').parent().html();
+            case 'innerHTML':
+                return this.html();
+            default:
+                return getProp(this[0], name, this.options.xmlMode);
         }
-
-        this.attr('value', value);
+    }
+    if (typeof name === 'object' || value !== undefined) {
+        if (typeof value === 'function') {
+            if (typeof name === 'object') {
+                throw new Error('Bad combination of arguments.');
+            }
+            return utils_1.domEach(this, function (el, i) {
+                if (utils_1.isTag(el))
+                    setProp(el, name, value.call(el, i, getProp(el, name, _this.options.xmlMode)), _this.options.xmlMode);
+            });
+        }
+        return utils_1.domEach(this, function (el) {
+            if (!utils_1.isTag(el))
+                return;
+            if (typeof name === 'object') {
+                Object.keys(name).forEach(function (key) {
+                    var val = name[key];
+                    setProp(el, key, val, _this.options.xmlMode);
+                });
+            }
+            else {
+                setProp(el, name, value, _this.options.xmlMode);
+            }
+        });
+    }
+    return undefined;
+}
+exports.prop = prop;
+/**
+ * Sets the value of a data attribute.
+ *
+ * @private
+ * @param el - The element to set the data attribute on.
+ * @param name - The data attribute's name.
+ * @param value - The data attribute's value.
+ */
+function setData(el, name, value) {
+    var _a;
+    var elem = el;
+    (_a = elem.data) !== null && _a !== void 0 ? _a : (elem.data = {});
+    if (typeof name === 'object')
+        Object.assign(elem.data, name);
+    else if (typeof name === 'string' && value !== undefined) {
+        elem.data[name] = value;
+    }
+}
+/**
+ * Read the specified attribute from the equivalent HTML5 `data-*` attribute,
+ * and (if present) cache the value in the node's internal data store. If no
+ * attribute name is specified, read *all* HTML5 `data-*` attributes in this manner.
+ *
+ * @private
+ * @category Attributes
+ * @param el - Elenent to get the data attribute of.
+ * @param name - Name of the data attribute.
+ * @returns The data attribute's value, or a map with all of the data attribute.
+ */
+function readData(el, name) {
+    var domNames;
+    var jsNames;
+    var value;
+    if (name == null) {
+        domNames = Object.keys(el.attribs).filter(function (attrName) {
+            return attrName.startsWith(dataAttrPrefix);
+        });
+        jsNames = domNames.map(function (domName) {
+            return utils_1.camelCase(domName.slice(dataAttrPrefix.length));
+        });
+    }
+    else {
+        domNames = [dataAttrPrefix + utils_1.cssCase(name)];
+        jsNames = [name];
+    }
+    for (var idx = 0; idx < domNames.length; ++idx) {
+        var domName = domNames[idx];
+        var jsName = jsNames[idx];
+        if (hasOwn.call(el.attribs, domName) &&
+            !hasOwn.call(el.data, jsName)) {
+            value = el.attribs[domName];
+            if (hasOwn.call(primitives, value)) {
+                value = primitives[value];
+            }
+            else if (value === String(Number(value))) {
+                value = Number(value);
+            }
+            else if (rbrace.test(value)) {
+                try {
+                    value = JSON.parse(value);
+                }
+                catch (e) {
+                    /* Ignore */
+                }
+            }
+            el.data[jsName] = value;
+        }
+    }
+    return name == null ? el.data : value;
+}
+function data(name, value) {
+    var _a;
+    var elem = this[0];
+    if (!elem || !utils_1.isTag(elem))
+        return;
+    var dataEl = elem;
+    (_a = dataEl.data) !== null && _a !== void 0 ? _a : (dataEl.data = {});
+    // Return the entire data object if no data specified
+    if (!name) {
+        return readData(dataEl);
+    }
+    // Set the value (with attr map support)
+    if (typeof name === 'object' || value !== undefined) {
+        utils_1.domEach(this, function (el) {
+            if (utils_1.isTag(el))
+                if (typeof name === 'object')
+                    setData(el, name);
+                else
+                    setData(el, name, value);
+        });
         return this;
-      }
-
-      return this.attr('value', value);
-    case 'select':
-      var option = this.find('option:selected');
-      var returnValue;
-      if (option === undefined) return undefined;
-      if (!querying) {
-        if (!hasOwn.call(this.attr(), 'multiple') && typeof value == 'object') {
-          return this;
+    }
+    if (hasOwn.call(dataEl.data, name)) {
+        return dataEl.data[name];
+    }
+    return readData(dataEl, name);
+}
+exports.data = data;
+function val(value) {
+    var querying = arguments.length === 0;
+    var element = this[0];
+    if (!element || !utils_1.isTag(element))
+        return querying ? undefined : this;
+    switch (element.name) {
+        case 'textarea':
+            return this.text(value);
+        case 'select': {
+            var option = this.find('option:selected');
+            if (!querying) {
+                if (this.attr('multiple') == null && typeof value === 'object') {
+                    return this;
+                }
+                this.find('option').removeAttr('selected');
+                var values = typeof value !== 'object' ? [value] : value;
+                for (var i = 0; i < values.length; i++) {
+                    this.find("option[value=\"" + values[i] + "\"]").attr('selected', '');
+                }
+                return this;
+            }
+            return this.attr('multiple')
+                ? option.toArray().map(function (el) { return static_1.text(el.children); })
+                : option.attr('value');
         }
-        if (typeof value != 'object') {
-          value = [value];
-        }
-        this.find('option').removeAttr('selected');
-        for (var i = 0; i < value.length; i++) {
-          this.find('option[value="' + value[i] + '"]').attr('selected', '');
-        }
-        return this;
-      }
-      returnValue = option.attr('value');
-      if (hasOwn.call(this.attr(), 'multiple')) {
-        returnValue = [];
-        domEach(option, function (__, el) {
-          returnValue.push(getAttr(el, 'value'));
-        });
-      }
-      return returnValue;
-    case 'option':
-      if (!querying) {
-        this.attr('value', value);
-        return this;
-      }
-      return this.attr('value');
-  }
-};
-
+        case 'input':
+        case 'option':
+            return querying
+                ? this.attr('value')
+                : this.attr('value', value);
+    }
+    return undefined;
+}
+exports.val = val;
 /**
  * Remove an attribute.
  *
  * @private
- * @param {node} elem - Node to remove attribute from.
- * @param {string} name - Name of the attribute to remove.
+ * @param elem - Node to remove attribute from.
+ * @param name - Name of the attribute to remove.
  */
-var removeAttribute = function (elem, name) {
-  if (!elem.attribs || !hasOwn.call(elem.attribs, name)) return;
-
-  delete elem.attribs[name];
-};
-
+function removeAttribute(elem, name) {
+    if (!elem.attribs || !hasOwn.call(elem.attribs, name))
+        return;
+    delete elem.attribs[name];
+}
 /**
- * Splits a space-separated list of names to individual
- * names.
+ * Splits a space-separated list of names to individual names.
  *
- * @param {string} names -  Names to split.
- * @returns {string[]} - Split names.
+ * @category Attributes
+ * @param names - Names to split.
+ * @returns - Split names.
  */
-var splitNames = function (names) {
-  return names ? names.trim().split(rspace) : [];
-};
-
+function splitNames(names) {
+    return names ? names.trim().split(rspace) : [];
+}
 /**
  * Method for removing attributes by `name`.
  *
+ * @category Attributes
  * @example
  *
- * $('.pear').removeAttr('class').html()
+ * ```js
+ * $('.pear').removeAttr('class').html();
  * //=> <li>Pear</li>
  *
- * $('.apple').attr('id', 'favorite')
- * $('.apple').removeAttr('id class').html()
+ * $('.apple').attr('id', 'favorite');
+ * $('.apple').removeAttr('id class').html();
  * //=> <li>Apple</li>
+ * ```
  *
- * @param {string} name - Name of the attribute.
- *
- * @see {@link http://api.jquery.com/removeAttr/}
+ * @param name - Name of the attribute.
+ * @returns The instance itself.
+ * @see {@link https://api.jquery.com/removeAttr/}
  */
-exports.removeAttr = function (name) {
-  var attrNames = splitNames(name);
-
-  for (var i = 0; i < attrNames.length; i++) {
-    domEach(this, function (j, elem) {
-      removeAttribute(elem, attrNames[i]);
-    });
-  }
-
-  return this;
-};
-
+function removeAttr(name) {
+    var attrNames = splitNames(name);
+    var _loop_1 = function (i) {
+        utils_1.domEach(this_1, function (elem) {
+            if (utils_1.isTag(elem))
+                removeAttribute(elem, attrNames[i]);
+        });
+    };
+    var this_1 = this;
+    for (var i = 0; i < attrNames.length; i++) {
+        _loop_1(i);
+    }
+    return this;
+}
+exports.removeAttr = removeAttr;
 /**
  * Check to see if *any* of the matched elements have the given `className`.
  *
+ * @category Attributes
  * @example
  *
- * $('.pear').hasClass('pear')
+ * ```js
+ * $('.pear').hasClass('pear');
  * //=> true
  *
- * $('apple').hasClass('fruit')
+ * $('apple').hasClass('fruit');
  * //=> false
  *
- * $('li').hasClass('pear')
+ * $('li').hasClass('pear');
  * //=> true
+ * ```
  *
- * @param {string} className - Name of the class.
- *
- * @see {@link http://api.jquery.com/hasClass/}
+ * @param className - Name of the class.
+ * @returns Indicates if an element has the given `className`.
+ * @see {@link https://api.jquery.com/hasClass/}
  */
-exports.hasClass = function (className) {
-  return this.toArray().some(function (elem) {
-    var attrs = elem.attribs;
-    var clazz = attrs && attrs['class'];
-    var idx = -1;
-    var end;
-
-    if (clazz && className.length) {
-      while ((idx = clazz.indexOf(className, idx + 1)) > -1) {
-        end = idx + className.length;
-
-        if (
-          (idx === 0 || rspace.test(clazz[idx - 1])) &&
-          (end === clazz.length || rspace.test(clazz[end]))
-        ) {
-          return true;
+function hasClass(className) {
+    return this.toArray().some(function (elem) {
+        var clazz = utils_1.isTag(elem) && elem.attribs.class;
+        var idx = -1;
+        if (clazz && className.length) {
+            while ((idx = clazz.indexOf(className, idx + 1)) > -1) {
+                var end = idx + className.length;
+                if ((idx === 0 || rspace.test(clazz[idx - 1])) &&
+                    (end === clazz.length || rspace.test(clazz[end]))) {
+                    return true;
+                }
+            }
         }
-      }
-    }
-  });
-};
-
+        return false;
+    });
+}
+exports.hasClass = hasClass;
 /**
- * Adds class(es) to all of the matched elements. Also accepts a `function`
- * like jQuery.
+ * Adds class(es) to all of the matched elements. Also accepts a `function`.
  *
+ * @category Attributes
  * @example
  *
- * $('.pear').addClass('fruit').html()
+ * ```js
+ * $('.pear').addClass('fruit').html();
  * //=> <li class="pear fruit">Pear</li>
  *
- * $('.apple').addClass('fruit red').html()
+ * $('.apple').addClass('fruit red').html();
  * //=> <li class="apple fruit red">Apple</li>
+ * ```
  *
- * @param {string} value - Name of new class.
- *
- * @see {@link http://api.jquery.com/addClass/}
+ * @param value - Name of new class.
+ * @returns The instance itself.
+ * @see {@link https://api.jquery.com/addClass/}
  */
-exports.addClass = function (value) {
-  // Support functions
-  if (typeof value === 'function') {
-    return domEach(this, function (i, el) {
-      var className = el.attribs['class'] || '';
-      exports.addClass.call([el], value.call(el, i, className));
-    });
-  }
-
-  // Return if no value or not a string or function
-  if (!value || typeof value !== 'string') return this;
-
-  var classNames = value.split(rspace);
-  var numElements = this.length;
-
-  for (var i = 0; i < numElements; i++) {
-    // If selected element isn't a tag, move on
-    if (!isTag(this[i])) continue;
-
-    // If we don't already have classes
-    var className = getAttr(this[i], 'class');
-    var numClasses;
-    var setClass;
-
-    if (!className) {
-      setAttr(this[i], 'class', classNames.join(' ').trim());
-    } else {
-      setClass = ' ' + className + ' ';
-      numClasses = classNames.length;
-
-      // Check if class already exists
-      for (var j = 0; j < numClasses; j++) {
-        var appendClass = classNames[j] + ' ';
-        if (setClass.indexOf(' ' + appendClass) < 0) setClass += appendClass;
-      }
-
-      setAttr(this[i], 'class', setClass.trim());
+function addClass(value) {
+    // Support functions
+    if (typeof value === 'function') {
+        return utils_1.domEach(this, function (el, i) {
+            if (utils_1.isTag(el)) {
+                var className = el.attribs.class || '';
+                addClass.call([el], value.call(el, i, className));
+            }
+        });
     }
-  }
-
-  return this;
-};
-
+    // Return if no value or not a string or function
+    if (!value || typeof value !== 'string')
+        return this;
+    var classNames = value.split(rspace);
+    var numElements = this.length;
+    for (var i = 0; i < numElements; i++) {
+        var el = this[i];
+        // If selected element isn't a tag, move on
+        if (!utils_1.isTag(el))
+            continue;
+        // If we don't already have classes — always set xmlMode to false here, as it doesn't matter for classes
+        var className = getAttr(el, 'class', false);
+        if (!className) {
+            setAttr(el, 'class', classNames.join(' ').trim());
+        }
+        else {
+            var setClass = " " + className + " ";
+            // Check if class already exists
+            for (var j = 0; j < classNames.length; j++) {
+                var appendClass = classNames[j] + " ";
+                if (!setClass.includes(" " + appendClass))
+                    setClass += appendClass;
+            }
+            setAttr(el, 'class', setClass.trim());
+        }
+    }
+    return this;
+}
+exports.addClass = addClass;
 /**
- * Removes one or more space-separated classes from the selected elements. If
- * no `className` is defined, all classes will be removed. Also accepts a
- * `function` like jQuery.
+ * Removes one or more space-separated classes from the selected elements. If no
+ * `className` is defined, all classes will be removed. Also accepts a `function`.
  *
+ * @category Attributes
  * @example
  *
- * $('.pear').removeClass('pear').html()
+ * ```js
+ * $('.pear').removeClass('pear').html();
  * //=> <li class="">Pear</li>
  *
- * $('.apple').addClass('red').removeClass().html()
+ * $('.apple').addClass('red').removeClass().html();
  * //=> <li class="">Apple</li>
- * @param {string} value - Name of the class.
+ * ```
  *
- * @see {@link http://api.jquery.com/removeClass/}
+ * @param name - Name of the class. If not specified, removes all elements.
+ * @returns The instance itself.
+ * @see {@link https://api.jquery.com/removeClass/}
  */
-exports.removeClass = function (value) {
-  var classes;
-  var numClasses;
-  var removeAll;
-
-  // Handle if value is a function
-  if (typeof value === 'function') {
-    return domEach(this, function (i, el) {
-      exports.removeClass.call(
-        [el],
-        value.call(el, i, el.attribs['class'] || '')
-      );
-    });
-  }
-
-  classes = splitNames(value);
-  numClasses = classes.length;
-  removeAll = arguments.length === 0;
-
-  return domEach(this, function (i, el) {
-    if (!isTag(el)) return;
-
-    if (removeAll) {
-      // Short circuit the remove all case as this is the nice one
-      el.attribs.class = '';
-    } else {
-      var elClasses = splitNames(el.attribs.class);
-      var index;
-      var changed;
-
-      for (var j = 0; j < numClasses; j++) {
-        index = elClasses.indexOf(classes[j]);
-
-        if (index >= 0) {
-          elClasses.splice(index, 1);
-          changed = true;
-
-          // We have to do another pass to ensure that there are not duplicate
-          // classes listed
-          j--;
-        }
-      }
-      if (changed) {
-        el.attribs.class = elClasses.join(' ');
-      }
+function removeClass(name) {
+    // Handle if value is a function
+    if (typeof name === 'function') {
+        return utils_1.domEach(this, function (el, i) {
+            if (utils_1.isTag(el))
+                removeClass.call([el], name.call(el, i, el.attribs.class || ''));
+        });
     }
-  });
-};
-
+    var classes = splitNames(name);
+    var numClasses = classes.length;
+    var removeAll = arguments.length === 0;
+    return utils_1.domEach(this, function (el) {
+        if (!utils_1.isTag(el))
+            return;
+        if (removeAll) {
+            // Short circuit the remove all case as this is the nice one
+            el.attribs.class = '';
+        }
+        else {
+            var elClasses = splitNames(el.attribs.class);
+            var changed = false;
+            for (var j = 0; j < numClasses; j++) {
+                var index = elClasses.indexOf(classes[j]);
+                if (index >= 0) {
+                    elClasses.splice(index, 1);
+                    changed = true;
+                    /*
+                     * We have to do another pass to ensure that there are not duplicate
+                     * classes listed
+                     */
+                    j--;
+                }
+            }
+            if (changed) {
+                el.attribs.class = elClasses.join(' ');
+            }
+        }
+    });
+}
+exports.removeClass = removeClass;
 /**
  * Add or remove class(es) from the matched elements, depending on either the
- * class's presence or the value of the switch argument. Also accepts a
- * `function` like jQuery.
+ * class's presence or the value of the switch argument. Also accepts a `function`.
  *
+ * @category Attributes
  * @example
  *
- * $('.apple.green').toggleClass('fruit green red').html()
+ * ```js
+ * $('.apple.green').toggleClass('fruit green red').html();
  * //=> <li class="apple fruit red">Apple</li>
  *
- * $('.apple.green').toggleClass('fruit green red', true).html()
+ * $('.apple.green').toggleClass('fruit green red', true).html();
  * //=> <li class="apple green fruit red">Apple</li>
+ * ```
  *
- * @param {(string|Function)} value - Name of the class. Can also be a function.
- * @param {boolean} [stateVal] - If specified the state of the class.
- *
- * @see {@link http://api.jquery.com/toggleClass/}
+ * @param value - Name of the class. Can also be a function.
+ * @param stateVal - If specified the state of the class.
+ * @returns The instance itself.
+ * @see {@link https://api.jquery.com/toggleClass/}
  */
-exports.toggleClass = function (value, stateVal) {
-  // Support functions
-  if (typeof value === 'function') {
-    return domEach(this, function (i, el) {
-      exports.toggleClass.call(
-        [el],
-        value.call(el, i, el.attribs['class'] || '', stateVal),
-        stateVal
-      );
-    });
-  }
-
-  // Return if no value or not a string or function
-  if (!value || typeof value !== 'string') return this;
-
-  var classNames = value.split(rspace);
-  var numClasses = classNames.length;
-  var state = typeof stateVal === 'boolean' ? (stateVal ? 1 : -1) : 0;
-  var numElements = this.length;
-  var elementClasses;
-  var index;
-
-  for (var i = 0; i < numElements; i++) {
-    // If selected element isn't a tag, move on
-    if (!isTag(this[i])) continue;
-
-    elementClasses = splitNames(this[i].attribs.class);
-
-    // Check if class already exists
-    for (var j = 0; j < numClasses; j++) {
-      // Check if the class name is currently defined
-      index = elementClasses.indexOf(classNames[j]);
-
-      // Add if stateValue === true or we are toggling and there is no value
-      if (state >= 0 && index < 0) {
-        elementClasses.push(classNames[j]);
-      } else if (state <= 0 && index >= 0) {
-        // Otherwise remove but only if the item exists
-        elementClasses.splice(index, 1);
-      }
+function toggleClass(value, stateVal) {
+    // Support functions
+    if (typeof value === 'function') {
+        return utils_1.domEach(this, function (el, i) {
+            if (utils_1.isTag(el)) {
+                toggleClass.call([el], value.call(el, i, el.attribs.class || '', stateVal), stateVal);
+            }
+        });
     }
-
-    this[i].attribs.class = elementClasses.join(' ');
-  }
-
-  return this;
-};
-
-/**
- * Checks the current list of elements and returns `true` if _any_ of the
- * elements match the selector. If using an element or Cheerio selection,
- * returns `true` if _any_ of the elements match. If using a predicate
- * function, the function is executed in the context of the selected element,
- * so `this` refers to the current element.
- *
- * @param {string|Function|cheerio|node} selector - Selector for the selection.
- *
- * @see {@link http://api.jquery.com/is/}
- */
-exports.is = function (selector) {
-  if (selector) {
-    return this.filter(selector).length > 0;
-  }
-  return false;
-};
+    // Return if no value or not a string or function
+    if (!value || typeof value !== 'string')
+        return this;
+    var classNames = value.split(rspace);
+    var numClasses = classNames.length;
+    var state = typeof stateVal === 'boolean' ? (stateVal ? 1 : -1) : 0;
+    var numElements = this.length;
+    for (var i = 0; i < numElements; i++) {
+        var el = this[i];
+        // If selected element isn't a tag, move on
+        if (!utils_1.isTag(el))
+            continue;
+        var elementClasses = splitNames(el.attribs.class);
+        // Check if class already exists
+        for (var j = 0; j < numClasses; j++) {
+            // Check if the class name is currently defined
+            var index = elementClasses.indexOf(classNames[j]);
+            // Add if stateValue === true or we are toggling and there is no value
+            if (state >= 0 && index < 0) {
+                elementClasses.push(classNames[j]);
+            }
+            else if (state <= 0 && index >= 0) {
+                // Otherwise remove but only if the item exists
+                elementClasses.splice(index, 1);
+            }
+        }
+        el.attribs.class = elementClasses.join(' ');
+    }
+    return this;
+}
+exports.toggleClass = toggleClass;
 
 
 /***/ }),
@@ -2019,219 +1908,194 @@ exports.is = function (selector) {
 /***/ 7084:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
-/**
- * @module cheerio/css
- */
+"use strict";
 
-var domEach = __nccwpck_require__(1183).domEach;
-
-var toString = Object.prototype.toString;
-
-/**
- * Get the value of a style property for the first element in the set of
- * matched elements or set one or more CSS properties for every matched
- * element.
- *
- * @param {string|object} prop - The name of the property.
- * @param {string} [val] - If specified the new value.
- * @returns {self}
- *
- * @see {@link http://api.jquery.com/css/}
- */
-exports.css = function (prop, val) {
-  if (
-    arguments.length === 2 ||
-    // When `prop` is a "plain" object
-    toString.call(prop) === '[object Object]'
-  ) {
-    return domEach(this, function (idx, el) {
-      setCss(el, prop, val, idx);
-    });
-  }
-  return getCss(this[0], prop);
-};
-
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.css = void 0;
+var utils_1 = __nccwpck_require__(1183);
+function css(prop, val) {
+    if ((prop != null && val != null) ||
+        // When `prop` is a "plain" object
+        (typeof prop === 'object' && !Array.isArray(prop))) {
+        return utils_1.domEach(this, function (el, i) {
+            if (utils_1.isTag(el)) {
+                // `prop` can't be an array here anymore.
+                setCss(el, prop, val, i);
+            }
+        });
+    }
+    return getCss(this[0], prop);
+}
+exports.css = css;
 /**
  * Set styles of all elements.
  *
- * @param {object} el - Element to set style of.
- * @param {string|object} prop - Name of property.
- * @param {string} val - Value to set property to.
- * @param {number} [idx] - Optional index within the selection.
- * @returns {self}
  * @private
+ * @param el - Element to set style of.
+ * @param prop - Name of property.
+ * @param value - Value to set property to.
+ * @param idx - Optional index within the selection.
  */
-function setCss(el, prop, val, idx) {
-  if ('string' == typeof prop) {
-    var styles = getCss(el);
-    if (typeof val === 'function') {
-      val = val.call(el, idx, styles[prop]);
+function setCss(el, prop, value, idx) {
+    if (typeof prop === 'string') {
+        var styles = getCss(el);
+        var val = typeof value === 'function' ? value.call(el, idx, styles[prop]) : value;
+        if (val === '') {
+            delete styles[prop];
+        }
+        else if (val != null) {
+            styles[prop] = val;
+        }
+        el.attribs.style = stringify(styles);
     }
-
-    if (val === '') {
-      delete styles[prop];
-    } else if (val != null) {
-      styles[prop] = val;
+    else if (typeof prop === 'object') {
+        Object.keys(prop).forEach(function (k, i) {
+            setCss(el, k, prop[k], i);
+        });
     }
-
-    el.attribs.style = stringify(styles);
-  } else if ('object' == typeof prop) {
-    Object.keys(prop).forEach(function (k) {
-      setCss(el, k, prop[k]);
-    });
-  }
 }
-
-/**
- * Get parsed styles of the first element.
- *
- * @param {node} el - Element to get styles from.
- * @param {string} prop - Name of the prop.
- * @returns {object}
- * @private
- */
 function getCss(el, prop) {
-  if (!el || !el.attribs) {
-    return undefined;
-  }
-
-  var styles = parse(el.attribs.style);
-  if (typeof prop === 'string') {
-    return styles[prop];
-  } else if (Array.isArray(prop)) {
-    var newStyles = {};
-    prop.forEach(function (item) {
-      if (styles[item] != null) {
-        newStyles[item] = styles[item];
-      }
-    });
-    return newStyles;
-  }
-  return styles;
+    if (!el || !utils_1.isTag(el))
+        return;
+    var styles = parse(el.attribs.style);
+    if (typeof prop === 'string') {
+        return styles[prop];
+    }
+    if (Array.isArray(prop)) {
+        var newStyles_1 = {};
+        prop.forEach(function (item) {
+            if (styles[item] != null) {
+                newStyles_1[item] = styles[item];
+            }
+        });
+        return newStyles_1;
+    }
+    return styles;
 }
-
 /**
  * Stringify `obj` to styles.
  *
- * @param {object} obj - Object to stringify.
- * @returns {object}
  * @private
+ * @category CSS
+ * @param obj - Object to stringify.
+ * @returns The serialized styles.
  */
 function stringify(obj) {
-  return Object.keys(obj || {}).reduce(function (str, prop) {
-    return (str += '' + (str ? ' ' : '') + prop + ': ' + obj[prop] + ';');
-  }, '');
+    return Object.keys(obj).reduce(function (str, prop) { return "" + str + (str ? ' ' : '') + prop + ": " + obj[prop] + ";"; }, '');
 }
-
 /**
  * Parse `styles`.
  *
- * @param {string} styles - Styles to be parsed.
- * @returns {object}
  * @private
+ * @category CSS
+ * @param styles - Styles to be parsed.
+ * @returns The parsed styles.
  */
 function parse(styles) {
-  styles = (styles || '').trim();
-
-  if (!styles) return {};
-
-  return styles.split(';').reduce(function (obj, str) {
-    var n = str.indexOf(':');
-    // skip if there is no :, or if it is the first/last character
-    if (n < 1 || n === str.length - 1) return obj;
-    obj[str.slice(0, n).trim()] = str.slice(n + 1).trim();
-    return obj;
-  }, {});
+    styles = (styles || '').trim();
+    if (!styles)
+        return {};
+    return styles.split(';').reduce(function (obj, str) {
+        var n = str.indexOf(':');
+        // Skip if there is no :, or if it is the first/last character
+        if (n < 1 || n === str.length - 1)
+            return obj;
+        obj[str.slice(0, n).trim()] = str.slice(n + 1).trim();
+        return obj;
+    }, {});
 }
 
 
 /***/ }),
 
 /***/ 5954:
-/***/ ((__unused_webpack_module, exports) => {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
-/**
- * @module cheerio/forms
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.serializeArray = exports.serialize = void 0;
+var utils_1 = __nccwpck_require__(1183);
+/*
+ * https://github.com/jquery/jquery/blob/2.1.3/src/manipulation/var/rcheckableType.js
+ * https://github.com/jquery/jquery/blob/2.1.3/src/serialize.js
  */
-
-// https://github.com/jquery/jquery/blob/2.1.3/src/manipulation/var/rcheckableType.js
-// https://github.com/jquery/jquery/blob/2.1.3/src/serialize.js
 var submittableSelector = 'input,select,textarea,keygen';
 var r20 = /%20/g;
 var rCRLF = /\r?\n/g;
-
 /**
  * Encode a set of form elements as a string for submission.
  *
- * @see {@link http://api.jquery.com/serialize/}
+ * @category Forms
+ * @returns The serialized form.
+ * @see {@link https://api.jquery.com/serialize/}
  */
-exports.serialize = function () {
-  // Convert form elements into name/value objects
-  var arr = this.serializeArray();
-
-  // Serialize each element into a key/value string
-  var retArr = arr.map(function (data) {
-    return encodeURIComponent(data.name) + '=' + encodeURIComponent(data.value);
-  });
-
-  // Return the resulting serialization
-  return retArr.join('&').replace(r20, '+');
-};
-
+function serialize() {
+    // Convert form elements into name/value objects
+    var arr = this.serializeArray();
+    // Serialize each element into a key/value string
+    var retArr = arr.map(function (data) {
+        return encodeURIComponent(data.name) + "=" + encodeURIComponent(data.value);
+    });
+    // Return the resulting serialization
+    return retArr.join('&').replace(r20, '+');
+}
+exports.serialize = serialize;
 /**
  * Encode a set of form elements as an array of names and values.
  *
+ * @category Forms
  * @example
- * $('<form><input name="foo" value="bar" /></form>').serializeArray()
- * //=> [ { name: 'foo', value: 'bar' } ]
  *
- * @see {@link http://api.jquery.com/serializeArray/}
+ * ```js
+ * $('<form><input name="foo" value="bar" /></form>').serializeArray();
+ * //=> [ { name: 'foo', value: 'bar' } ]
+ * ```
+ *
+ * @returns The serialized form.
+ * @see {@link https://api.jquery.com/serializeArray/}
  */
-exports.serializeArray = function () {
-  // Resolve all form elements from either forms or collections of form elements
-  var Cheerio = this.constructor;
-  return this.map(function () {
-    var elem = this;
-    var $elem = Cheerio(elem);
-    if (elem.name === 'form') {
-      return $elem.find(submittableSelector).toArray();
-    }
-    return $elem.filter(submittableSelector).toArray();
-  })
-    .filter(
-      // Verify elements have a name (`attr.name`) and are not disabled (`:disabled`)
-      '[name!=""]:not(:disabled)' +
-        // and cannot be clicked (`[type=submit]`) or are used in `x-www-form-urlencoded` (`[type=file]`)
-        ':not(:submit, :button, :image, :reset, :file)' +
-        // and are either checked/don't have a checkable state
-        ':matches([checked], :not(:checkbox, :radio))'
-      // Convert each of the elements to its value(s)
-    )
-    .map(function (i, elem) {
-      var $elem = Cheerio(elem);
-      var name = $elem.attr('name');
-      var value = $elem.val();
-
-      // If there is no value set (e.g. `undefined`, `null`), then default value to empty
-      if (value == null) {
-        value = '';
-      }
-
-      // If we have an array of values (e.g. `<select multiple>`), return an array of key/value pairs
-      if (Array.isArray(value)) {
-        return value.map(function (val) {
-          // We trim replace any line endings (e.g. `\r` or `\r\n` with `\r\n`) to guarantee consistency across platforms
-          //   These can occur inside of `<textarea>'s`
-          return { name: name, value: val.replace(rCRLF, '\r\n') };
-        });
-        // Otherwise (e.g. `<input type="text">`, return only one key/value pair
-      }
-      return { name: name, value: value.replace(rCRLF, '\r\n') };
-
-      // Convert our result to an array
+function serializeArray() {
+    var _this = this;
+    // Resolve all form elements from either forms or collections of form elements
+    return this.map(function (_, elem) {
+        var $elem = _this._make(elem);
+        if (utils_1.isTag(elem) && elem.name === 'form') {
+            return $elem.find(submittableSelector).toArray();
+        }
+        return $elem.filter(submittableSelector).toArray();
     })
-    .get();
-};
+        .filter(
+    // Verify elements have a name (`attr.name`) and are not disabled (`:enabled`)
+    '[name!=""]:enabled' +
+        // And cannot be clicked (`[type=submit]`) or are used in `x-www-form-urlencoded` (`[type=file]`)
+        ':not(:submit, :button, :image, :reset, :file)' +
+        // And are either checked/don't have a checkable state
+        ':matches([checked], :not(:checkbox, :radio))'
+    // Convert each of the elements to its value(s)
+    )
+        .map(function (_, elem) {
+        var _a;
+        var $elem = _this._make(elem);
+        var name = $elem.attr('name'); // We have filtered for elements with a name before.
+        // If there is no value set (e.g. `undefined`, `null`), then default value to empty
+        var value = (_a = $elem.val()) !== null && _a !== void 0 ? _a : '';
+        // If we have an array of values (e.g. `<select multiple>`), return an array of key/value pairs
+        if (Array.isArray(value)) {
+            return value.map(function (val) {
+                /*
+                 * We trim replace any line endings (e.g. `\r` or `\r\n` with `\r\n`) to guarantee consistency across platforms
+                 * These can occur inside of `<textarea>'s`
+                 */
+                return ({ name: name, value: val.replace(rCRLF, '\r\n') });
+            });
+        }
+        // Otherwise (e.g. `<input type="text">`, return only one key/value pair
+        return { name: name, value: value.replace(rCRLF, '\r\n') };
+    })
+        .toArray();
+}
+exports.serializeArray = serializeArray;
 
 
 /***/ }),
@@ -2239,301 +2103,269 @@ exports.serializeArray = function () {
 /***/ 8196:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.clone = exports.text = exports.toString = exports.html = exports.empty = exports.replaceWith = exports.remove = exports.insertBefore = exports.before = exports.insertAfter = exports.after = exports.wrapAll = exports.unwrap = exports.wrapInner = exports.wrap = exports.prepend = exports.append = exports.prependTo = exports.appendTo = exports._makeDomArray = void 0;
+var tslib_1 = __nccwpck_require__(9679);
+var domhandler_1 = __nccwpck_require__(4038);
 /**
  * Methods for modifying the DOM structure.
  *
  * @module cheerio/manipulation
  */
-
-var parse = __nccwpck_require__(9024);
-var html = __nccwpck_require__(2).html;
-var text = __nccwpck_require__(2).text;
-var updateDOM = parse.update;
-var utils = __nccwpck_require__(1183);
-var domEach = utils.domEach;
-var cloneDom = utils.cloneDom;
-var isHtml = utils.isHtml;
-var slice = Array.prototype.slice;
-var domhandler = __nccwpck_require__(4038);
-var DomUtils = __nccwpck_require__(2928).DomUtils;
-
+var domhandler_2 = __nccwpck_require__(4038);
+var parse_1 = tslib_1.__importStar(__nccwpck_require__(9024));
+var static_1 = __nccwpck_require__(2);
+var utils_1 = __nccwpck_require__(1183);
+var htmlparser2_1 = __nccwpck_require__(2928);
 /**
- * Create an array of nodes, recursing into arrays and parsing strings if
- * necessary.
+ * Create an array of nodes, recursing into arrays and parsing strings if necessary.
  *
- * @param {cheerio|string|cheerio[]|string[]} [elem] - Elements to make an array of.
- * @param {boolean} [clone] - Optionally clone nodes.
  * @private
+ * @category Manipulation
+ * @param elem - Elements to make an array of.
+ * @param clone - Optionally clone nodes.
+ * @returns The array of nodes.
  */
-exports._makeDomArray = function makeDomArray(elem, clone) {
-  if (elem == null) {
-    return [];
-  } else if (elem.cheerio) {
-    return clone ? cloneDom(elem.get(), elem.options) : elem.get();
-  } else if (Array.isArray(elem)) {
-    return elem.reduce(
-      function (newElems, el) {
-        return newElems.concat(this._makeDomArray(el, clone));
-      }.bind(this),
-      []
-    );
-  } else if (typeof elem === 'string') {
-    return parse(elem, this.options, false).children;
-  }
-  return clone ? cloneDom([elem]) : [elem];
-};
-
-var _insert = function (concatenator) {
-  return function () {
-    var elems = slice.call(arguments);
-    var lastIdx = this.length - 1;
-
-    return domEach(this, function (i, el) {
-      var dom;
-      var domSrc;
-
-      if (typeof elems[0] === 'function') {
-        domSrc = elems[0].call(el, i, html(el.children));
-      } else {
-        domSrc = elems;
-      }
-
-      dom = this._makeDomArray(domSrc, i < lastIdx);
-      concatenator(dom, el.children, el);
-    });
-  };
-};
-
-/*
+function _makeDomArray(elem, clone) {
+    var _this = this;
+    if (elem == null) {
+        return [];
+    }
+    if (utils_1.isCheerio(elem)) {
+        return clone ? utils_1.cloneDom(elem.get()) : elem.get();
+    }
+    if (Array.isArray(elem)) {
+        return elem.reduce(function (newElems, el) { return newElems.concat(_this._makeDomArray(el, clone)); }, []);
+    }
+    if (typeof elem === 'string') {
+        return parse_1.default(elem, this.options, false).children;
+    }
+    return clone ? utils_1.cloneDom([elem]) : [elem];
+}
+exports._makeDomArray = _makeDomArray;
+function _insert(concatenator) {
+    return function () {
+        var _this = this;
+        var elems = [];
+        for (var _i = 0; _i < arguments.length; _i++) {
+            elems[_i] = arguments[_i];
+        }
+        var lastIdx = this.length - 1;
+        return utils_1.domEach(this, function (el, i) {
+            if (!domhandler_1.hasChildren(el))
+                return;
+            var domSrc = typeof elems[0] === 'function'
+                ? elems[0].call(el, i, static_1.html(el.children))
+                : elems;
+            var dom = _this._makeDomArray(domSrc, i < lastIdx);
+            concatenator(dom, el.children, el);
+        });
+    };
+}
+/**
  * Modify an array in-place, removing some number of elements and adding new
  * elements directly following them.
  *
- * @param {Array} array Target array to splice.
- * @param {Number} spliceIdx Index at which to begin changing the array.
- * @param {Number} spliceCount Number of elements to remove from the array.
- * @param {Array} newElems Elements to insert into the array.
- *
  * @private
+ * @category Manipulation
+ * @param array - Target array to splice.
+ * @param spliceIdx - Index at which to begin changing the array.
+ * @param spliceCount - Number of elements to remove from the array.
+ * @param newElems - Elements to insert into the array.
+ * @param parent - The parent of the node.
+ * @returns The spliced array.
  */
-var uniqueSplice = function (array, spliceIdx, spliceCount, newElems, parent) {
-  var spliceArgs = [spliceIdx, spliceCount].concat(newElems);
-  var prev = array[spliceIdx - 1] || null;
-  var next = array[spliceIdx + spliceCount] || null;
-  var idx;
-  var len;
-  var prevIdx;
-  var node;
-  var oldParent;
-
-  // Before splicing in new elements, ensure they do not already appear in the
-  // current array.
-  for (idx = 0, len = newElems.length; idx < len; ++idx) {
-    node = newElems[idx];
-    oldParent = node.parent;
-    prevIdx = oldParent && oldParent.children.indexOf(newElems[idx]);
-
-    if (oldParent && prevIdx > -1) {
-      oldParent.children.splice(prevIdx, 1);
-      if (parent === oldParent && spliceIdx > prevIdx) {
-        spliceArgs[0]--;
-      }
+function uniqueSplice(array, spliceIdx, spliceCount, newElems, parent) {
+    var _a, _b;
+    var spliceArgs = tslib_1.__spreadArray([
+        spliceIdx,
+        spliceCount
+    ], newElems);
+    var prev = array[spliceIdx - 1] || null;
+    var next = array[spliceIdx + spliceCount] || null;
+    /*
+     * Before splicing in new elements, ensure they do not already appear in the
+     * current array.
+     */
+    for (var idx = 0; idx < newElems.length; ++idx) {
+        var node = newElems[idx];
+        var oldParent = node.parent;
+        if (oldParent) {
+            var prevIdx = oldParent.children.indexOf(newElems[idx]);
+            if (prevIdx > -1) {
+                oldParent.children.splice(prevIdx, 1);
+                if (parent === oldParent && spliceIdx > prevIdx) {
+                    spliceArgs[0]--;
+                }
+            }
+        }
+        node.parent = parent;
+        if (node.prev) {
+            node.prev.next = (_a = node.next) !== null && _a !== void 0 ? _a : null;
+        }
+        if (node.next) {
+            node.next.prev = (_b = node.prev) !== null && _b !== void 0 ? _b : null;
+        }
+        node.prev = newElems[idx - 1] || prev;
+        node.next = newElems[idx + 1] || next;
     }
-
-    node.parent = parent;
-
-    if (node.prev) {
-      node.prev.next = node.next || null;
+    if (prev) {
+        prev.next = newElems[0];
     }
-
-    if (node.next) {
-      node.next.prev = node.prev || null;
+    if (next) {
+        next.prev = newElems[newElems.length - 1];
     }
-
-    node.prev = newElems[idx - 1] || prev;
-    node.next = newElems[idx + 1] || next;
-  }
-
-  if (prev) {
-    prev.next = newElems[0];
-  }
-  if (next) {
-    next.prev = newElems[newElems.length - 1];
-  }
-  return array.splice.apply(array, spliceArgs);
-};
-
+    return array.splice.apply(array, spliceArgs);
+}
 /**
- * Insert every element in the set of matched elements to the end of the
- * target.
+ * Insert every element in the set of matched elements to the end of the target.
  *
- * @param {string|cheerio} target - Element to append elements to.
- *
+ * @category Manipulation
  * @example
  *
- * $('<li class="plum">Plum</li>').appendTo('#fruits')
- * $.html()
+ * ```js
+ * $('<li class="plum">Plum</li>').appendTo('#fruits');
+ * $.html();
  * //=>  <ul id="fruits">
  * //      <li class="apple">Apple</li>
  * //      <li class="orange">Orange</li>
  * //      <li class="pear">Pear</li>
  * //      <li class="plum">Plum</li>
  * //    </ul>
+ * ```
  *
- * @see {@link http://api.jquery.com/appendTo/}
+ * @param target - Element to append elements to.
+ * @returns The instance itself.
+ * @see {@link https://api.jquery.com/appendTo/}
  */
-exports.appendTo = function (target) {
-  if (!target.cheerio) {
-    target = this.constructor.call(
-      this.constructor,
-      target,
-      null,
-      this._originalRoot
-    );
-  }
-
-  target.append(this);
-
-  return this;
-};
-
+function appendTo(target) {
+    var appendTarget = utils_1.isCheerio(target) ? target : this._make(target);
+    appendTarget.append(this);
+    return this;
+}
+exports.appendTo = appendTo;
 /**
- * Insert every element in the set of matched elements to the beginning of the
- * target.
+ * Insert every element in the set of matched elements to the beginning of the target.
  *
- * @param {string|cheerio} target - Element to prepend elements to.
- *
+ * @category Manipulation
  * @example
  *
- * $('<li class="plum">Plum</li>').prependTo('#fruits')
- * $.html()
+ * ```js
+ * $('<li class="plum">Plum</li>').prependTo('#fruits');
+ * $.html();
  * //=>  <ul id="fruits">
  * //      <li class="plum">Plum</li>
  * //      <li class="apple">Apple</li>
  * //      <li class="orange">Orange</li>
  * //      <li class="pear">Pear</li>
  * //    </ul>
+ * ```
  *
- * @see {@link http://api.jquery.com/prependTo/}
+ * @param target - Element to prepend elements to.
+ * @returns The instance itself.
+ * @see {@link https://api.jquery.com/prependTo/}
  */
-exports.prependTo = function (target) {
-  if (!target.cheerio) {
-    target = this.constructor.call(
-      this.constructor,
-      target,
-      null,
-      this._originalRoot
-    );
-  }
-
-  target.prepend(this);
-
-  return this;
-};
-
+function prependTo(target) {
+    var prependTarget = utils_1.isCheerio(target) ? target : this._make(target);
+    prependTarget.prepend(this);
+    return this;
+}
+exports.prependTo = prependTo;
 /**
  * Inserts content as the *last* child of each of the selected elements.
  *
- * @function
- *
+ * @category Manipulation
  * @example
  *
- * $('ul').append('<li class="plum">Plum</li>')
- * $.html()
+ * ```js
+ * $('ul').append('<li class="plum">Plum</li>');
+ * $.html();
  * //=>  <ul id="fruits">
  * //      <li class="apple">Apple</li>
  * //      <li class="orange">Orange</li>
  * //      <li class="pear">Pear</li>
  * //      <li class="plum">Plum</li>
  * //    </ul>
+ * ```
  *
- * @see {@link http://api.jquery.com/append/}
+ * @see {@link https://api.jquery.com/append/}
  */
 exports.append = _insert(function (dom, children, parent) {
-  uniqueSplice(children, children.length, 0, dom, parent);
+    uniqueSplice(children, children.length, 0, dom, parent);
 });
-
 /**
  * Inserts content as the *first* child of each of the selected elements.
  *
- * @function
- *
+ * @category Manipulation
  * @example
  *
- * $('ul').prepend('<li class="plum">Plum</li>')
- * $.html()
+ * ```js
+ * $('ul').prepend('<li class="plum">Plum</li>');
+ * $.html();
  * //=>  <ul id="fruits">
  * //      <li class="plum">Plum</li>
  * //      <li class="apple">Apple</li>
  * //      <li class="orange">Orange</li>
  * //      <li class="pear">Pear</li>
  * //    </ul>
+ * ```
  *
- * @see {@link http://api.jquery.com/prepend/}
+ * @see {@link https://api.jquery.com/prepend/}
  */
 exports.prepend = _insert(function (dom, children, parent) {
-  uniqueSplice(children, 0, 0, dom, parent);
+    uniqueSplice(children, 0, 0, dom, parent);
 });
-
 function _wrap(insert) {
-  return function (wrapper) {
-    var wrapperFn = typeof wrapper === 'function' && wrapper;
-    var lastIdx = this.length - 1;
-    var lastParent = this.parents().last();
-
-    for (var i = 0; i < this.length; i++) {
-      var el = this[i];
-      var wrapperDom;
-      var elInsertLocation;
-      var j;
-
-      if (wrapperFn) {
-        wrapper = wrapperFn.call(el, i);
-      }
-
-      if (typeof wrapper === 'string' && !isHtml(wrapper)) {
-        wrapper = lastParent.find(wrapper).clone();
-      }
-
-      wrapperDom = this._makeDomArray(wrapper, i < lastIdx).slice(0, 1);
-      elInsertLocation = wrapperDom[0];
-      // Find the deepest child. Only consider the first tag child of each node
-      // (ignore text); stop if no children are found.
-      j = 0;
-
-      while (elInsertLocation && elInsertLocation.children) {
-        if (j >= elInsertLocation.children.length) {
-          break;
+    return function (wrapper) {
+        var lastIdx = this.length - 1;
+        var lastParent = this.parents().last();
+        for (var i = 0; i < this.length; i++) {
+            var el = this[i];
+            var wrap_1 = typeof wrapper === 'function'
+                ? wrapper.call(el, i, el)
+                : typeof wrapper === 'string' && !utils_1.isHtml(wrapper)
+                    ? lastParent.find(wrapper).clone()
+                    : wrapper;
+            var wrapperDom = this._makeDomArray(wrap_1, i < lastIdx)[0];
+            if (!wrapperDom || !htmlparser2_1.DomUtils.hasChildren(wrapperDom))
+                continue;
+            var elInsertLocation = wrapperDom;
+            /*
+             * Find the deepest child. Only consider the first tag child of each node
+             * (ignore text); stop if no children are found.
+             */
+            var j = 0;
+            while (j < elInsertLocation.children.length) {
+                var child = elInsertLocation.children[j];
+                if (utils_1.isTag(child)) {
+                    elInsertLocation = child;
+                    j = 0;
+                }
+                else {
+                    j++;
+                }
+            }
+            insert(el, elInsertLocation, [wrapperDom]);
         }
-
-        if (elInsertLocation.children[j].type === 'tag') {
-          elInsertLocation = elInsertLocation.children[j];
-          j = 0;
-        } else {
-          j++;
-        }
-      }
-
-      insert(el, elInsertLocation, wrapperDom);
-    }
-
-    return this;
-  };
+        return this;
+    };
 }
-
 /**
  * The .wrap() function can take any string or object that could be passed to
  * the $() factory function to specify a DOM structure. This structure may be
  * nested several levels deep, but should contain only one inmost element. A
- * copy of this structure will be wrapped around each of the elements in the
- * set of matched elements. This method returns the original set of elements
- * for chaining purposes.
+ * copy of this structure will be wrapped around each of the elements in the set
+ * of matched elements. This method returns the original set of elements for
+ * chaining purposes.
  *
- * @param {cheerio} wrapper - The DOM structure to wrap around each element in the selection.
- *
+ * @category Manipulation
  * @example
  *
- * const redFruit = $('<div class="red-fruit"></div>')
- * $('.apple').wrap(redFruit)
+ * ```js
+ * const redFruit = $('<div class="red-fruit"></div>');
+ * $('.apple').wrap(redFruit);
  *
  * //=> <ul id="fruits">
  * //     <div class="red-fruit">
@@ -2543,8 +2375,8 @@ function _wrap(insert) {
  * //     <li class="plum">Plum</li>
  * //   </ul>
  *
- * const healthy = $('<div class="healthy"></div>')
- * $('li').wrap(healthy)
+ * const healthy = $('<div class="healthy"></div>');
+ * $('li').wrap(healthy);
  *
  * //=> <ul id="fruits">
  * //     <div class="healthy">
@@ -2557,34 +2389,38 @@ function _wrap(insert) {
  * //        <li class="plum">Plum</li>
  * //     </div>
  * //   </ul>
+ * ```
  *
- * @see {@link http://api.jquery.com/wrap/}
+ * @param wrapper - The DOM structure to wrap around each element in the selection.
+ * @see {@link https://api.jquery.com/wrap/}
  */
 exports.wrap = _wrap(function (el, elInsertLocation, wrapperDom) {
-  var parent = el.parent;
-  var siblings = parent.children;
-  var index = siblings.indexOf(el);
-
-  updateDOM([el], elInsertLocation);
-  // The previous operation removed the current element from the `siblings`
-  // array, so the `dom` array can be inserted without removing any
-  // additional elements.
-  uniqueSplice(siblings, index, 0, wrapperDom, parent);
+    var parent = el.parent;
+    if (!parent)
+        return;
+    var siblings = parent.children;
+    var index = siblings.indexOf(el);
+    parse_1.update([el], elInsertLocation);
+    /*
+     * The previous operation removed the current element from the `siblings`
+     * array, so the `dom` array can be inserted without removing any
+     * additional elements.
+     */
+    uniqueSplice(siblings, index, 0, wrapperDom, parent);
 });
-
 /**
- * The .wrapInner() function can take any string or object that could be passed to
- * the $() factory function to specify a DOM structure. This structure may be
+ * The .wrapInner() function can take any string or object that could be passed
+ * to the $() factory function to specify a DOM structure. This structure may be
  * nested several levels deep, but should contain only one inmost element. The
- * structure will be wrapped around the content of each of the elements in the set
- * of matched elements.
+ * structure will be wrapped around the content of each of the elements in the
+ * set of matched elements.
  *
- * @param {cheerio} wrapper - The DOM structure to wrap around the content of each element in the selection.
- *
+ * @category Manipulation
  * @example
  *
- * const redFruit = $('<div class="red-fruit"></div>')
- * $('.apple').wrapInner(redFruit)
+ * ```js
+ * const redFruit = $('<div class="red-fruit"></div>');
+ * $('.apple').wrapInner(redFruit);
  *
  * //=> <ul id="fruits">
  * //     <li class="apple">
@@ -2594,8 +2430,8 @@ exports.wrap = _wrap(function (el, elInsertLocation, wrapperDom) {
  * //     <li class="pear">Pear</li>
  * //   </ul>
  *
- * const healthy = $('<div class="healthy"></div>')
- * $('li').wrapInner(healthy)
+ * const healthy = $('<div class="healthy"></div>');
+ * $('li').wrapInner(healthy);
  *
  * //=> <ul id="fruits">
  * //     <li class="apple">
@@ -2608,414 +2444,518 @@ exports.wrap = _wrap(function (el, elInsertLocation, wrapperDom) {
  * //       <div class="healthy">Pear</div>
  * //     </li>
  * //   </ul>
+ * ```
  *
- * @see {@link http://api.jquery.com/wrapInner/}
+ * @param wrapper - The DOM structure to wrap around the content of each element
+ *   in the selection.
+ * @returns The instance itself, for chaining.
+ * @see {@link https://api.jquery.com/wrapInner/}
  */
 exports.wrapInner = _wrap(function (el, elInsertLocation, wrapperDom) {
-  updateDOM(el.children, elInsertLocation);
-  updateDOM(wrapperDom, el);
+    if (!domhandler_1.hasChildren(el))
+        return;
+    parse_1.update(el.children, elInsertLocation);
+    parse_1.update(wrapperDom, el);
 });
-
+/**
+ * The .unwrap() function, removes the parents of the set of matched elements
+ * from the DOM, leaving the matched elements in their place.
+ *
+ * @category Manipulation
+ * @example <caption>without selector</caption>
+ *
+ * ```js
+ * const $ = cheerio.load(
+ *   '<div id=test>\n  <div><p>Hello</p></div>\n  <div><p>World</p></div>\n</div>'
+ * );
+ * $('#test p').unwrap();
+ *
+ * //=> <div id=test>
+ * //     <p>Hello</p>
+ * //     <p>World</p>
+ * //   </div>
+ * ```
+ *
+ * @example <caption>with selector</caption>
+ *
+ * ```js
+ * const $ = cheerio.load(
+ *   '<div id=test>\n  <p>Hello</p>\n  <b><p>World</p></b>\n</div>'
+ * );
+ * $('#test p').unwrap('b');
+ *
+ * //=> <div id=test>
+ * //     <p>Hello</p>
+ * //     <p>World</p>
+ * //   </div>
+ * ```
+ *
+ * @param selector - A selector to check the parent element against. If an
+ *   element's parent does not match the selector, the element won't be unwrapped.
+ * @returns The instance itself, for chaining.
+ * @see {@link https://api.jquery.com/unwrap/}
+ */
+function unwrap(selector) {
+    var _this = this;
+    this.parent(selector)
+        .not('body')
+        .each(function (_, el) {
+        _this._make(el).replaceWith(el.children);
+    });
+    return this;
+}
+exports.unwrap = unwrap;
+/**
+ * The .wrapAll() function can take any string or object that could be passed to
+ * the $() function to specify a DOM structure. This structure may be nested
+ * several levels deep, but should contain only one inmost element. The
+ * structure will be wrapped around all of the elements in the set of matched
+ * elements, as a single group.
+ *
+ * @category Manipulation
+ * @example <caption>With markup passed to `wrapAll`</caption>
+ *
+ * ```js
+ * const $ = cheerio.load(
+ *   '<div class="container"><div class="inner">First</div><div class="inner">Second</div></div>'
+ * );
+ * $('.inner').wrapAll("<div class='new'></div>");
+ *
+ * //=> <div class="container">
+ * //     <div class='new'>
+ * //       <div class="inner">First</div>
+ * //       <div class="inner">Second</div>
+ * //     </div>
+ * //   </div>
+ * ```
+ *
+ * @example <caption>With an existing cheerio instance</caption>
+ *
+ * ```js
+ * const $ = cheerio.load(
+ *   '<span>Span 1</span><strong>Strong</strong><span>Span 2</span>'
+ * );
+ * const wrap = $('<div><p><em><b></b></em></p></div>');
+ * $('span').wrapAll(wrap);
+ *
+ * //=> <div>
+ * //     <p>
+ * //       <em>
+ * //         <b>
+ * //           <span>Span 1</span>
+ * //           <span>Span 2</span>
+ * //         </b>
+ * //       </em>
+ * //     </p>
+ * //   </div>
+ * //   <strong>Strong</strong>
+ * ```
+ *
+ * @param wrapper - The DOM structure to wrap around all matched elements in the
+ *   selection.
+ * @returns The instance itself.
+ * @see {@link https://api.jquery.com/wrapAll/}
+ */
+function wrapAll(wrapper) {
+    var el = this[0];
+    if (el) {
+        var wrap_2 = this._make(typeof wrapper === 'function' ? wrapper.call(el, 0, el) : wrapper).insertBefore(el);
+        // If html is given as wrapper, wrap may contain text elements
+        var elInsertLocation = void 0;
+        for (var i = 0; i < wrap_2.length; i++) {
+            if (wrap_2[i].type === 'tag')
+                elInsertLocation = wrap_2[i];
+        }
+        var j = 0;
+        /*
+         * Find the deepest child. Only consider the first tag child of each node
+         * (ignore text); stop if no children are found.
+         */
+        while (elInsertLocation && j < elInsertLocation.children.length) {
+            var child = elInsertLocation.children[j];
+            if (child.type === 'tag') {
+                elInsertLocation = child;
+                j = 0;
+            }
+            else {
+                j++;
+            }
+        }
+        if (elInsertLocation)
+            this._make(elInsertLocation).append(this);
+    }
+    return this;
+}
+exports.wrapAll = wrapAll;
+/* eslint-disable jsdoc/check-param-names*/
 /**
  * Insert content next to each element in the set of matched elements.
  *
+ * @category Manipulation
  * @example
  *
- * $('.apple').after('<li class="plum">Plum</li>')
- * $.html()
+ * ```js
+ * $('.apple').after('<li class="plum">Plum</li>');
+ * $.html();
  * //=>  <ul id="fruits">
  * //      <li class="apple">Apple</li>
  * //      <li class="plum">Plum</li>
  * //      <li class="orange">Orange</li>
  * //      <li class="pear">Pear</li>
  * //    </ul>
+ * ```
  *
- * @see {@link http://api.jquery.com/after/}
+ * @param content - HTML string, DOM element, array of DOM elements or Cheerio
+ *   to insert after each element in the set of matched elements.
+ * @returns The instance itself.
+ * @see {@link https://api.jquery.com/after/}
  */
-exports.after = function () {
-  var elems = slice.call(arguments);
-  var lastIdx = this.length - 1;
-
-  domEach(this, function (i, el) {
-    var parent = el.parent;
-    if (!parent) {
-      return;
+function after() {
+    var _this = this;
+    var elems = [];
+    for (var _i = 0; _i < arguments.length; _i++) {
+        elems[_i] = arguments[_i];
     }
-
-    var siblings = parent.children;
-    var index = siblings.indexOf(el);
-    var domSrc;
-    var dom;
-
-    // If not found, move on
-    if (index < 0) return;
-
-    if (typeof elems[0] === 'function') {
-      domSrc = elems[0].call(el, i, html(el.children));
-    } else {
-      domSrc = elems;
-    }
-    dom = this._makeDomArray(domSrc, i < lastIdx);
-
-    // Add element after `this` element
-    uniqueSplice(siblings, index + 1, 0, dom, parent);
-  });
-
-  return this;
-};
-
+    var lastIdx = this.length - 1;
+    return utils_1.domEach(this, function (el, i) {
+        var parent = el.parent;
+        if (!htmlparser2_1.DomUtils.hasChildren(el) || !parent) {
+            return;
+        }
+        var siblings = parent.children;
+        var index = siblings.indexOf(el);
+        // If not found, move on
+        /* istanbul ignore next */
+        if (index < 0)
+            return;
+        var domSrc = typeof elems[0] === 'function'
+            ? elems[0].call(el, i, static_1.html(el.children))
+            : elems;
+        var dom = _this._makeDomArray(domSrc, i < lastIdx);
+        // Add element after `this` element
+        uniqueSplice(siblings, index + 1, 0, dom, parent);
+    });
+}
+exports.after = after;
+/* eslint-enable jsdoc/check-param-names*/
 /**
  * Insert every element in the set of matched elements after the target.
  *
+ * @category Manipulation
  * @example
  *
- * $('<li class="plum">Plum</li>').insertAfter('.apple')
- * $.html()
+ * ```js
+ * $('<li class="plum">Plum</li>').insertAfter('.apple');
+ * $.html();
  * //=>  <ul id="fruits">
  * //      <li class="apple">Apple</li>
  * //      <li class="plum">Plum</li>
  * //      <li class="orange">Orange</li>
  * //      <li class="pear">Pear</li>
  * //    </ul>
+ * ```
  *
- * @param {string|cheerio} target - Element to insert elements after.
- *
- * @see {@link http://api.jquery.com/insertAfter/}
+ * @param target - Element to insert elements after.
+ * @returns The set of newly inserted elements.
+ * @see {@link https://api.jquery.com/insertAfter/}
  */
-exports.insertAfter = function (target) {
-  var clones = [];
-  var self = this;
-  if (typeof target === 'string') {
-    target = this.constructor.call(
-      this.constructor,
-      target,
-      null,
-      this._originalRoot
-    );
-  }
-  target = this._makeDomArray(target);
-  self.remove();
-  domEach(target, function (i, el) {
-    var clonedSelf = self._makeDomArray(self.clone());
-    var parent = el.parent;
-    if (!parent) {
-      return;
+function insertAfter(target) {
+    var _this = this;
+    if (typeof target === 'string') {
+        target = this._make(target);
     }
-
-    var siblings = parent.children;
-    var index = siblings.indexOf(el);
-
-    // If not found, move on
-    if (index < 0) return;
-
-    // Add cloned `this` element(s) after target element
-    uniqueSplice(siblings, index + 1, 0, clonedSelf, parent);
-    clones.push(clonedSelf);
-  });
-  return this.constructor.call(this.constructor, this._makeDomArray(clones));
-};
-
+    this.remove();
+    var clones = [];
+    this._makeDomArray(target).forEach(function (el) {
+        var clonedSelf = _this.clone().toArray();
+        var parent = el.parent;
+        if (!parent) {
+            return;
+        }
+        var siblings = parent.children;
+        var index = siblings.indexOf(el);
+        // If not found, move on
+        /* istanbul ignore next */
+        if (index < 0)
+            return;
+        // Add cloned `this` element(s) after target element
+        uniqueSplice(siblings, index + 1, 0, clonedSelf, parent);
+        clones.push.apply(clones, clonedSelf);
+    });
+    return this._make(clones);
+}
+exports.insertAfter = insertAfter;
+/* eslint-disable jsdoc/check-param-names*/
 /**
  * Insert content previous to each element in the set of matched elements.
  *
+ * @category Manipulation
  * @example
  *
- * $('.apple').before('<li class="plum">Plum</li>')
- * $.html()
+ * ```js
+ * $('.apple').before('<li class="plum">Plum</li>');
+ * $.html();
  * //=>  <ul id="fruits">
  * //      <li class="plum">Plum</li>
  * //      <li class="apple">Apple</li>
  * //      <li class="orange">Orange</li>
  * //      <li class="pear">Pear</li>
  * //    </ul>
+ * ```
  *
- * @see {@link http://api.jquery.com/before/}
+ * @param content - HTML string, DOM element, array of DOM elements or Cheerio
+ *   to insert before each element in the set of matched elements.
+ * @returns The instance itself.
+ * @see {@link https://api.jquery.com/before/}
  */
-exports.before = function () {
-  var elems = slice.call(arguments);
-  var lastIdx = this.length - 1;
-
-  domEach(this, function (i, el) {
-    var parent = el.parent;
-    if (!parent) {
-      return;
+function before() {
+    var _this = this;
+    var elems = [];
+    for (var _i = 0; _i < arguments.length; _i++) {
+        elems[_i] = arguments[_i];
     }
-
-    var siblings = parent.children;
-    var index = siblings.indexOf(el);
-    var domSrc;
-    var dom;
-
-    // If not found, move on
-    if (index < 0) return;
-
-    if (typeof elems[0] === 'function') {
-      domSrc = elems[0].call(el, i, html(el.children));
-    } else {
-      domSrc = elems;
-    }
-
-    dom = this._makeDomArray(domSrc, i < lastIdx);
-
-    // Add element before `el` element
-    uniqueSplice(siblings, index, 0, dom, parent);
-  });
-
-  return this;
-};
-
+    var lastIdx = this.length - 1;
+    return utils_1.domEach(this, function (el, i) {
+        var parent = el.parent;
+        if (!htmlparser2_1.DomUtils.hasChildren(el) || !parent) {
+            return;
+        }
+        var siblings = parent.children;
+        var index = siblings.indexOf(el);
+        // If not found, move on
+        /* istanbul ignore next */
+        if (index < 0)
+            return;
+        var domSrc = typeof elems[0] === 'function'
+            ? elems[0].call(el, i, static_1.html(el.children))
+            : elems;
+        var dom = _this._makeDomArray(domSrc, i < lastIdx);
+        // Add element before `el` element
+        uniqueSplice(siblings, index, 0, dom, parent);
+    });
+}
+exports.before = before;
+/* eslint-enable jsdoc/check-param-names*/
 /**
  * Insert every element in the set of matched elements before the target.
  *
+ * @category Manipulation
  * @example
  *
- * $('<li class="plum">Plum</li>').insertBefore('.apple')
- * $.html()
+ * ```js
+ * $('<li class="plum">Plum</li>').insertBefore('.apple');
+ * $.html();
  * //=>  <ul id="fruits">
  * //      <li class="plum">Plum</li>
  * //      <li class="apple">Apple</li>
  * //      <li class="orange">Orange</li>
  * //      <li class="pear">Pear</li>
  * //    </ul>
+ * ```
  *
- * @param {string|cheerio} target - Element to insert elements before.
- *
- * @see {@link http://api.jquery.com/insertBefore/}
+ * @param target - Element to insert elements before.
+ * @returns The set of newly inserted elements.
+ * @see {@link https://api.jquery.com/insertBefore/}
  */
-exports.insertBefore = function (target) {
-  var clones = [];
-  var self = this;
-  if (typeof target === 'string') {
-    target = this.constructor.call(
-      this.constructor,
-      target,
-      null,
-      this._originalRoot
-    );
-  }
-  target = this._makeDomArray(target);
-  self.remove();
-  domEach(target, function (i, el) {
-    var clonedSelf = self._makeDomArray(self.clone());
-    var parent = el.parent;
-    if (!parent) {
-      return;
-    }
-
-    var siblings = parent.children;
-    var index = siblings.indexOf(el);
-
-    // If not found, move on
-    if (index < 0) return;
-
-    // Add cloned `this` element(s) after target element
-    uniqueSplice(siblings, index, 0, clonedSelf, parent);
-    clones.push(clonedSelf);
-  });
-  return this.constructor.call(this.constructor, this._makeDomArray(clones));
-};
-
+function insertBefore(target) {
+    var _this = this;
+    var targetArr = this._make(target);
+    this.remove();
+    var clones = [];
+    utils_1.domEach(targetArr, function (el) {
+        var clonedSelf = _this.clone().toArray();
+        var parent = el.parent;
+        if (!parent) {
+            return;
+        }
+        var siblings = parent.children;
+        var index = siblings.indexOf(el);
+        // If not found, move on
+        /* istanbul ignore next */
+        if (index < 0)
+            return;
+        // Add cloned `this` element(s) after target element
+        uniqueSplice(siblings, index, 0, clonedSelf, parent);
+        clones.push.apply(clones, clonedSelf);
+    });
+    return this._make(clones);
+}
+exports.insertBefore = insertBefore;
 /**
  * Removes the set of matched elements from the DOM and all their children.
  * `selector` filters the set of matched elements to be removed.
  *
+ * @category Manipulation
  * @example
  *
- * $('.pear').remove()
- * $.html()
+ * ```js
+ * $('.pear').remove();
+ * $.html();
  * //=>  <ul id="fruits">
  * //      <li class="apple">Apple</li>
  * //      <li class="orange">Orange</li>
  * //    </ul>
+ * ```
  *
- * @param {string} [selector] - Optional selector for elements to remove.
- *
- * @see {@link http://api.jquery.com/remove/}
+ * @param selector - Optional selector for elements to remove.
+ * @returns The instance itself.
+ * @see {@link https://api.jquery.com/remove/}
  */
-exports.remove = function (selector) {
-  var elems = this;
-
-  // Filter if we have selector
-  if (selector) elems = elems.filter(selector);
-
-  domEach(elems, function (i, el) {
-    DomUtils.removeElement(el);
-    el.prev = el.next = el.parent = null;
-  });
-
-  return this;
-};
-
+function remove(selector) {
+    // Filter if we have selector
+    var elems = selector ? this.filter(selector) : this;
+    utils_1.domEach(elems, function (el) {
+        htmlparser2_1.DomUtils.removeElement(el);
+        el.prev = el.next = el.parent = null;
+    });
+    return this;
+}
+exports.remove = remove;
 /**
  * Replaces matched elements with `content`.
  *
+ * @category Manipulation
  * @example
  *
- * const plum = $('<li class="plum">Plum</li>')
- * $('.pear').replaceWith(plum)
- * $.html()
+ * ```js
+ * const plum = $('<li class="plum">Plum</li>');
+ * $('.pear').replaceWith(plum);
+ * $.html();
  * //=> <ul id="fruits">
  * //     <li class="apple">Apple</li>
  * //     <li class="orange">Orange</li>
  * //     <li class="plum">Plum</li>
  * //   </ul>
+ * ```
  *
- * @param {cheerio|Function} content - Replacement for matched elements.
- *
- * @see {@link http://api.jquery.com/replaceWith/}
+ * @param content - Replacement for matched elements.
+ * @returns The instance itself.
+ * @see {@link https://api.jquery.com/replaceWith/}
  */
-exports.replaceWith = function (content) {
-  var self = this;
-
-  domEach(this, function (i, el) {
-    var parent = el.parent;
-    if (!parent) {
-      return;
-    }
-
-    var siblings = parent.children;
-    var dom = self._makeDomArray(
-      typeof content === 'function' ? content.call(el, i, el) : content
-    );
-    var index;
-
-    // In the case that `dom` contains nodes that already exist in other
-    // structures, ensure those nodes are properly removed.
-    updateDOM(dom, null);
-
-    index = siblings.indexOf(el);
-
-    // Completely remove old element
-    uniqueSplice(siblings, index, 1, dom, parent);
-    el.parent = el.prev = el.next = null;
-  });
-
-  return this;
-};
-
+function replaceWith(content) {
+    var _this = this;
+    return utils_1.domEach(this, function (el, i) {
+        var parent = el.parent;
+        if (!parent) {
+            return;
+        }
+        var siblings = parent.children;
+        var cont = typeof content === 'function' ? content.call(el, i, el) : content;
+        var dom = _this._makeDomArray(cont);
+        /*
+         * In the case that `dom` contains nodes that already exist in other
+         * structures, ensure those nodes are properly removed.
+         */
+        parse_1.update(dom, null);
+        var index = siblings.indexOf(el);
+        // Completely remove old element
+        uniqueSplice(siblings, index, 1, dom, parent);
+        if (!dom.includes(el)) {
+            el.parent = el.prev = el.next = null;
+        }
+    });
+}
+exports.replaceWith = replaceWith;
 /**
  * Empties an element, removing all its children.
  *
+ * @category Manipulation
  * @example
  *
- * $('ul').empty()
- * $.html()
+ * ```js
+ * $('ul').empty();
+ * $.html();
  * //=>  <ul id="fruits"></ul>
+ * ```
  *
- * @see {@link http://api.jquery.com/empty/}
+ * @returns The instance itself.
+ * @see {@link https://api.jquery.com/empty/}
  */
-exports.empty = function () {
-  domEach(this, function (i, el) {
-    el.children.forEach(function (child) {
-      child.next = child.prev = child.parent = null;
+function empty() {
+    return utils_1.domEach(this, function (el) {
+        if (!htmlparser2_1.DomUtils.hasChildren(el))
+            return;
+        el.children.forEach(function (child) {
+            child.next = child.prev = child.parent = null;
+        });
+        el.children.length = 0;
     });
-
-    el.children.length = 0;
-  });
-  return this;
-};
-
+}
+exports.empty = empty;
+function html(str) {
+    if (str === undefined) {
+        var el = this[0];
+        if (!el || !htmlparser2_1.DomUtils.hasChildren(el))
+            return null;
+        return static_1.html(el.children, this.options);
+    }
+    // Keep main options unchanged
+    var opts = tslib_1.__assign(tslib_1.__assign({}, this.options), { context: null });
+    return utils_1.domEach(this, function (el) {
+        if (!htmlparser2_1.DomUtils.hasChildren(el))
+            return;
+        el.children.forEach(function (child) {
+            child.next = child.prev = child.parent = null;
+        });
+        opts.context = el;
+        var content = utils_1.isCheerio(str)
+            ? str.toArray()
+            : parse_1.default("" + str, opts, false).children;
+        parse_1.update(content, el);
+    });
+}
+exports.html = html;
 /**
- * Gets an HTML content string from the first selected element. If `htmlString`
- * is specified, each selected element's content is replaced by the new
- * content.
+ * Turns the collection to a string. Alias for `.html()`.
  *
- * @param {string} str - If specified used to replace selection's contents.
- *
- * @example
- *
- * $('.orange').html()
- * //=> Orange
- *
- * $('#fruits').html('<li class="mango">Mango</li>').html()
- * //=> <li class="mango">Mango</li>
- *
- * @see {@link http://api.jquery.com/html/}
+ * @category Manipulation
+ * @returns The rendered document.
  */
-exports.html = function (str) {
-  if (str === undefined) {
-    if (!this[0] || !this[0].children) return null;
-    return html(this[0].children, this.options);
-  }
-
-  var opts = this.options;
-
-  domEach(this, function (i, el) {
-    el.children.forEach(function (child) {
-      child.next = child.prev = child.parent = null;
+function toString() {
+    return static_1.html(this, this.options);
+}
+exports.toString = toString;
+function text(str) {
+    var _this = this;
+    // If `str` is undefined, act as a "getter"
+    if (str === undefined) {
+        return static_1.text(this);
+    }
+    if (typeof str === 'function') {
+        // Function support
+        return utils_1.domEach(this, function (el, i) {
+            text.call(_this._make(el), str.call(el, i, static_1.text([el])));
+        });
+    }
+    // Append text node to each selected elements
+    return utils_1.domEach(this, function (el) {
+        if (!htmlparser2_1.DomUtils.hasChildren(el))
+            return;
+        el.children.forEach(function (child) {
+            child.next = child.prev = child.parent = null;
+        });
+        var textNode = new domhandler_2.Text(str);
+        parse_1.update(textNode, el);
     });
-
-    var content = str.cheerio
-      ? str.clone().get()
-      : parse('' + str, opts, false).children;
-
-    updateDOM(content, el);
-  });
-
-  return this;
-};
-
-exports.toString = function () {
-  return html(this, this.options);
-};
-
-/**
- * Get the combined text contents of each element in the set of matched
- * elements, including their descendants. If `textString` is specified, each
- * selected element's content is replaced by the new text content.
- *
- * @param {string} [str] - If specified replacement for the selected element's contents.
- *
- * @example
- *
- * $('.orange').text()
- * //=> Orange
- *
- * $('ul').text()
- * //=>  Apple
- * //    Orange
- * //    Pear
- *
- * @see {@link http://api.jquery.com/text/}
- */
-exports.text = function (str) {
-  // If `str` is undefined, act as a "getter"
-  if (str === undefined) {
-    return text(this);
-  } else if (typeof str === 'function') {
-    // Function support
-    var self = this;
-    return domEach(this, function (i, el) {
-      return exports.text.call(self._make(el), str.call(el, i, text([el])));
-    });
-  }
-
-  // Append text node to each selected elements
-  domEach(this, function (i, el) {
-    el.children.forEach(function (child) {
-      child.next = child.prev = child.parent = null;
-    });
-
-    var textNode = new domhandler.Text(str);
-
-    updateDOM(textNode, el);
-  });
-
-  return this;
-};
-
+}
+exports.text = text;
 /**
  * Clone the cheerio object.
  *
+ * @category Manipulation
  * @example
  *
- * const moreFruit = $('#fruits').clone()
+ * ```js
+ * const moreFruit = $('#fruits').clone();
+ * ```
  *
- * @see {@link http://api.jquery.com/clone/}
+ * @returns The cloned object.
+ * @see {@link https://api.jquery.com/clone/}
  */
-exports.clone = function () {
-  return this._make(cloneDom(this.get(), this.options));
-};
+function clone() {
+    return this._make(utils_1.cloneDom(this.get()));
+}
+exports.clone = clone;
 
 
 /***/ }),
@@ -3023,571 +2963,491 @@ exports.clone = function () {
 /***/ 6563:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
+"use strict";
+
 /**
  * Methods for traversing the DOM structure.
  *
  * @module cheerio/traversing
  */
-
-var select = __nccwpck_require__(4225);
-var utils = __nccwpck_require__(1183);
-var domEach = utils.domEach;
-var uniqueSort = __nccwpck_require__(2928).DomUtils.uniqueSort;
-var isTag = utils.isTag;
-
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.addBack = exports.add = exports.end = exports.slice = exports.index = exports.toArray = exports.get = exports.eq = exports.last = exports.first = exports.has = exports.not = exports.is = exports.filterArray = exports.filter = exports.map = exports.each = exports.contents = exports.children = exports.siblings = exports.prevUntil = exports.prevAll = exports.prev = exports.nextUntil = exports.nextAll = exports.next = exports.closest = exports.parentsUntil = exports.parents = exports.parent = exports.find = void 0;
+var tslib_1 = __nccwpck_require__(9679);
+var domhandler_1 = __nccwpck_require__(4038);
+var select = tslib_1.__importStar(__nccwpck_require__(5409));
+var utils_1 = __nccwpck_require__(1183);
+var static_1 = __nccwpck_require__(2);
+var htmlparser2_1 = __nccwpck_require__(2928);
+var uniqueSort = htmlparser2_1.DomUtils.uniqueSort;
+var reSiblingSelector = /^\s*[~+]/;
 /**
  * Get the descendants of each element in the current set of matched elements,
  * filtered by a selector, jQuery object, or element.
  *
+ * @category Traversing
  * @example
  *
- * $('#fruits').find('li').length
+ * ```js
+ * $('#fruits').find('li').length;
  * //=> 3
- * $('#fruits').find($('.apple')).length
+ * $('#fruits').find($('.apple')).length;
  * //=> 1
+ * ```
  *
- * @param {string|cheerio|node} selectorOrHaystack - Element to look for.
- *
- * @see {@link http://api.jquery.com/find/}
+ * @param selectorOrHaystack - Element to look for.
+ * @returns The found elements.
+ * @see {@link https://api.jquery.com/find/}
  */
-exports.find = function (selectorOrHaystack) {
-  var elems = this.toArray().reduce(function (newElems, elem) {
-    return newElems.concat(elem.children.filter(isTag));
-  }, []);
-  var contains = this.constructor.contains;
-  var haystack;
-
-  if (selectorOrHaystack && typeof selectorOrHaystack !== 'string') {
-    if (selectorOrHaystack.cheerio) {
-      haystack = selectorOrHaystack.get();
-    } else {
-      haystack = [selectorOrHaystack];
+function find(selectorOrHaystack) {
+    var _a;
+    if (!selectorOrHaystack) {
+        return this._make([]);
     }
-
-    return this._make(
-      haystack.filter(function (elem) {
-        var idx;
-        var len;
-        for (idx = 0, len = this.length; idx < len; ++idx) {
-          if (contains(this[idx], elem)) {
-            return true;
-          }
+    var context = this.toArray();
+    if (typeof selectorOrHaystack !== 'string') {
+        var haystack = utils_1.isCheerio(selectorOrHaystack)
+            ? selectorOrHaystack.toArray()
+            : [selectorOrHaystack];
+        return this._make(haystack.filter(function (elem) { return context.some(function (node) { return static_1.contains(node, elem); }); }));
+    }
+    var elems = reSiblingSelector.test(selectorOrHaystack)
+        ? context
+        : this.children().toArray();
+    var options = {
+        context: context,
+        root: (_a = this._root) === null || _a === void 0 ? void 0 : _a[0],
+        xmlMode: this.options.xmlMode,
+    };
+    return this._make(select.select(selectorOrHaystack, elems, options));
+}
+exports.find = find;
+/**
+ * Creates a matcher, using a particular mapping function. Matchers provide a
+ * function that finds elements using a generating function, supporting filtering.
+ *
+ * @private
+ * @param matchMap - Mapping function.
+ * @returns - Function for wrapping generating functions.
+ */
+function _getMatcher(matchMap) {
+    return function (fn) {
+        var postFns = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            postFns[_i - 1] = arguments[_i];
         }
-      }, this)
-    );
-  }
-
-  var options = { __proto__: this.options, context: this.toArray() };
-
-  return this._make(select.select(selectorOrHaystack || '', elems, options));
-};
-
+        return function (selector) {
+            var _a;
+            var matched = matchMap(fn, this);
+            if (selector) {
+                matched = filterArray(matched, selector, this.options.xmlMode, (_a = this._root) === null || _a === void 0 ? void 0 : _a[0]);
+            }
+            return this._make(
+            // Post processing is only necessary if there is more than one element.
+            this.length > 1 && matched.length > 1
+                ? postFns.reduce(function (elems, fn) { return fn(elems); }, matched)
+                : matched);
+        };
+    };
+}
+/** Matcher that adds multiple elements for each entry in the input. */
+var _matcher = _getMatcher(function (fn, elems) {
+    var _a;
+    var ret = [];
+    for (var i = 0; i < elems.length; i++) {
+        var value = fn(elems[i]);
+        ret.push(value);
+    }
+    return (_a = new Array()).concat.apply(_a, ret);
+});
+/** Matcher that adds at most one element for each entry in the input. */
+var _singleMatcher = _getMatcher(function (fn, elems) {
+    var ret = [];
+    for (var i = 0; i < elems.length; i++) {
+        var value = fn(elems[i]);
+        if (value !== null) {
+            ret.push(value);
+        }
+    }
+    return ret;
+});
+/**
+ * Matcher that supports traversing until a condition is met.
+ *
+ * @returns A function usable for `*Until` methods.
+ */
+function _matchUntil(nextElem) {
+    var postFns = [];
+    for (var _i = 1; _i < arguments.length; _i++) {
+        postFns[_i - 1] = arguments[_i];
+    }
+    // We use a variable here that is used from within the matcher.
+    var matches = null;
+    var innerMatcher = _getMatcher(function (nextElem, elems) {
+        var matched = [];
+        utils_1.domEach(elems, function (elem) {
+            for (var next_1; (next_1 = nextElem(elem)); elem = next_1) {
+                // FIXME: `matched` might contain duplicates here and the index is too large.
+                if (matches === null || matches === void 0 ? void 0 : matches(next_1, matched.length))
+                    break;
+                matched.push(next_1);
+            }
+        });
+        return matched;
+    }).apply(void 0, tslib_1.__spreadArray([nextElem], postFns));
+    return function (selector, filterSelector) {
+        var _this = this;
+        // Override `matches` variable with the new target.
+        matches =
+            typeof selector === 'string'
+                ? function (elem) { return select.is(elem, selector, _this.options); }
+                : selector
+                    ? getFilterFn(selector)
+                    : null;
+        var ret = innerMatcher.call(this, filterSelector);
+        // Set `matches` to `null`, so we don't waste memory.
+        matches = null;
+        return ret;
+    };
+}
+function _removeDuplicates(elems) {
+    return Array.from(new Set(elems));
+}
 /**
  * Get the parent of each element in the current set of matched elements,
  * optionally filtered by a selector.
  *
+ * @category Traversing
  * @example
  *
- * $('.pear').parent().attr('id')
+ * ```js
+ * $('.pear').parent().attr('id');
  * //=> fruits
+ * ```
  *
- * @param {string} [selector] - If specified filter for parent.
- *
- * @see {@link http://api.jquery.com/parent/}
+ * @param selector - If specified filter for parent.
+ * @returns The parents.
+ * @see {@link https://api.jquery.com/parent/}
  */
-exports.parent = function (selector) {
-  var set = [];
-
-  domEach(this, function (idx, elem) {
-    var parentElem = elem.parent;
-    if (
-      parentElem &&
-      parentElem.type !== 'root' &&
-      set.indexOf(parentElem) < 0
-    ) {
-      set.push(parentElem);
-    }
-  });
-
-  if (arguments.length) {
-    set = exports.filter.call(set, selector, this);
-  }
-
-  return this._make(set);
-};
-
+exports.parent = _singleMatcher(function (_a) {
+    var parent = _a.parent;
+    return (parent && !domhandler_1.isDocument(parent) ? parent : null);
+}, _removeDuplicates);
 /**
  * Get a set of parents filtered by `selector` of each element in the current
  * set of match elements.
  *
+ * @category Traversing
  * @example
  *
- * $('.orange').parents().length
- * // => 2
- * $('.orange').parents('#fruits').length
- * // => 1
+ * ```js
+ * $('.orange').parents().length;
+ * //=> 2
+ * $('.orange').parents('#fruits').length;
+ * //=> 1
+ * ```
  *
- * @param {string} [selector] - If specified filter for parents.
- *
- * @see {@link http://api.jquery.com/parents/}
+ * @param selector - If specified filter for parents.
+ * @returns The parents.
+ * @see {@link https://api.jquery.com/parents/}
  */
-exports.parents = function (selector) {
-  var parentNodes = [];
-
-  // When multiple DOM elements are in the original set, the resulting set will
-  // be in *reverse* order of the original elements as well, with duplicates
-  // removed.
-  this.get()
-    .reverse()
-    .forEach(function (elem) {
-      traverseParents(this, elem.parent, selector, Infinity).forEach(function (
-        node
-      ) {
-        if (parentNodes.indexOf(node) === -1) {
-          parentNodes.push(node);
-        }
-      });
-    }, this);
-
-  return this._make(parentNodes);
-};
-
+exports.parents = _matcher(function (elem) {
+    var matched = [];
+    while (elem.parent && !domhandler_1.isDocument(elem.parent)) {
+        matched.push(elem.parent);
+        elem = elem.parent;
+    }
+    return matched;
+}, uniqueSort, function (elems) { return elems.reverse(); });
 /**
  * Get the ancestors of each element in the current set of matched elements, up
- * to but not including the element matched by the selector, DOM node, or
- * cheerio object.
+ * to but not including the element matched by the selector, DOM node, or cheerio object.
  *
+ * @category Traversing
  * @example
  *
- * $('.orange').parentsUntil('#food').length
- * // => 1
+ * ```js
+ * $('.orange').parentsUntil('#food').length;
+ * //=> 1
+ * ```
  *
- * @param {string|node|cheerio} selector - Selector for element to stop at.
- * @param {string|Function} [filter] - Optional filter for parents.
- *
- * @see {@link http://api.jquery.com/parentsUntil/}
+ * @param selector - Selector for element to stop at.
+ * @param filterSelector - Optional filter for parents.
+ * @returns The parents.
+ * @see {@link https://api.jquery.com/parentsUntil/}
  */
-exports.parentsUntil = function (selector, filter) {
-  var parentNodes = [];
-  var untilNode;
-  var untilNodes;
-
-  if (typeof selector === 'string') {
-    untilNode = select.select(
-      selector,
-      this.parents().toArray(),
-      this.options
-    )[0];
-  } else if (selector && selector.cheerio) {
-    untilNodes = selector.toArray();
-  } else if (selector) {
-    untilNode = selector;
-  }
-
-  // When multiple DOM elements are in the original set, the resulting set will
-  // be in *reverse* order of the original elements as well, with duplicates
-  // removed.
-
-  this.toArray()
-    .reverse()
-    .forEach(function (elem) {
-      while ((elem = elem.parent)) {
-        if (
-          (untilNode && elem !== untilNode) ||
-          (untilNodes && untilNodes.indexOf(elem) === -1) ||
-          (!untilNode && !untilNodes)
-        ) {
-          if (isTag(elem) && parentNodes.indexOf(elem) === -1) {
-            parentNodes.push(elem);
-          }
-        } else {
-          break;
-        }
-      }
-    }, this);
-
-  return this._make(
-    filter ? select.select(filter, parentNodes, this.options) : parentNodes
-  );
-};
-
+exports.parentsUntil = _matchUntil(function (_a) {
+    var parent = _a.parent;
+    return (parent && !domhandler_1.isDocument(parent) ? parent : null);
+}, uniqueSort, function (elems) { return elems.reverse(); });
 /**
  * For each element in the set, get the first element that matches the selector
- * by testing the element itself and traversing up through its ancestors in
- * the DOM tree.
+ * by testing the element itself and traversing up through its ancestors in the DOM tree.
  *
+ * @category Traversing
  * @example
  *
- * $('.orange').closest()
- * // => []
- * $('.orange').closest('.apple')
- * // => []
- * $('.orange').closest('li')
- * // => [<li class="orange">Orange</li>]
- * $('.orange').closest('#fruits')
- * // => [<ul id="fruits"> ... </ul>]
+ * ```js
+ * $('.orange').closest();
+ * //=> []
  *
- * @param {string} [selector] - Selector for the element to find.
+ * $('.orange').closest('.apple');
+ * // => []
  *
- * @see {@link http://api.jquery.com/closest/}
+ * $('.orange').closest('li');
+ * //=> [<li class="orange">Orange</li>]
+ *
+ * $('.orange').closest('#fruits');
+ * //=> [<ul id="fruits"> ... </ul>]
+ * ```
+ *
+ * @param selector - Selector for the element to find.
+ * @returns The closest nodes.
+ * @see {@link https://api.jquery.com/closest/}
  */
-exports.closest = function (selector) {
-  var set = [];
-
-  if (!selector) {
+function closest(selector) {
+    var _this = this;
+    var set = [];
+    if (!selector) {
+        return this._make(set);
+    }
+    utils_1.domEach(this, function (elem) {
+        var _a;
+        while (elem && elem.type !== 'root') {
+            if (!selector ||
+                filterArray([elem], selector, _this.options.xmlMode, (_a = _this._root) === null || _a === void 0 ? void 0 : _a[0])
+                    .length) {
+                // Do not add duplicate elements to the set
+                if (elem && !set.includes(elem)) {
+                    set.push(elem);
+                }
+                break;
+            }
+            elem = elem.parent;
+        }
+    });
     return this._make(set);
-  }
-
-  domEach(this, function (idx, elem) {
-    var closestElem = traverseParents(this, elem, selector, 1)[0];
-
-    // Do not add duplicate elements to the set
-    if (closestElem && set.indexOf(closestElem) < 0) {
-      set.push(closestElem);
-    }
-  });
-
-  return this._make(set);
-};
-
+}
+exports.closest = closest;
 /**
- * Gets the next sibling of the first selected element, optionally filtered by
- * a selector.
+ * Gets the next sibling of the first selected element, optionally filtered by a selector.
  *
+ * @category Traversing
  * @example
  *
- * $('.apple').next().hasClass('orange')
+ * ```js
+ * $('.apple').next().hasClass('orange');
  * //=> true
+ * ```
  *
- * @param {string} [selector] - If specified filter for sibling.
- *
- * @see {@link http://api.jquery.com/next/}
+ * @param selector - If specified filter for sibling.
+ * @returns The next nodes.
+ * @see {@link https://api.jquery.com/next/}
  */
-exports.next = function (selector) {
-  if (!this[0]) {
-    return this;
-  }
-  var elems = [];
-
-  this.toArray().forEach(function (elem) {
-    while ((elem = elem.next)) {
-      if (isTag(elem)) {
-        elems.push(elem);
-        return;
-      }
-    }
-  });
-
-  return selector
-    ? exports.filter.call(elems, selector, this)
-    : this._make(elems);
-};
-
+exports.next = _singleMatcher(function (elem) { return htmlparser2_1.DomUtils.nextElementSibling(elem); });
 /**
  * Gets all the following siblings of the first selected element, optionally
  * filtered by a selector.
  *
+ * @category Traversing
  * @example
  *
- * $('.apple').nextAll()
+ * ```js
+ * $('.apple').nextAll();
  * //=> [<li class="orange">Orange</li>, <li class="pear">Pear</li>]
- * $('.apple').nextAll('.orange')
+ * $('.apple').nextAll('.orange');
  * //=> [<li class="orange">Orange</li>]
+ * ```
  *
- * @param {string} [selector] - If specified filter for siblings.
- *
- * @see {@link http://api.jquery.com/nextAll/}
+ * @param selector - If specified filter for siblings.
+ * @returns The next nodes.
+ * @see {@link https://api.jquery.com/nextAll/}
  */
-exports.nextAll = function (selector) {
-  if (!this[0]) {
-    return this;
-  }
-  var elems = [];
-
-  this.toArray().forEach(function (elem) {
-    while ((elem = elem.next)) {
-      if (isTag(elem) && elems.indexOf(elem) === -1) {
-        elems.push(elem);
-      }
+exports.nextAll = _matcher(function (elem) {
+    var matched = [];
+    while (elem.next) {
+        elem = elem.next;
+        if (utils_1.isTag(elem))
+            matched.push(elem);
     }
-  });
-
-  return selector
-    ? exports.filter.call(elems, selector, this)
-    : this._make(elems);
-};
-
+    return matched;
+}, _removeDuplicates);
 /**
  * Gets all the following siblings up to but not including the element matched
  * by the selector, optionally filtered by another selector.
  *
+ * @category Traversing
  * @example
  *
- * $('.apple').nextUntil('.pear')
+ * ```js
+ * $('.apple').nextUntil('.pear');
  * //=> [<li class="orange">Orange</li>]
+ * ```
  *
- * @param {string|cheerio|node} selector - Selector for element to stop at.
- * @param {string} [filterSelector] - If specified filter for siblings.
- *
- * @see {@link http://api.jquery.com/nextUntil/}
+ * @param selector - Selector for element to stop at.
+ * @param filterSelector - If specified filter for siblings.
+ * @returns The next nodes.
+ * @see {@link https://api.jquery.com/nextUntil/}
  */
-exports.nextUntil = function (selector, filterSelector) {
-  if (!this[0]) {
-    return this;
-  }
-  var elems = [];
-  var untilNode;
-  var untilNodes;
-
-  if (typeof selector === 'string') {
-    untilNode = select.select(selector, this.nextAll().get(), this.options)[0];
-  } else if (selector && selector.cheerio) {
-    untilNodes = selector.get();
-  } else if (selector) {
-    untilNode = selector;
-  }
-
-  this.toArray().forEach(function (elem) {
-    while ((elem = elem.next)) {
-      if (
-        (untilNode && elem !== untilNode) ||
-        (untilNodes && untilNodes.indexOf(elem) === -1) ||
-        (!untilNode && !untilNodes)
-      ) {
-        if (isTag(elem) && elems.indexOf(elem) === -1) {
-          elems.push(elem);
-        }
-      } else {
-        break;
-      }
-    }
-  });
-
-  return filterSelector
-    ? exports.filter.call(elems, filterSelector, this)
-    : this._make(elems);
-};
-
+exports.nextUntil = _matchUntil(function (el) { return htmlparser2_1.DomUtils.nextElementSibling(el); }, _removeDuplicates);
 /**
  * Gets the previous sibling of the first selected element optionally filtered
  * by a selector.
  *
+ * @category Traversing
  * @example
  *
- * $('.orange').prev().hasClass('apple')
+ * ```js
+ * $('.orange').prev().hasClass('apple');
  * //=> true
+ * ```
  *
- * @param {string} [selector] - If specified filter for siblings.
- *
- * @see {@link http://api.jquery.com/prev/}
+ * @param selector - If specified filter for siblings.
+ * @returns The previous nodes.
+ * @see {@link https://api.jquery.com/prev/}
  */
-exports.prev = function (selector) {
-  if (!this[0]) {
-    return this;
-  }
-  var elems = [];
-
-  this.toArray().forEach(function (elem) {
-    while ((elem = elem.prev)) {
-      if (isTag(elem)) {
-        elems.push(elem);
-        return;
-      }
-    }
-  });
-
-  return selector
-    ? exports.filter.call(elems, selector, this)
-    : this._make(elems);
-};
-
+exports.prev = _singleMatcher(function (elem) { return htmlparser2_1.DomUtils.prevElementSibling(elem); });
 /**
  * Gets all the preceding siblings of the first selected element, optionally
  * filtered by a selector.
  *
+ * @category Traversing
  * @example
  *
- * $('.pear').prevAll()
+ * ```js
+ * $('.pear').prevAll();
  * //=> [<li class="orange">Orange</li>, <li class="apple">Apple</li>]
- * $('.pear').prevAll('.orange')
+ *
+ * $('.pear').prevAll('.orange');
  * //=> [<li class="orange">Orange</li>]
+ * ```
  *
- * @param {string} [selector] - If specified filter for siblings.
- *
- * @see {@link http://api.jquery.com/prevAll/}
+ * @param selector - If specified filter for siblings.
+ * @returns The previous nodes.
+ * @see {@link https://api.jquery.com/prevAll/}
  */
-exports.prevAll = function (selector) {
-  if (!this[0]) {
-    return this;
-  }
-  var elems = [];
-
-  this.toArray().forEach(function (elem) {
-    while ((elem = elem.prev)) {
-      if (isTag(elem) && elems.indexOf(elem) === -1) {
-        elems.push(elem);
-      }
+exports.prevAll = _matcher(function (elem) {
+    var matched = [];
+    while (elem.prev) {
+        elem = elem.prev;
+        if (utils_1.isTag(elem))
+            matched.push(elem);
     }
-  });
-
-  return selector
-    ? exports.filter.call(elems, selector, this)
-    : this._make(elems);
-};
-
+    return matched;
+}, _removeDuplicates);
 /**
  * Gets all the preceding siblings up to but not including the element matched
  * by the selector, optionally filtered by another selector.
  *
+ * @category Traversing
  * @example
  *
- * $('.pear').prevUntil('.apple')
+ * ```js
+ * $('.pear').prevUntil('.apple');
  * //=> [<li class="orange">Orange</li>]
+ * ```
  *
- * @param {string|cheerio|node} selector - Selector for element to stop at.
- * @param {string} [filterSelector] - If specified filter for siblings.
- *
- * @see {@link http://api.jquery.com/prevUntil/}
+ * @param selector - Selector for element to stop at.
+ * @param filterSelector - If specified filter for siblings.
+ * @returns The previous nodes.
+ * @see {@link https://api.jquery.com/prevUntil/}
  */
-exports.prevUntil = function (selector, filterSelector) {
-  if (!this[0]) {
-    return this;
-  }
-  var elems = [];
-  var untilNode;
-  var untilNodes;
-
-  if (typeof selector === 'string') {
-    untilNode = select.select(selector, this.prevAll().get(), this.options)[0];
-  } else if (selector && selector.cheerio) {
-    untilNodes = selector.get();
-  } else if (selector) {
-    untilNode = selector;
-  }
-
-  this.toArray().forEach(function (elem) {
-    while ((elem = elem.prev)) {
-      if (
-        (untilNode && elem !== untilNode) ||
-        (untilNodes && untilNodes.indexOf(elem) === -1) ||
-        (!untilNode && !untilNodes)
-      ) {
-        if (isTag(elem) && elems.indexOf(elem) === -1) {
-          elems.push(elem);
-        }
-      } else {
-        break;
-      }
-    }
-  });
-
-  return filterSelector
-    ? exports.filter.call(elems, filterSelector, this)
-    : this._make(elems);
-};
-
+exports.prevUntil = _matchUntil(function (el) { return htmlparser2_1.DomUtils.prevElementSibling(el); }, _removeDuplicates);
 /**
- * Gets the first selected element's siblings, excluding itself.
+ * Get the siblings of each element (excluding the element) in the set of
+ * matched elements, optionally filtered by a selector.
  *
+ * @category Traversing
  * @example
  *
- * $('.pear').siblings().length
+ * ```js
+ * $('.pear').siblings().length;
  * //=> 2
  *
- * $('.pear').siblings('.orange').length
+ * $('.pear').siblings('.orange').length;
  * //=> 1
+ * ```
  *
- * @param {string} [selector] - If specified filter for siblings.
- *
- * @see {@link http://api.jquery.com/siblings/}
+ * @param selector - If specified filter for siblings.
+ * @returns The siblings.
+ * @see {@link https://api.jquery.com/siblings/}
  */
-exports.siblings = function (selector) {
-  var parent = this.parent();
-
-  var elems = (parent ? parent.children() : this.siblingsAndMe())
-    .toArray()
-    .filter(function (elem) {
-      return isTag(elem) && !this.is(elem);
-    }, this);
-
-  if (selector !== undefined) {
-    return exports.filter.call(elems, selector, this);
-  }
-  return this._make(elems);
-};
-
+exports.siblings = _matcher(function (elem) {
+    return htmlparser2_1.DomUtils.getSiblings(elem).filter(function (el) { return utils_1.isTag(el) && el !== elem; });
+}, uniqueSort);
 /**
  * Gets the children of the first selected element.
  *
+ * @category Traversing
  * @example
  *
- * $('#fruits').children().length
+ * ```js
+ * $('#fruits').children().length;
  * //=> 3
  *
- * $('#fruits').children('.pear').text()
+ * $('#fruits').children('.pear').text();
  * //=> Pear
+ * ```
  *
- * @param {string} [selector] - If specified filter for children.
- *
- * @see {@link http://api.jquery.com/children/}
+ * @param selector - If specified filter for children.
+ * @returns The children.
+ * @see {@link https://api.jquery.com/children/}
  */
-exports.children = function (selector) {
-  var elems = this.toArray().reduce(function (newElems, elem) {
-    return newElems.concat(elem.children.filter(isTag));
-  }, []);
-
-  if (selector === undefined) return this._make(elems);
-
-  return exports.filter.call(elems, selector, this);
-};
-
+exports.children = _matcher(function (elem) { return htmlparser2_1.DomUtils.getChildren(elem).filter(utils_1.isTag); }, _removeDuplicates);
 /**
  * Gets the children of each element in the set of matched elements, including
  * text and comment nodes.
  *
+ * @category Traversing
  * @example
  *
- * $('#fruits').contents().length
+ * ```js
+ * $('#fruits').contents().length;
  * //=> 3
+ * ```
  *
- * @see {@link http://api.jquery.com/contents/}
+ * @returns The children.
+ * @see {@link https://api.jquery.com/contents/}
  */
-exports.contents = function () {
-  var elems = this.toArray().reduce(function (newElems, elem) {
-    return newElems.concat(elem.children);
-  }, []);
-  return this._make(elems);
-};
-
+function contents() {
+    var elems = this.toArray().reduce(function (newElems, elem) {
+        return domhandler_1.hasChildren(elem) ? newElems.concat(elem.children) : newElems;
+    }, []);
+    return this._make(elems);
+}
+exports.contents = contents;
 /**
  * Iterates over a cheerio object, executing a function for each matched
  * element. When the callback is fired, the function is fired in the context of
- * the DOM element, so `this` refers to the current element, which is
- * equivalent to the function parameter `element`. To break out of the `each`
- * loop early, return with `false`.
+ * the DOM element, so `this` refers to the current element, which is equivalent
+ * to the function parameter `element`. To break out of the `each` loop early,
+ * return with `false`.
  *
+ * @category Traversing
  * @example
  *
+ * ```js
  * const fruits = [];
  *
- * $('li').each(function(i, elem) {
+ * $('li').each(function (i, elem) {
  *   fruits[i] = $(this).text();
  * });
  *
  * fruits.join(', ');
  * //=> Apple, Orange, Pear
+ * ```
  *
- * @param {Function} fn - Function to execute.
- *
- * @see {@link http://api.jquery.com/each/}
+ * @param fn - Function to execute.
+ * @returns The instance itself, useful for chaining.
+ * @see {@link https://api.jquery.com/each/}
  */
-exports.each = function (fn) {
-  var i = 0;
-  var len = this.length;
-  while (i < len && fn.call(this[i], i, this[i]) !== false) ++i;
-  return this;
-};
-
+function each(fn) {
+    var i = 0;
+    var len = this.length;
+    while (i < len && fn.call(this[i], i, this[i]) !== false)
+        ++i;
+    return this;
+}
+exports.each = each;
 /**
  * Pass each element in the current matched set through a function, producing a
  * new Cheerio object containing the return values. The function can return an
@@ -3596,645 +3456,825 @@ exports.each = function (fn) {
  * inserted into the set. If the function returns null or undefined, no element
  * will be inserted.
  *
+ * @category Traversing
  * @example
  *
- * $('li').map(function(i, el) {
- *   // this === el
- *   return $(this).text();
- * }).get().join(' ');
+ * ```js
+ * $('li')
+ *   .map(function (i, el) {
+ *     // this === el
+ *     return $(this).text();
+ *   })
+ *   .toArray()
+ *   .join(' ');
  * //=> "apple orange pear"
+ * ```
  *
- * @param {Function} fn - Function to execute.
- *
- * @see {@link http://api.jquery.com/map/}
+ * @param fn - Function to execute.
+ * @returns The mapped elements, wrapped in a Cheerio collection.
+ * @see {@link https://api.jquery.com/map/}
  */
-exports.map = function (fn) {
-  var elems = [];
-  for (var i = 0; i < this.length; i++) {
-    var el = this[i];
-    var val = fn.call(el, i, el);
-    if (val != null) {
-      elems = elems.concat(val);
+function map(fn) {
+    var elems = [];
+    for (var i = 0; i < this.length; i++) {
+        var el = this[i];
+        var val = fn.call(el, i, el);
+        if (val != null) {
+            elems = elems.concat(val);
+        }
     }
-  }
-  return this._make(elems);
-};
-
-function getFilterFn(match) {
-  if (typeof match === 'function') {
-    return function (el, i) {
-      return match.call(el, i, el);
-    };
-  } else if (match.cheerio) {
-    return match.is.bind(match);
-  }
-  return function (el) {
-    return match === el;
-  };
+    return this._make(elems);
 }
-
+exports.map = map;
 /**
- * Iterates over a cheerio object, reducing the set of selector elements to
- * those that match the selector or pass the function's test. When a Cheerio
- * selection is specified, return only the elements contained in that
- * selection. When an element is specified, return only that element (if it is
- * contained in the original selection). If using the function method, the
- * function is executed in the context of the selected element, so `this`
+ * Creates a function to test if a filter is matched.
+ *
+ * @param match - A filter.
+ * @returns A function that determines if a filter has been matched.
+ */
+function getFilterFn(match) {
+    if (typeof match === 'function') {
+        return function (el, i) { return match.call(el, i, el); };
+    }
+    if (utils_1.isCheerio(match)) {
+        return function (el) { return Array.prototype.includes.call(match, el); };
+    }
+    return function (el) {
+        return match === el;
+    };
+}
+function filter(match) {
+    var _a;
+    return this._make(filterArray(this.toArray(), match, this.options.xmlMode, (_a = this._root) === null || _a === void 0 ? void 0 : _a[0]));
+}
+exports.filter = filter;
+function filterArray(nodes, match, xmlMode, root) {
+    return typeof match === 'string'
+        ? select.filter(match, nodes, { xmlMode: xmlMode, root: root })
+        : nodes.filter(getFilterFn(match));
+}
+exports.filterArray = filterArray;
+/**
+ * Checks the current list of elements and returns `true` if *any* of the
+ * elements match the selector. If using an element or Cheerio selection,
+ * returns `true` if *any* of the elements match. If using a predicate function,
+ * the function is executed in the context of the selected element, so `this`
  * refers to the current element.
  *
- * @function
- * @param {string | Function} match - Value to look for, following the rules above.
- * @param {node[]} container - Optional node to filter instead.
- *
- * @example <caption>Selector</caption>
- *
- * $('li').filter('.orange').attr('class');
- * //=> orange
- *
- * @example <caption>Function</caption>
- *
- * $('li').filter(function(i, el) {
- *   // this === el
- *   return $(this).attr('class') === 'orange';
- * }).attr('class')
- * //=> orange
- *
- * @see {@link http://api.jquery.com/filter/}
+ * @category Attributes
+ * @param selector - Selector for the selection.
+ * @returns Whether or not the selector matches an element of the instance.
+ * @see {@link https://api.jquery.com/is/}
  */
-exports.filter = function (match, container) {
-  container = container || this;
-  var elements = this.toArray ? this.toArray() : this;
-
-  if (typeof match === 'string') {
-    elements = select.filter(match, elements, container.options);
-  } else {
-    elements = elements.filter(getFilterFn(match));
-  }
-
-  return container._make(elements);
-};
-
+function is(selector) {
+    var nodes = this.toArray();
+    return typeof selector === 'string'
+        ? select.some(nodes.filter(utils_1.isTag), selector, this.options)
+        : selector
+            ? nodes.some(getFilterFn(selector))
+            : false;
+}
+exports.is = is;
 /**
- * Remove elements from the set of matched elements. Given a jQuery object that
+ * Remove elements from the set of matched elements. Given a Cheerio object that
  * represents a set of DOM elements, the `.not()` method constructs a new
- * jQuery object from a subset of the matching elements. The supplied selector
+ * Cheerio object from a subset of the matching elements. The supplied selector
  * is tested against each element; the elements that don't match the selector
- * will be included in the result. The `.not()` method can take a function as
- * its argument in the same way that `.filter()` does. Elements for which the
- * function returns true are excluded from the filtered set; all other elements
- * are included.
+ * will be included in the result.
  *
- * @function
- * @param {string | Function} match - Value to look for, following the rules above.
- * @param {node[]} container - Optional node to filter instead.
+ * The `.not()` method can take a function as its argument in the same way that
+ * `.filter()` does. Elements for which the function returns `true` are excluded
+ * from the filtered set; all other elements are included.
  *
+ * @category Traversing
  * @example <caption>Selector</caption>
  *
+ * ```js
  * $('li').not('.apple').length;
  * //=> 2
+ * ```
  *
  * @example <caption>Function</caption>
  *
- * $('li').not(function(i, el) {
+ * ```js
+ * $('li').not(function (i, el) {
  *   // this === el
  *   return $(this).attr('class') === 'orange';
- * }).length;
- * //=> 2
+ * }).length; //=> 2
+ * ```
  *
- * @see {@link http://api.jquery.com/not/}
+ * @param match - Value to look for, following the rules above.
+ * @param container - Optional node to filter instead.
+ * @returns The filtered collection.
+ * @see {@link https://api.jquery.com/not/}
  */
-exports.not = function (match, container) {
-  container = container || this;
-  var elements = container.toArray ? container.toArray() : container;
-  var matches;
-  var filterFn;
-
-  if (typeof match === 'string') {
-    matches = new Set(select.filter(match, elements, this.options));
-    elements = elements.filter(function (el) {
-      return !matches.has(el);
-    });
-  } else {
-    filterFn = getFilterFn(match);
-    elements = elements.filter(function (el, i) {
-      return !filterFn(el, i);
-    });
-  }
-
-  return container._make(elements);
-};
-
+function not(match) {
+    var nodes = this.toArray();
+    if (typeof match === 'string') {
+        var matches_1 = new Set(select.filter(match, nodes, this.options));
+        nodes = nodes.filter(function (el) { return !matches_1.has(el); });
+    }
+    else {
+        var filterFn_1 = getFilterFn(match);
+        nodes = nodes.filter(function (el, i) { return !filterFn_1(el, i); });
+    }
+    return this._make(nodes);
+}
+exports.not = not;
 /**
  * Filters the set of matched elements to only those which have the given DOM
  * element as a descendant or which have a descendant that matches the given
  * selector. Equivalent to `.filter(':has(selector)')`.
  *
+ * @category Traversing
  * @example <caption>Selector</caption>
  *
+ * ```js
  * $('ul').has('.pear').attr('id');
  * //=> fruits
+ * ```
  *
  * @example <caption>Element</caption>
  *
+ * ```js
  * $('ul').has($('.pear')[0]).attr('id');
  * //=> fruits
+ * ```
  *
- * @param {string|cheerio|node} selectorOrHaystack - Element to look for.
- *
- * @see {@link http://api.jquery.com/has/}
+ * @param selectorOrHaystack - Element to look for.
+ * @returns The filtered collection.
+ * @see {@link https://api.jquery.com/has/}
  */
-exports.has = function (selectorOrHaystack) {
-  var that = this;
-  return exports.filter.call(this, function () {
-    return that._make(this).find(selectorOrHaystack).length > 0;
-  });
-};
-
+function has(selectorOrHaystack) {
+    var _this = this;
+    return this.filter(typeof selectorOrHaystack === 'string'
+        ? // Using the `:has` selector here short-circuits searches.
+            ":has(" + selectorOrHaystack + ")"
+        : function (_, el) { return _this._make(el).find(selectorOrHaystack).length > 0; });
+}
+exports.has = has;
 /**
  * Will select the first element of a cheerio object.
  *
+ * @category Traversing
  * @example
  *
- * $('#fruits').children().first().text()
+ * ```js
+ * $('#fruits').children().first().text();
  * //=> Apple
+ * ```
  *
- * @see {@link http://api.jquery.com/first/}
+ * @returns The first element.
+ * @see {@link https://api.jquery.com/first/}
  */
-exports.first = function () {
-  return this.length > 1 ? this._make(this[0]) : this;
-};
-
+function first() {
+    return this.length > 1 ? this._make(this[0]) : this;
+}
+exports.first = first;
 /**
  * Will select the last element of a cheerio object.
  *
+ * @category Traversing
  * @example
  *
- * $('#fruits').children().last().text()
+ * ```js
+ * $('#fruits').children().last().text();
  * //=> Pear
+ * ```
  *
- * @see {@link http://api.jquery.com/last/}
+ * @returns The last element.
+ * @see {@link https://api.jquery.com/last/}
  */
-exports.last = function () {
-  return this.length > 1 ? this._make(this[this.length - 1]) : this;
-};
-
+function last() {
+    return this.length > 0 ? this._make(this[this.length - 1]) : this;
+}
+exports.last = last;
 /**
  * Reduce the set of matched elements to the one at the specified index. Use
  * `.eq(-i)` to count backwards from the last selected element.
  *
+ * @category Traversing
  * @example
  *
- * $('li').eq(0).text()
+ * ```js
+ * $('li').eq(0).text();
  * //=> Apple
  *
- * $('li').eq(-1).text()
+ * $('li').eq(-1).text();
  * //=> Pear
+ * ```
  *
- * @param {number} i - Index of the element to select.
- *
- * @see {@link http://api.jquery.com/eq/}
+ * @param i - Index of the element to select.
+ * @returns The element at the `i`th position.
+ * @see {@link https://api.jquery.com/eq/}
  */
-exports.eq = function (i) {
-  i = +i;
-
-  // Use the first identity optimization if possible
-  if (i === 0 && this.length <= 1) return this;
-
-  if (i < 0) i = this.length + i;
-  return this[i] ? this._make(this[i]) : this._make([]);
-};
-
+function eq(i) {
+    var _a;
+    i = +i;
+    // Use the first identity optimization if possible
+    if (i === 0 && this.length <= 1)
+        return this;
+    if (i < 0)
+        i = this.length + i;
+    return this._make((_a = this[i]) !== null && _a !== void 0 ? _a : []);
+}
+exports.eq = eq;
+function get(i) {
+    if (i == null) {
+        return this.toArray();
+    }
+    return this[i < 0 ? this.length + i : i];
+}
+exports.get = get;
 /**
- * Retrieve the DOM elements matched by the Cheerio object. If an index is
- * specified, retrieve one of the elements matched by the Cheerio object.
+ * Retrieve all the DOM elements contained in the jQuery set as an array.
  *
  * @example
  *
- * $('li').get(0).tagName
- * //=> li
+ * ```js
+ * $('li').toArray();
+ * //=> [ {...}, {...}, {...} ]
+ * ```
  *
- * If no index is specified, retrieve all elements matched by the Cheerio object:
- *
- * @example
- *
- * $('li').get().length
- * //=> 3
- *
- * @param {number} [i] - Element to retrieve.
- *
- * @see {@link http://api.jquery.com/get/}
+ * @returns The contained items.
  */
-exports.get = function (i) {
-  if (i == null) {
+function toArray() {
     return Array.prototype.slice.call(this);
-  }
-  return this[i < 0 ? this.length + i : i];
-};
-
+}
+exports.toArray = toArray;
 /**
  * Search for a given element from among the matched elements.
  *
+ * @category Traversing
  * @example
  *
- * $('.pear').index()
- * //=> 2
- * $('.orange').index('li')
+ * ```js
+ * $('.pear').index();
+ * //=> 2 $('.orange').index('li');
  * //=> 1
- * $('.apple').index($('#fruit, li'))
+ * $('.apple').index($('#fruit, li'));
  * //=> 1
+ * ```
  *
- * @param {string|cheerio|node} [selectorOrNeedle] - Element to look for.
- *
- * @see {@link http://api.jquery.com/index/}
+ * @param selectorOrNeedle - Element to look for.
+ * @returns The index of the element.
+ * @see {@link https://api.jquery.com/index/}
  */
-exports.index = function (selectorOrNeedle) {
-  var $haystack;
-  var needle;
-
-  if (arguments.length === 0) {
-    $haystack = this.parent().children();
-    needle = this[0];
-  } else if (typeof selectorOrNeedle === 'string') {
-    $haystack = this._make(selectorOrNeedle);
-    needle = this[0];
-  } else {
-    $haystack = this;
-    needle = selectorOrNeedle.cheerio ? selectorOrNeedle[0] : selectorOrNeedle;
-  }
-
-  return $haystack.get().indexOf(needle);
-};
-
+function index(selectorOrNeedle) {
+    var $haystack;
+    var needle;
+    if (selectorOrNeedle == null) {
+        $haystack = this.parent().children();
+        needle = this[0];
+    }
+    else if (typeof selectorOrNeedle === 'string') {
+        $haystack = this._make(selectorOrNeedle);
+        needle = this[0];
+    }
+    else {
+        $haystack = this;
+        needle = utils_1.isCheerio(selectorOrNeedle)
+            ? selectorOrNeedle[0]
+            : selectorOrNeedle;
+    }
+    return Array.prototype.indexOf.call($haystack, needle);
+}
+exports.index = index;
 /**
- * Gets the elements matching the specified range.
+ * Gets the elements matching the specified range (0-based position).
  *
+ * @category Traversing
  * @example
  *
- * $('li').slice(1).eq(0).text()
+ * ```js
+ * $('li').slice(1).eq(0).text();
  * //=> 'Orange'
  *
- * $('li').slice(1, 2).length
+ * $('li').slice(1, 2).length;
  * //=> 1
+ * ```
  *
- * @see {@link http://api.jquery.com/slice/}
+ * @param start - An position at which the elements begin to be selected. If
+ *   negative, it indicates an offset from the end of the set.
+ * @param end - An position at which the elements stop being selected. If
+ *   negative, it indicates an offset from the end of the set. If omitted, the
+ *   range continues until the end of the set.
+ * @returns The elements matching the specified range.
+ * @see {@link https://api.jquery.com/slice/}
  */
-exports.slice = function () {
-  return this._make([].slice.apply(this, arguments));
-};
-
-function traverseParents(self, elem, selector, limit) {
-  var elems = [];
-  while (elem && elems.length < limit && elem.type !== 'root') {
-    if (!selector || exports.filter.call([elem], selector, self).length) {
-      elems.push(elem);
-    }
-    elem = elem.parent;
-  }
-  return elems;
+function slice(start, end) {
+    return this._make(Array.prototype.slice.call(this, start, end));
 }
-
+exports.slice = slice;
 /**
  * End the most recent filtering operation in the current chain and return the
  * set of matched elements to its previous state.
  *
+ * @category Traversing
  * @example
  *
- * $('li').eq(0).end().length
+ * ```js
+ * $('li').eq(0).end().length;
  * //=> 3
+ * ```
  *
- * @see {@link http://api.jquery.com/end/}
+ * @returns The previous state of the set of matched elements.
+ * @see {@link https://api.jquery.com/end/}
  */
-exports.end = function () {
-  return this.prevObject || this._make([]);
-};
-
+function end() {
+    var _a;
+    return (_a = this.prevObject) !== null && _a !== void 0 ? _a : this._make([]);
+}
+exports.end = end;
 /**
  * Add elements to the set of matched elements.
  *
+ * @category Traversing
  * @example
  *
- * $('.apple').add('.orange').length
+ * ```js
+ * $('.apple').add('.orange').length;
  * //=> 2
+ * ```
  *
- * @param {string|cheerio} other - Elements to add.
- * @param {cheerio} [context] - Optionally the context of the new selection.
- *
- * @see {@link http://api.jquery.com/add/}
+ * @param other - Elements to add.
+ * @param context - Optionally the context of the new selection.
+ * @returns The combined set.
+ * @see {@link https://api.jquery.com/add/}
  */
-exports.add = function (other, context) {
-  var selection = this._make(other, context);
-  var contents = uniqueSort(selection.get().concat(this.get()));
-
-  for (var i = 0; i < contents.length; ++i) {
-    selection[i] = contents[i];
-  }
-  selection.length = contents.length;
-
-  return selection;
-};
-
+function add(other, context) {
+    var selection = this._make(other, context);
+    var contents = uniqueSort(tslib_1.__spreadArray(tslib_1.__spreadArray([], this.get()), selection.get()));
+    return this._make(contents);
+}
+exports.add = add;
 /**
  * Add the previous set of elements on the stack to the current set, optionally
  * filtered by a selector.
  *
+ * @category Traversing
  * @example
  *
- * $('li').eq(0).addBack('.orange').length
+ * ```js
+ * $('li').eq(0).addBack('.orange').length;
  * //=> 2
+ * ```
  *
- * @param {string} selector - Selector for the elements to add.
- *
- * @see {@link http://api.jquery.com/addBack/}
+ * @param selector - Selector for the elements to add.
+ * @returns The combined set.
+ * @see {@link https://api.jquery.com/addBack/}
  */
-exports.addBack = function (selector) {
-  return this.add(
-    arguments.length ? this.prevObject.filter(selector) : this.prevObject
-  );
-};
+function addBack(selector) {
+    return this.prevObject
+        ? this.add(selector ? this.prevObject.filter(selector) : this.prevObject)
+        : this;
+}
+exports.addBack = addBack;
 
 
 /***/ }),
 
 /***/ 641:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
-/*
-  Module dependencies
-*/
+"use strict";
 
-var parse = __nccwpck_require__(9024);
-var defaultOptions = __nccwpck_require__(9901)/* .default */ .Z;
-var flattenOptions = __nccwpck_require__(9901)/* .flatten */ .x;
-var isHtml = __nccwpck_require__(1183).isHtml;
-
-/*
- * The API
- */
-var api = [
-  __nccwpck_require__(8596),
-  __nccwpck_require__(6563),
-  __nccwpck_require__(8196),
-  __nccwpck_require__(7084),
-  __nccwpck_require__(5954),
-];
-
-/**
- * Instance of cheerio. Methods are specified in the modules.
- * Usage of this constructor is not recommended. Please use $.load instead.
- *
- * @class
- * @hideconstructor
- * @param {string|cheerio|node|node[]} selector - The new selection.
- * @param {string|cheerio|node|node[]} [context] - Context of the selection.
- * @param {string|cheerio|node|node[]} [root] - Sets the root node.
- * @param {object} [options] - Options for the instance.
- *
- * @mixes module:cheerio/attributes
- * @mixes module:cheerio/css
- * @mixes module:cheerio/forms
- * @mixes module:cheerio/manipulation
- * @mixes module:cheerio/traversing
- */
-var Cheerio = (module.exports = function (selector, context, root, options) {
-  if (!(this instanceof Cheerio)) {
-    return new Cheerio(selector, context, root, options);
-  }
-
-  this.options = Object.assign(
-    {},
-    defaultOptions,
-    this.options,
-    flattenOptions(options)
-  );
-
-  // $(), $(null), $(undefined), $(false)
-  if (!selector) return this;
-
-  if (root) {
-    if (typeof root === 'string') root = parse(root, this.options, false);
-    this._root = Cheerio.call(this, root);
-  }
-
-  // $($)
-  if (selector.cheerio) return selector;
-
-  // $(dom)
-  if (isNode(selector)) selector = [selector];
-
-  // $([dom])
-  if (Array.isArray(selector)) {
-    selector.forEach(function (elem, idx) {
-      this[idx] = elem;
-    }, this);
-    this.length = selector.length;
-    return this;
-  }
-
-  // $(<html>)
-  if (typeof selector === 'string' && isHtml(selector)) {
-    return Cheerio.call(this, parse(selector, this.options, false).children);
-  }
-
-  // If we don't have a context, maybe we have a root, from loading
-  if (!context) {
-    context = this._root;
-  } else if (typeof context === 'string') {
-    if (isHtml(context)) {
-      // $('li', '<ul>...</ul>')
-      context = parse(context, this.options, false);
-      context = Cheerio.call(this, context);
-    } else {
-      // $('li', 'ul')
-      selector = [context, selector].join(' ');
-      context = this._root;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Cheerio = void 0;
+var tslib_1 = __nccwpck_require__(9679);
+var parse_1 = tslib_1.__importDefault(__nccwpck_require__(9024));
+var options_1 = tslib_1.__importDefault(__nccwpck_require__(9901));
+var utils_1 = __nccwpck_require__(1183);
+var Attributes = tslib_1.__importStar(__nccwpck_require__(8596));
+var Traversing = tslib_1.__importStar(__nccwpck_require__(6563));
+var Manipulation = tslib_1.__importStar(__nccwpck_require__(8196));
+var Css = tslib_1.__importStar(__nccwpck_require__(7084));
+var Forms = tslib_1.__importStar(__nccwpck_require__(5954));
+var Cheerio = /** @class */ (function () {
+    /**
+     * Instance of cheerio. Methods are specified in the modules. Usage of this
+     * constructor is not recommended. Please use $.load instead.
+     *
+     * @private
+     * @param selector - The new selection.
+     * @param context - Context of the selection.
+     * @param root - Sets the root node.
+     * @param options - Options for the instance.
+     */
+    function Cheerio(selector, context, root, options) {
+        var _this = this;
+        if (options === void 0) { options = options_1.default; }
+        this.length = 0;
+        this.options = options;
+        // $(), $(null), $(undefined), $(false)
+        if (!selector)
+            return this;
+        if (root) {
+            if (typeof root === 'string')
+                root = parse_1.default(root, this.options, false);
+            this._root = new this.constructor(root, null, null, this.options);
+            // Add a cyclic reference, so that calling methods on `_root` never fails.
+            this._root._root = this._root;
+        }
+        // $($)
+        if (utils_1.isCheerio(selector))
+            return selector;
+        var elements = typeof selector === 'string' && utils_1.isHtml(selector)
+            ? // $(<html>)
+                parse_1.default(selector, this.options, false).children
+            : isNode(selector)
+                ? // $(dom)
+                    [selector]
+                : Array.isArray(selector)
+                    ? // $([dom])
+                        selector
+                    : null;
+        if (elements) {
+            elements.forEach(function (elem, idx) {
+                _this[idx] = elem;
+            });
+            this.length = elements.length;
+            return this;
+        }
+        // We know that our selector is a string now.
+        var search = selector;
+        var searchContext = !context
+            ? // If we don't have a context, maybe we have a root, from loading
+                this._root
+            : typeof context === 'string'
+                ? utils_1.isHtml(context)
+                    ? // $('li', '<ul>...</ul>')
+                        this._make(parse_1.default(context, this.options, false))
+                    : // $('li', 'ul')
+                        ((search = context + " " + search), this._root)
+                : utils_1.isCheerio(context)
+                    ? // $('li', $)
+                        context
+                    : // $('li', node), $('li', [nodes])
+                        this._make(context);
+        // If we still don't have a context, return
+        if (!searchContext)
+            return this;
+        /*
+         * #id, .class, tag
+         */
+        // @ts-expect-error No good way to type this — we will always return `Cheerio<Element>` here.
+        return searchContext.find(search);
     }
-  } else if (!context.cheerio) {
-    // $('li', node), $('li', [nodes])
-    context = Cheerio.call(this, context);
-  }
-
-  // If we still don't have a context, return
-  if (!context) return this;
-
-  // #id, .class, tag
-  return context.find(selector);
-});
-
-/*
- * Set a signature of the object
- */
+    /**
+     * Make a cheerio object.
+     *
+     * @private
+     * @param dom - The contents of the new object.
+     * @param context - The context of the new object.
+     * @returns The new cheerio object.
+     */
+    Cheerio.prototype._make = function (dom, context) {
+        var cheerio = new this.constructor(dom, context, this._root, this.options);
+        cheerio.prevObject = this;
+        return cheerio;
+    };
+    return Cheerio;
+}());
+exports.Cheerio = Cheerio;
+/** Set a signature of the object. */
 Cheerio.prototype.cheerio = '[cheerio object]';
-
 /*
  * Make cheerio an array-like object
  */
-Cheerio.prototype.length = 0;
 Cheerio.prototype.splice = Array.prototype.splice;
-
-/*
- * Make a cheerio object
- *
- * @private
- */
-Cheerio.prototype._make = function (dom, context) {
-  var cheerio = new this.constructor(dom, context, this._root, this.options);
-  cheerio.prevObject = this;
-  return cheerio;
-};
-
-/**
- * Retrieve all the DOM elements contained in the jQuery set as an array.
- *
- * @example
- * $('li').toArray()
- * //=> [ {...}, {...}, {...} ]
- */
-Cheerio.prototype.toArray = function () {
-  return this.get();
-};
-
 // Support for (const element of $(...)) iteration:
-if (typeof Symbol !== 'undefined') {
-  Cheerio.prototype[Symbol.iterator] = Array.prototype[Symbol.iterator];
+Cheerio.prototype[Symbol.iterator] = Array.prototype[Symbol.iterator];
+// Plug in the API
+Object.assign(Cheerio.prototype, Attributes, Traversing, Manipulation, Css, Forms);
+function isNode(obj) {
+    return (!!obj.name ||
+        obj.type === 'root' ||
+        obj.type === 'text' ||
+        obj.type === 'comment');
 }
 
-// Plug in the API
-api.forEach(function (mod) {
-  Object.assign(Cheerio.prototype, mod);
-});
 
-var isNode = function (obj) {
-  return (
-    obj.name ||
-    obj.type === 'root' ||
-    obj.type === 'text' ||
-    obj.type === 'comment'
-  );
-};
+/***/ }),
+
+/***/ 4612:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.root = exports.parseHTML = exports.merge = exports.contains = void 0;
+var tslib_1 = __nccwpck_require__(9679);
+/**
+ * Types used in signatures of Cheerio methods.
+ *
+ * @category Cheerio
+ */
+tslib_1.__exportStar(__nccwpck_require__(9317), exports);
+tslib_1.__exportStar(__nccwpck_require__(1313), exports);
+var load_1 = __nccwpck_require__(1313);
+/**
+ * The default cheerio instance.
+ *
+ * @deprecated Use the function returned by `load` instead.
+ */
+exports.default = load_1.load([]);
+var staticMethods = tslib_1.__importStar(__nccwpck_require__(2));
+/**
+ * In order to promote consistency with the jQuery library, users are encouraged
+ * to instead use the static method of the same name.
+ *
+ * @deprecated
+ * @example
+ *
+ * ```js
+ * const $ = cheerio.load('<div><p></p></div>');
+ *
+ * $.contains($('div').get(0), $('p').get(0));
+ * //=> true
+ *
+ * $.contains($('p').get(0), $('div').get(0));
+ * //=> false
+ * ```
+ *
+ * @returns {boolean}
+ */
+exports.contains = staticMethods.contains;
+/**
+ * In order to promote consistency with the jQuery library, users are encouraged
+ * to instead use the static method of the same name.
+ *
+ * @deprecated
+ * @example
+ *
+ * ```js
+ * const $ = cheerio.load('');
+ *
+ * $.merge([1, 2], [3, 4]);
+ * //=> [1, 2, 3, 4]
+ * ```
+ */
+exports.merge = staticMethods.merge;
+/**
+ * In order to promote consistency with the jQuery library, users are encouraged
+ * to instead use the static method of the same name as it is defined on the
+ * "loaded" Cheerio factory function.
+ *
+ * @deprecated See {@link static/parseHTML}.
+ * @example
+ *
+ * ```js
+ * const $ = cheerio.load('');
+ * $.parseHTML('<b>markup</b>');
+ * ```
+ */
+exports.parseHTML = staticMethods.parseHTML;
+/**
+ * Users seeking to access the top-level element of a parsed document should
+ * instead use the `root` static method of a "loaded" Cheerio function.
+ *
+ * @deprecated
+ * @example
+ *
+ * ```js
+ * const $ = cheerio.load('');
+ * $.root();
+ * ```
+ */
+exports.root = staticMethods.root;
+
+
+/***/ }),
+
+/***/ 1313:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.load = void 0;
+var tslib_1 = __nccwpck_require__(9679);
+var options_1 = tslib_1.__importStar(__nccwpck_require__(9901));
+var staticMethods = tslib_1.__importStar(__nccwpck_require__(2));
+var cheerio_1 = __nccwpck_require__(641);
+var parse_1 = tslib_1.__importDefault(__nccwpck_require__(9024));
+/**
+ * Create a querying function, bound to a document created from the provided
+ * markup. Note that similar to web browser contexts, this operation may
+ * introduce `<html>`, `<head>`, and `<body>` elements; set `isDocument` to
+ * `false` to switch to fragment mode and disable this.
+ *
+ * @param content - Markup to be loaded.
+ * @param options - Options for the created instance.
+ * @param isDocument - Allows parser to be switched to fragment mode.
+ * @returns The loaded document.
+ * @see {@link https://cheerio.js.org#loading} for additional usage information.
+ */
+function load(content, options, isDocument) {
+    if (isDocument === void 0) { isDocument = true; }
+    if (content == null) {
+        throw new Error('cheerio.load() expects a string');
+    }
+    var internalOpts = tslib_1.__assign(tslib_1.__assign({}, options_1.default), options_1.flatten(options));
+    var root = parse_1.default(content, internalOpts, isDocument);
+    /** Create an extended class here, so that extensions only live on one instance. */
+    var LoadedCheerio = /** @class */ (function (_super) {
+        tslib_1.__extends(LoadedCheerio, _super);
+        function LoadedCheerio() {
+            return _super !== null && _super.apply(this, arguments) || this;
+        }
+        return LoadedCheerio;
+    }(cheerio_1.Cheerio));
+    function initialize(selector, context, r, opts) {
+        if (r === void 0) { r = root; }
+        return new LoadedCheerio(selector, context, r, tslib_1.__assign(tslib_1.__assign({}, internalOpts), options_1.flatten(opts)));
+    }
+    // Add in static methods & properties
+    Object.assign(initialize, staticMethods, {
+        load: load,
+        // `_root` and `_options` are used in static methods.
+        _root: root,
+        _options: internalOpts,
+        // Add `fn` for plugins
+        fn: LoadedCheerio.prototype,
+        // Add the prototype here to maintain `instanceof` behavior.
+        prototype: LoadedCheerio.prototype,
+    });
+    return initialize;
+}
+exports.load = load;
 
 
 /***/ }),
 
 /***/ 9901:
-/***/ ((__unused_webpack_module, exports) => {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
-/*
- * Cheerio default options
- */
+"use strict";
 
-exports.Z = {
-  xml: false,
-  decodeEntities: true,
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.flatten = void 0;
+var tslib_1 = __nccwpck_require__(9679);
+var defaultOpts = {
+    xml: false,
+    decodeEntities: true,
 };
-
-var xmlModeDefault = { _useHtmlParser2: true, xmlMode: true };
-
-exports.x = function (options) {
-  return options && options.xml
-    ? typeof options.xml === 'boolean'
-      ? xmlModeDefault
-      : Object.assign({}, xmlModeDefault, options.xml)
-    : options;
+/** Cheerio default options. */
+exports.default = defaultOpts;
+var xmlModeDefault = {
+    _useHtmlParser2: true,
+    xmlMode: true,
 };
+function flatten(options) {
+    return (options === null || options === void 0 ? void 0 : options.xml)
+        ? typeof options.xml === 'boolean'
+            ? xmlModeDefault
+            : tslib_1.__assign(tslib_1.__assign({}, xmlModeDefault), options.xml)
+        : options !== null && options !== void 0 ? options : undefined;
+}
+exports.flatten = flatten;
 
 
 /***/ }),
 
 /***/ 9024:
-/***/ ((module, exports, __nccwpck_require__) => {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.update = void 0;
+var htmlparser2_1 = __nccwpck_require__(2928);
+var htmlparser2_adapter_1 = __nccwpck_require__(2632);
+var parse5_adapter_1 = __nccwpck_require__(8186);
+var domhandler_1 = __nccwpck_require__(4038);
 /*
-  Module Dependencies
-*/
-var htmlparser = __nccwpck_require__(2928);
-var parse5 = __nccwpck_require__(5598);
-var htmlparser2Adapter = __nccwpck_require__(9759);
-var domhandler = __nccwpck_require__(4038);
-var DomUtils = htmlparser.DomUtils;
-
-/*
-  Parser
-*/
-exports = module.exports = function parse(content, options, isDocument) {
-  // options = options || $.fn.options;
-
-  var dom;
-
-  if (typeof Buffer !== 'undefined' && Buffer.isBuffer(content)) {
-    content = content.toString();
-  }
-
-  if (typeof content === 'string') {
-    var useHtmlParser2 = options.xmlMode || options._useHtmlParser2;
-
-    dom = useHtmlParser2
-      ? htmlparser.parseDocument(content, options)
-      : parseWithParse5(content, options, isDocument);
-  } else {
-    if (
-      typeof content === 'object' &&
-      content != null &&
-      content.type === 'root'
-    ) {
-      dom = content;
-    } else {
-      // Generic root element
-      var root = new domhandler.Document(content);
-      content.forEach(function (node) {
-        node.parent = root;
-      });
-
-      dom = root;
+ * Parser
+ */
+function parse(content, options, isDocument) {
+    if (typeof Buffer !== 'undefined' && Buffer.isBuffer(content)) {
+        content = content.toString();
     }
-  }
-
-  return dom;
-};
-
-function parseWithParse5(content, options, isDocument) {
-  var parse = isDocument ? parse5.parse : parse5.parseFragment;
-
-  return parse(content, {
-    treeAdapter: htmlparser2Adapter,
-    sourceCodeLocationInfo: options.sourceCodeLocationInfo,
-  });
+    if (typeof content === 'string') {
+        return options.xmlMode || options._useHtmlParser2
+            ? htmlparser2_adapter_1.parse(content, options)
+            : parse5_adapter_1.parse(content, options, isDocument);
+    }
+    var doc = content;
+    if (!Array.isArray(doc) && domhandler_1.isDocument(doc)) {
+        // If `doc` is already a root, just return it
+        return doc;
+    }
+    // Add conent to new root element
+    var root = new domhandler_1.Document([]);
+    // Update the DOM using the root
+    update(doc, root);
+    return root;
 }
-
-/*
-  Update the dom structure, for one changed layer
-*/
-exports.update = function (arr, parent) {
-  // normalize
-  if (!Array.isArray(arr)) arr = [arr];
-
-  // Update parent
-  if (parent) {
-    parent.children = arr;
-  } else {
-    parent = null;
-  }
-
-  // Update neighbors
-  for (var i = 0; i < arr.length; i++) {
-    var node = arr[i];
-
-    // Cleanly remove existing nodes from their previous structures.
-    if (node.parent && node.parent.children !== arr) {
-      DomUtils.removeElement(node);
-    }
-
+exports.default = parse;
+/**
+ * Update the dom structure, for one changed layer.
+ *
+ * @param newChilds - The new children.
+ * @param parent - The new parent.
+ * @returns The parent node.
+ */
+function update(newChilds, parent) {
+    // Normalize
+    var arr = Array.isArray(newChilds) ? newChilds : [newChilds];
+    // Update parent
     if (parent) {
-      node.prev = arr[i - 1] || null;
-      node.next = arr[i + 1] || null;
-    } else {
-      node.prev = node.next = null;
+        parent.children = arr;
     }
+    else {
+        parent = null;
+    }
+    // Update neighbors
+    for (var i = 0; i < arr.length; i++) {
+        var node = arr[i];
+        // Cleanly remove existing nodes from their previous structures.
+        if (node.parent && node.parent.children !== arr) {
+            htmlparser2_1.DomUtils.removeElement(node);
+        }
+        if (parent) {
+            node.prev = arr[i - 1] || null;
+            node.next = arr[i + 1] || null;
+        }
+        else {
+            node.prev = node.next = null;
+        }
+        node.parent = parent;
+    }
+    return parent;
+}
+exports.update = update;
 
-    node.parent = parent;
-  }
 
-  return parent;
+/***/ }),
+
+/***/ 2632:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
 };
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.render = exports.parse = void 0;
+var htmlparser2_1 = __nccwpck_require__(2928);
+Object.defineProperty(exports, "parse", ({ enumerable: true, get: function () { return htmlparser2_1.parseDocument; } }));
+var dom_serializer_1 = __nccwpck_require__(8621);
+Object.defineProperty(exports, "render", ({ enumerable: true, get: function () { return __importDefault(dom_serializer_1).default; } }));
+
+
+/***/ }),
+
+/***/ 8186:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.render = exports.parse = void 0;
+var tslib_1 = __nccwpck_require__(9679);
+var domhandler_1 = __nccwpck_require__(4038);
+var parse5_1 = __nccwpck_require__(5598);
+var parse5_htmlparser2_tree_adapter_1 = tslib_1.__importDefault(__nccwpck_require__(9759));
+function parse(content, options, isDocument) {
+    var opts = {
+        scriptingEnabled: typeof options.scriptingEnabled === 'boolean'
+            ? options.scriptingEnabled
+            : true,
+        treeAdapter: parse5_htmlparser2_tree_adapter_1.default,
+        sourceCodeLocationInfo: options.sourceCodeLocationInfo,
+    };
+    var context = options.context;
+    // @ts-expect-error The tree adapter unfortunately doesn't return the exact types.
+    return isDocument
+        ? parse5_1.parse(content, opts)
+        : // @ts-expect-error Same issue again.
+            parse5_1.parseFragment(context, content, opts);
+}
+exports.parse = parse;
+function render(dom) {
+    var _a;
+    /*
+     * `dom-serializer` passes over the special "root" node and renders the
+     * node's children in its place. To mimic this behavior with `parse5`, an
+     * equivalent operation must be applied to the input array.
+     */
+    var nodes = 'length' in dom ? dom : [dom];
+    for (var index = 0; index < nodes.length; index += 1) {
+        var node = nodes[index];
+        if (domhandler_1.isDocument(node)) {
+            (_a = Array.prototype.splice).call.apply(_a, tslib_1.__spreadArray([nodes, index, 1], node.children));
+        }
+    }
+    // @ts-expect-error Types don't align here either.
+    return parse5_1.serialize({ children: nodes }, { treeAdapter: parse5_htmlparser2_tree_adapter_1.default });
+}
+exports.render = render;
 
 
 /***/ }),
@@ -4242,306 +4282,224 @@ exports.update = function (arr, parent) {
 /***/ 2:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
-var htmlparser2Adapter = __nccwpck_require__(9759);
+"use strict";
 
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.merge = exports.contains = exports.root = exports.parseHTML = exports.text = exports.xml = exports.html = void 0;
+var tslib_1 = __nccwpck_require__(9679);
+var options_1 = tslib_1.__importStar(__nccwpck_require__(9901));
+var cheerio_select_1 = __nccwpck_require__(5409);
+var htmlparser2_1 = __nccwpck_require__(2928);
+var parse5_adapter_1 = __nccwpck_require__(8186);
+var htmlparser2_adapter_1 = __nccwpck_require__(2632);
 /**
- * @module cheerio/static
- * @ignore
- */
-
-var serialize = __nccwpck_require__(8621).default;
-var defaultOptions = __nccwpck_require__(9901)/* .default */ .Z;
-var flattenOptions = __nccwpck_require__(9901)/* .flatten */ .x;
-var select = __nccwpck_require__(4225).select;
-var parse5 = __nccwpck_require__(5598);
-var parse = __nccwpck_require__(9024);
-
-/**
- * Create a querying function, bound to a document created from the provided
- * markup. Note that similar to web browser contexts, this operation may
- * introduce `<html>`, `<head>`, and `<body>` elements; set `isDocument` to `false`
- * to switch to fragment mode and disable this.
+ * Helper function to render a DOM.
  *
- * See the README section titled "Loading" for additional usage information.
- *
- * @param {string} content - Markup to be loaded.
- * @param {object} [options] - Options for the created instance.
- * @param {boolean} [isDocument] - Allows parser to be switched to fragment mode.
- *
+ * @param that - Cheerio instance to render.
+ * @param dom - The DOM to render. Defaults to `that`'s root.
+ * @param options - Options for rendering.
+ * @returns The rendered document.
  */
-exports.load = function (content, options, isDocument) {
-  if (content === null || content === undefined) {
-    throw new Error('cheerio.load() expects a string');
-  }
-
-  var Cheerio = __nccwpck_require__(641);
-
-  options = Object.assign({}, defaultOptions, flattenOptions(options));
-
-  if (isDocument === void 0) isDocument = true;
-
-  var root = parse(content, options, isDocument);
-
-  var initialize = function (selector, context, r, opts) {
-    if (!(this instanceof initialize)) {
-      return new initialize(selector, context, r, opts);
-    }
-    opts = Object.assign({}, options, opts);
-    return Cheerio.call(this, selector, context, r || root, opts);
-  };
-
-  // Ensure that selections created by the "loaded" `initialize` function are
-  // true Cheerio instances.
-  initialize.prototype = Object.create(Cheerio.prototype);
-  initialize.prototype.constructor = initialize;
-
-  // Mimic jQuery's prototype alias for plugin authors.
-  initialize.fn = initialize.prototype;
-
-  // Keep a reference to the top-level scope so we can chain methods that implicitly
-  // resolve selectors; e.g. $("<span>").(".bar"), which otherwise loses ._root
-  initialize.prototype._originalRoot = root;
-
-  // Add in the static methods
-  Object.assign(initialize, exports);
-
-  // Add in the root
-  initialize._root = root;
-  // store options
-  initialize._options = options;
-
-  return initialize;
-};
-
-/*
- * Helper function
- */
-
 function render(that, dom, options) {
-  if (!dom) {
-    if (that._root && that._root.children) {
-      dom = that._root.children;
-    } else {
-      return '';
-    }
-  } else if (typeof dom === 'string') {
-    dom = select(dom, that._root, options);
-  }
-
-  if (options.xmlMode || options._useHtmlParser2) {
-    return serialize(dom, options);
-  }
-
-  // `dom-serializer` passes over the special "root" node and renders the
-  // node's children in its place. To mimic this behavior with `parse5`, an
-  // equivalent operation must be applied to the input array.
-  var nodes = 'length' in dom ? dom : [dom];
-  for (var index = 0; index < nodes.length; index += 1) {
-    if (nodes[index].type === 'root') {
-      nodes.splice.apply(nodes, [index, 1].concat(nodes[index].children));
-    }
-  }
-
-  return parse5.serialize(
-    { children: nodes },
-    { treeAdapter: htmlparser2Adapter }
-  );
+    var _a;
+    var toRender = dom
+        ? typeof dom === 'string'
+            ? cheerio_select_1.select(dom, (_a = that === null || that === void 0 ? void 0 : that._root) !== null && _a !== void 0 ? _a : [], options)
+            : dom
+        : that === null || that === void 0 ? void 0 : that._root.children;
+    if (!toRender)
+        return '';
+    return options.xmlMode || options._useHtmlParser2
+        ? htmlparser2_adapter_1.render(toRender, options)
+        : parse5_adapter_1.render(toRender);
 }
-
 /**
- * Renders the document.
+ * Checks if a passed object is an options object.
  *
- * @param {string|cheerio|node} [dom] - Element to render.
- * @param {object} [options] - Options for the renderer.
+ * @param dom - Object to check if it is an options object.
+ * @returns Whether the object is an options object.
  */
-exports.html = function (dom, options) {
-  // be flexible about parameters, sometimes we call html(),
-  // with options as only parameter
-  // check dom argument for dom element specific properties
-  // assume there is no 'length' or 'type' properties in the options object
-  if (
-    Object.prototype.toString.call(dom) === '[object Object]' &&
-    !options &&
-    !('length' in dom) &&
-    !('type' in dom)
-  ) {
-    options = dom;
-    dom = undefined;
-  }
-
-  // sometimes $.html() used without preloading html
-  // so fallback non existing options to the default ones
-  options = Object.assign(
-    {},
-    defaultOptions,
-    this._options,
-    flattenOptions(options || {})
-  );
-
-  return render(this, dom, options);
-};
-
+function isOptions(dom) {
+    return (typeof dom === 'object' &&
+        dom != null &&
+        !('length' in dom) &&
+        !('type' in dom));
+}
+function html(dom, options) {
+    /*
+     * Be flexible about parameters, sometimes we call html(),
+     * with options as only parameter
+     * check dom argument for dom element specific properties
+     * assume there is no 'length' or 'type' properties in the options object
+     */
+    if (!options && isOptions(dom)) {
+        options = dom;
+        dom = undefined;
+    }
+    /*
+     * Sometimes `$.html()` is used without preloading html,
+     * so fallback non-existing options to the default ones.
+     */
+    var opts = tslib_1.__assign(tslib_1.__assign(tslib_1.__assign({}, options_1.default), (this ? this._options : {})), options_1.flatten(options !== null && options !== void 0 ? options : {}));
+    return render(this || undefined, dom, opts);
+}
+exports.html = html;
 /**
  * Render the document as XML.
  *
- * @param {string|cheerio|node} [dom] - Element to render.
+ * @param dom - Element to render.
+ * @returns THe rendered document.
  */
-exports.xml = function (dom) {
-  var options = Object.assign({}, this._options, { xmlMode: true });
-
-  return render(this, dom, options);
-};
-
+function xml(dom) {
+    var options = tslib_1.__assign(tslib_1.__assign({}, this._options), { xmlMode: true });
+    return render(this, dom, options);
+}
+exports.xml = xml;
 /**
  * Render the document as text.
  *
- * @param {string|cheerio|node} [elems] - Elements to render.
+ * @param elements - Elements to render.
+ * @returns The rendered document.
  */
-exports.text = function (elems) {
-  if (!elems) {
-    elems = this.root();
-  }
-
-  var ret = '';
-  var len = elems.length;
-  var elem;
-
-  for (var i = 0; i < len; i++) {
-    elem = elems[i];
-    if (elem.type === 'text') ret += elem.data;
-    else if (
-      elem.children &&
-      elem.type !== 'comment' &&
-      elem.tagName !== 'script' &&
-      elem.tagName !== 'style'
-    ) {
-      ret += exports.text(elem.children);
+function text(elements) {
+    var elems = elements ? elements : this ? this.root() : [];
+    var ret = '';
+    for (var i = 0; i < elems.length; i++) {
+        var elem = elems[i];
+        if (htmlparser2_1.DomUtils.isText(elem))
+            ret += elem.data;
+        else if (htmlparser2_1.DomUtils.hasChildren(elem) &&
+            elem.type !== htmlparser2_1.ElementType.Comment &&
+            elem.type !== htmlparser2_1.ElementType.Script &&
+            elem.type !== htmlparser2_1.ElementType.Style) {
+            ret += text(elem.children);
+        }
     }
-  }
-
-  return ret;
-};
-
-/**
- * Parses a string into an array of DOM nodes. The `context` argument has no
- * meaning for Cheerio, but it is maintained for API compatibility with jQuery.
- *
- * @param {string} data - Markup that will be parsed.
- * @param {any|boolean} [context] - Will be ignored. If it is a boolean it will be used as the value of `keepScripts`.
- * @param {boolean} [keepScripts] - If false all scripts will be removed.
- *
- * @alias Cheerio.parseHTML
- * @see {@link https://api.jquery.com/jQuery.parseHTML/}
- */
-exports.parseHTML = function (data, context, keepScripts) {
-  var parsed;
-
-  if (!data || typeof data !== 'string') {
-    return null;
-  }
-
-  if (typeof context === 'boolean') {
-    keepScripts = context;
-  }
-
-  parsed = this.load(data, defaultOptions, false);
-  if (!keepScripts) {
-    parsed('script').remove();
-  }
-
-  // The `children` array is used by Cheerio internally to group elements that
-  // share the same parents. When nodes created through `parseHTML` are
-  // inserted into previously-existing DOM structures, they will be removed
-  // from the `children` array. The results of `parseHTML` should remain
-  // constant across these operations, so a shallow copy should be returned.
-  return parsed.root()[0].children.slice();
-};
-
+    return ret;
+}
+exports.text = text;
+function parseHTML(data, context, keepScripts) {
+    if (keepScripts === void 0) { keepScripts = typeof context === 'boolean' ? context : false; }
+    if (!data || typeof data !== 'string') {
+        return null;
+    }
+    if (typeof context === 'boolean') {
+        keepScripts = context;
+    }
+    var parsed = this.load(data, options_1.default, false);
+    if (!keepScripts) {
+        parsed('script').remove();
+    }
+    /*
+     * The `children` array is used by Cheerio internally to group elements that
+     * share the same parents. When nodes created through `parseHTML` are
+     * inserted into previously-existing DOM structures, they will be removed
+     * from the `children` array. The results of `parseHTML` should remain
+     * constant across these operations, so a shallow copy should be returned.
+     */
+    return parsed.root()[0].children.slice();
+}
+exports.parseHTML = parseHTML;
 /**
  * Sometimes you need to work with the top-level root element. To query it, you
  * can use `$.root()`.
  *
- * @alias Cheerio.root
- *
  * @example
+ *
+ * ```js
  * $.root().append('<ul id="vegetables"></ul>').html();
  * //=> <ul id="fruits">...</ul><ul id="vegetables"></ul>
+ * ```
+ *
+ * @returns Cheerio instance wrapping the root node.
+ * @alias Cheerio.root
  */
-exports.root = function () {
-  return this(this._root);
-};
-
+function root() {
+    return this(this._root);
+}
+exports.root = root;
 /**
  * Checks to see if the `contained` DOM element is a descendant of the
  * `container` DOM element.
  *
- * @param {node} container - Potential parent node.
- * @param {node} contained - Potential child node.
- * @returns {boolean}
- *
+ * @param container - Potential parent node.
+ * @param contained - Potential child node.
+ * @returns Indicates if the nodes contain one another.
  * @alias Cheerio.contains
- * @see {@link https://api.jquery.com/jQuery.contains}
+ * @see {@link https://api.jquery.com/jQuery.contains/}
  */
-exports.contains = function (container, contained) {
-  // According to the jQuery API, an element does not "contain" itself
-  if (contained === container) {
-    return false;
-  }
-
-  // Step up the descendants, stopping when the root element is reached
-  // (signaled by `.parent` returning a reference to the same object)
-  while (contained && contained !== contained.parent) {
-    contained = contained.parent;
+function contains(container, contained) {
+    // According to the jQuery API, an element does not "contain" itself
     if (contained === container) {
-      return true;
+        return false;
     }
-  }
-
-  return false;
-};
-
+    /*
+     * Step up the descendants, stopping when the root element is reached
+     * (signaled by `.parent` returning a reference to the same object)
+     */
+    var next = contained;
+    while (next && next !== next.parent) {
+        next = next.parent;
+        if (next === container) {
+            return true;
+        }
+    }
+    return false;
+}
+exports.contains = contains;
 /**
  * $.merge().
  *
- * @param {Array|cheerio} arr1 - First array.
- * @param {Array|cheerio} arr2 - Second array.
- *
+ * @param arr1 - First array.
+ * @param arr2 - Second array.
+ * @returns `arr1`, with elements of `arr2` inserted.
  * @alias Cheerio.merge
- * @see {@link https://api.jquery.com/jQuery.merge}
+ * @see {@link https://api.jquery.com/jQuery.merge/}
  */
-exports.merge = function (arr1, arr2) {
-  if (!isArrayLike(arr1) || !isArrayLike(arr2)) {
-    return;
-  }
-  var newLength = arr1.length + arr2.length;
-  for (var i = 0; i < arr2.length; i++) {
-    arr1[i + arr1.length] = arr2[i];
-  }
-  arr1.length = newLength;
-  return arr1;
-};
-
-function isArrayLike(item) {
-  if (Array.isArray(item)) {
-    return true;
-  }
-
-  if (
-    typeof item !== 'object' ||
-    !Object.prototype.hasOwnProperty.call(item, 'length') ||
-    typeof item.length !== 'number' ||
-    item.length < 0
-  ) {
-    return false;
-  }
-
-  for (var i = 0; i < item.length; i++) {
-    if (!(i in item)) {
-      return false;
+function merge(arr1, arr2) {
+    if (!isArrayLike(arr1) || !isArrayLike(arr2)) {
+        return;
     }
-  }
-  return true;
+    var newLength = arr1.length;
+    var len = +arr2.length;
+    for (var i = 0; i < len; i++) {
+        arr1[newLength++] = arr2[i];
+    }
+    arr1.length = newLength;
+    return arr1;
 }
+exports.merge = merge;
+/**
+ * @param item - Item to check.
+ * @returns Indicates if the item is array-like.
+ */
+function isArrayLike(item) {
+    if (Array.isArray(item)) {
+        return true;
+    }
+    if (typeof item !== 'object' ||
+        !Object.prototype.hasOwnProperty.call(item, 'length') ||
+        typeof item.length !== 'number' ||
+        item.length < 0) {
+        return false;
+    }
+    for (var i = 0; i < item.length; i++) {
+        if (!(i in item)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+
+/***/ }),
+
+/***/ 9317:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
 
 
 /***/ }),
@@ -4549,115 +4507,118 @@ function isArrayLike(item) {
 /***/ 1183:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
-var htmlparser2 = __nccwpck_require__(2928);
-var domhandler = __nccwpck_require__(4038);
+"use strict";
 
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.isHtml = exports.cloneDom = exports.domEach = exports.cssCase = exports.camelCase = exports.isCheerio = exports.isTag = void 0;
+var htmlparser2_1 = __nccwpck_require__(2928);
+var domhandler_1 = __nccwpck_require__(4038);
 /**
  * Check if the DOM element is a tag.
  *
  * `isTag(type)` includes `<script>` and `<style>` tags.
  *
- * @param {node} type - DOM node to check.
- * @returns {boolean}
- *
  * @private
+ * @category Utils
+ * @param type - DOM node to check.
+ * @returns Whether the node is a tag.
  */
-exports.isTag = htmlparser2.DomUtils.isTag;
-
+exports.isTag = htmlparser2_1.DomUtils.isTag;
+/**
+ * Checks if an object is a Cheerio instance.
+ *
+ * @category Utils
+ * @param maybeCheerio - The object to check.
+ * @returns Whether the object is a Cheerio instance.
+ */
+function isCheerio(maybeCheerio) {
+    return maybeCheerio.cheerio != null;
+}
+exports.isCheerio = isCheerio;
 /**
  * Convert a string to camel case notation.
  *
- * @param  {string} str - String to be converted.
- * @returns {string}      String in camel case notation.
- *
  * @private
+ * @category Utils
+ * @param str - String to be converted.
+ * @returns String in camel case notation.
  */
-exports.camelCase = function (str) {
-  return str.replace(/[_.-](\w|$)/g, function (_, x) {
-    return x.toUpperCase();
-  });
-};
-
+function camelCase(str) {
+    return str.replace(/[_.-](\w|$)/g, function (_, x) { return x.toUpperCase(); });
+}
+exports.camelCase = camelCase;
 /**
  * Convert a string from camel case to "CSS case", where word boundaries are
  * described by hyphens ("-") and all characters are lower-case.
  *
- * @param  {string} str - String to be converted.
- * @returns {string}      String in "CSS case".
- *
  * @private
+ * @category Utils
+ * @param str - String to be converted.
+ * @returns String in "CSS case".
  */
-exports.cssCase = function (str) {
-  return str.replace(/[A-Z]/g, '-$&').toLowerCase();
-};
-
+function cssCase(str) {
+    return str.replace(/[A-Z]/g, '-$&').toLowerCase();
+}
+exports.cssCase = cssCase;
 /**
- * Iterate over each DOM element without creating intermediary Cheerio
- * instances.
+ * Iterate over each DOM element without creating intermediary Cheerio instances.
  *
  * This is indented for use internally to avoid otherwise unnecessary memory
  * pressure introduced by _make.
  *
- * @param {cheerio} cheerio - Cheerio object.
- * @param {Function} fn - Function to call.
+ * @category Utils
+ * @param array - Array to iterate over.
+ * @param fn - Function to call.
+ * @returns The original instance.
  */
-exports.domEach = function (cheerio, fn) {
-  var i = 0;
-  var len = cheerio.length;
-  while (i < len && fn.call(cheerio, i, cheerio[i]) !== false) ++i;
-  return cheerio;
-};
-
+function domEach(array, fn) {
+    var len = array.length;
+    for (var i = 0; i < len; i++)
+        fn(array[i], i);
+    return array;
+}
+exports.domEach = domEach;
 /**
- * Create a deep copy of the given DOM structure.
- * Sets the parents of the copies of the passed nodes to `null`.
+ * Create a deep copy of the given DOM structure. Sets the parents of the copies
+ * of the passed nodes to `null`.
  *
- * @param {object} dom - The htmlparser2-compliant DOM structure.
+ * @private
+ * @category Utils
+ * @param dom - The htmlparser2-compliant DOM structure.
+ * @returns - The cloned DOM.
+ */
+function cloneDom(dom) {
+    var clone = 'length' in dom
+        ? Array.prototype.map.call(dom, function (el) { return domhandler_1.cloneNode(el, true); })
+        : [domhandler_1.cloneNode(dom, true)];
+    // Add a root node around the cloned nodes
+    var root = new domhandler_1.Document(clone);
+    clone.forEach(function (node) {
+        node.parent = root;
+    });
+    return clone;
+}
+exports.cloneDom = cloneDom;
+/**
+ * A simple way to check for HTML strings. Tests for a `<` within a string,
+ * immediate followed by a letter and eventually followed by a `>`.
+ *
  * @private
  */
-exports.cloneDom = function (dom) {
-  var clone =
-    'length' in dom
-      ? Array.prototype.map.call(dom, function (el) {
-          return domhandler.cloneNode(el, true);
-        })
-      : [domhandler.cloneNode(dom, true)];
-
-  // Add a root node around the cloned nodes
-  var root = new domhandler.Document(clone);
-  clone.forEach(function (node) {
-    node.parent = root;
-  });
-
-  return clone;
-};
-
-/*
- * A simple way to check for HTML strings or ID strings
- */
-var quickExpr = /^(?:[^#<]*(<[\w\W]+>)[^>]*$|#([\w-]*)$)/;
-
+var quickExpr = /<[a-zA-Z][^]*>/;
 /**
  * Check if string is HTML.
  *
- * @param {string} str - String to check.
- *
  * @private
+ * @category Utils
+ * @param str - String to check.
+ * @returns Indicates if `str` is HTML.
  */
-exports.isHtml = function (str) {
-  // Faster than running regex, if str starts with `<` and ends with `>`, assume it's HTML
-  if (
-    str.charAt(0) === '<' &&
-    str.charAt(str.length - 1) === '>' &&
-    str.length >= 3
-  ) {
-    return true;
-  }
-
-  // Run the regex
-  var match = quickExpr.exec(str);
-  return !!(match && match[1]);
-};
+function isHtml(str) {
+    // Run the regex
+    return quickExpr.test(str);
+}
+exports.isHtml = isHtml;
 
 
 /***/ }),
@@ -4711,9 +4672,11 @@ exports.attributeRules = {
         if (data.ignoreCase) {
             value = value.toLowerCase();
             return function (elem) {
-                var _a;
-                return ((_a = adapter.getAttributeValue(elem, name)) === null || _a === void 0 ? void 0 : _a.toLowerCase()) ===
-                    value && next(elem);
+                var attr = adapter.getAttributeValue(elem, name);
+                return (attr != null &&
+                    attr.length === value.length &&
+                    attr.toLowerCase() === value &&
+                    next(elem));
             };
         }
         return function (elem) {
@@ -4738,8 +4701,8 @@ exports.attributeRules = {
         return function hyphen(elem) {
             var attr = adapter.getAttributeValue(elem, name);
             return (attr != null &&
-                attr.substr(0, len) === value &&
                 (attr.length === len || attr.charAt(len) === "-") &&
+                attr.substr(0, len) === value &&
                 next(elem));
         };
     },
@@ -4752,7 +4715,10 @@ exports.attributeRules = {
         var regex = new RegExp("(?:^|\\s)" + escapeRegex(value) + "(?:$|\\s)", ignoreCase ? "i" : "");
         return function element(elem) {
             var attr = adapter.getAttributeValue(elem, name);
-            return attr != null && regex.test(attr) && next(elem);
+            return (attr != null &&
+                attr.length >= value.length &&
+                regex.test(attr) &&
+                next(elem));
         };
     },
     exists: function (next, _a, _b) {
@@ -4771,9 +4737,11 @@ exports.attributeRules = {
         if (data.ignoreCase) {
             value = value.toLowerCase();
             return function (elem) {
-                var _a;
-                return ((_a = adapter
-                    .getAttributeValue(elem, name)) === null || _a === void 0 ? void 0 : _a.substr(0, len).toLowerCase()) === value && next(elem);
+                var attr = adapter.getAttributeValue(elem, name);
+                return (attr != null &&
+                    attr.length >= len &&
+                    attr.substr(0, len).toLowerCase() === value &&
+                    next(elem));
             };
         }
         return function (elem) {
@@ -4814,7 +4782,10 @@ exports.attributeRules = {
             var regex_1 = new RegExp(escapeRegex(value), "i");
             return function anyIC(elem) {
                 var attr = adapter.getAttributeValue(elem, name);
-                return attr != null && regex_1.test(attr) && next(elem);
+                return (attr != null &&
+                    attr.length >= value.length &&
+                    regex_1.test(attr) &&
+                    next(elem));
             };
         }
         return function (elem) {
@@ -4836,8 +4807,9 @@ exports.attributeRules = {
             value = value.toLowerCase();
             return function (elem) {
                 var attr = adapter.getAttributeValue(elem, name);
-                return (attr != null &&
-                    attr.toLocaleLowerCase() !== value &&
+                return ((attr == null ||
+                    attr.length !== value.length ||
+                    attr.toLowerCase() !== value) &&
                     next(elem));
             };
         }
@@ -4879,7 +4851,7 @@ function compile(selector, options, context) {
 }
 exports.compile = compile;
 function compileUnsafe(selector, options, context) {
-    var token = css_what_1.parse(selector, options);
+    var token = typeof selector === "string" ? css_what_1.parse(selector, options) : selector;
     return compileToken(token, options, context);
 }
 exports.compileUnsafe = compileUnsafe;
@@ -4902,8 +4874,8 @@ function absolutize(token, _a, context) {
     var adapter = _a.adapter;
     // TODO Use better check if the context is a document
     var hasContext = !!(context === null || context === void 0 ? void 0 : context.every(function (e) {
-        var parent = adapter.getParent(e);
-        return e === subselects_1.PLACEHOLDER_ELEMENT || !!(parent && adapter.isTag(parent));
+        var parent = adapter.isTag(e) && adapter.getParent(e);
+        return e === subselects_1.PLACEHOLDER_ELEMENT || (parent && adapter.isTag(parent));
     }));
     for (var _i = 0, token_1 = token; _i < token_1.length; _i++) {
         var t = token_1[_i];
@@ -4991,10 +4963,6 @@ function compileGeneralSelector(next, selector, options, context, compileToken) 
         case "pseudo-element":
             throw new Error("Pseudo-elements are not supported by css-select");
         case "attribute":
-            if (options.strict &&
-                (selector.ignoreCase || selector.action === "not")) {
-                throw new Error("Unsupported attribute selector");
-            }
             return attributes_1.attributeRules[selector.action](next, selector, options);
         case "pseudo":
             return pseudo_selectors_1.compilePseudoSelector(next, selector, options, context, compileToken);
@@ -5043,9 +5011,6 @@ function compileGeneralSelector(next, selector, options, context, compileToken) 
                 return false;
             };
         case "parent":
-            if (options.strict) {
-                throw new Error("Parent selector isn't part of CSS3");
-            }
             return function parent(elem) {
                 return adapter
                     .getChildren(elem)
@@ -5054,7 +5019,7 @@ function compileGeneralSelector(next, selector, options, context, compileToken) 
         case "child":
             return function child(elem) {
                 var parent = adapter.getParent(elem);
-                return !!parent && adapter.isTag(parent) && next(parent);
+                return parent != null && adapter.isTag(parent) && next(parent);
             };
         case "sibling":
             return function sibling(elem) {
@@ -5117,7 +5082,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.pseudos = exports.filters = exports.is = exports.selectOne = exports.selectAll = exports.prepareContext = exports._compileToken = exports._compileUnsafe = exports.compile = void 0;
+exports.aliases = exports.pseudos = exports.filters = exports.is = exports.selectOne = exports.selectAll = exports.prepareContext = exports._compileToken = exports._compileUnsafe = exports.compile = void 0;
 var DomUtils = __importStar(__nccwpck_require__(1754));
 var boolbase_1 = __nccwpck_require__(4159);
 var compile_1 = __nccwpck_require__(5030);
@@ -5235,10 +5200,11 @@ exports.is = is;
  * @see [compile] for supported selector queries.
  */
 exports.default = exports.selectAll;
-// Export filters and pseudos to allow users to supply their own.
+// Export filters, pseudos and aliases to allow users to supply their own.
 var pseudo_selectors_1 = __nccwpck_require__(9312);
 Object.defineProperty(exports, "filters", ({ enumerable: true, get: function () { return pseudo_selectors_1.filters; } }));
 Object.defineProperty(exports, "pseudos", ({ enumerable: true, get: function () { return pseudo_selectors_1.pseudos; } }));
+Object.defineProperty(exports, "aliases", ({ enumerable: true, get: function () { return pseudo_selectors_1.aliases; } }));
 
 
 /***/ }),
@@ -5271,6 +5237,47 @@ exports.isTraversal = isTraversal;
 
 /***/ }),
 
+/***/ 4176:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.aliases = void 0;
+/**
+ * Aliases are pseudos that are expressed as selectors.
+ */
+exports.aliases = {
+    // Links
+    "any-link": ":is(a, area, link)[href]",
+    link: ":any-link:not(:visited)",
+    // Forms
+    // https://html.spec.whatwg.org/multipage/scripting.html#disabled-elements
+    disabled: ":is(\n        :is(button, input, select, textarea, optgroup, option)[disabled],\n        optgroup[disabled] > option,\n        fieldset[disabled]:not(fieldset[disabled] legend:first-of-type *)\n    )",
+    enabled: ":not(:disabled)",
+    checked: ":is(:is(input[type=radio], input[type=checkbox])[checked], option:selected)",
+    required: ":is(input, select, textarea)[required]",
+    optional: ":is(input, select, textarea):not([required])",
+    // JQuery extensions
+    // https://html.spec.whatwg.org/multipage/form-elements.html#concept-option-selectedness
+    selected: "option:is([selected], select:not([multiple]):not(:has(> option[selected])) > :first-of-type)",
+    checkbox: "[type=checkbox]",
+    file: "[type=file]",
+    password: "[type=password]",
+    radio: "[type=radio]",
+    reset: "[type=reset]",
+    image: "[type=image]",
+    submit: "[type=submit]",
+    parent: ":not(:empty)",
+    header: ":is(h1, h2, h3, h4, h5, h6)",
+    button: ":is(button, input[type=button])",
+    input: ":is(input, textarea, select, button)",
+    text: "input:is(:not([type!='']), [type=text])",
+};
+
+
+/***/ }),
+
 /***/ 1686:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -5283,25 +5290,10 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.filters = void 0;
 var nth_check_1 = __importDefault(__nccwpck_require__(1260));
 var boolbase_1 = __nccwpck_require__(4159);
-var attributes_1 = __nccwpck_require__(6863);
-var checkAttrib = attributes_1.attributeRules.equals;
-function getAttribFunc(name, value) {
-    var data = {
-        type: "attribute",
-        action: "equals",
-        ignoreCase: false,
-        namespace: null,
-        name: name,
-        value: value,
-    };
-    return function attribFunc(next, _rule, options) {
-        return checkAttrib(next, data, options);
-    };
-}
 function getChildFunc(next, adapter) {
     return function (elem) {
         var parent = adapter.getParent(elem);
-        return !!parent && adapter.isTag(parent) && next(elem);
+        return parent != null && adapter.isTag(parent) && next(elem);
     };
 }
 exports.filters = {
@@ -5424,46 +5416,28 @@ exports.filters = {
         }
         return function (elem) { return context.includes(elem) && next(elem); };
     },
-    // JQuery extensions (others follow as pseudos)
-    checkbox: getAttribFunc("type", "checkbox"),
-    file: getAttribFunc("type", "file"),
-    password: getAttribFunc("type", "password"),
-    radio: getAttribFunc("type", "radio"),
-    reset: getAttribFunc("type", "reset"),
-    image: getAttribFunc("type", "image"),
-    submit: getAttribFunc("type", "submit"),
-    // Dynamic state pseudos. These depend on optional Adapter methods.
-    hover: function (next, _rule, _a) {
+    hover: dynamicStatePseudo("isHovered"),
+    visited: dynamicStatePseudo("isVisited"),
+    active: dynamicStatePseudo("isActive"),
+};
+/**
+ * Dynamic state pseudos. These depend on optional Adapter methods.
+ *
+ * @param name The name of the adapter method to call.
+ * @returns Pseudo for the `filters` object.
+ */
+function dynamicStatePseudo(name) {
+    return function dynamicPseudo(next, _rule, _a) {
         var adapter = _a.adapter;
-        var isHovered = adapter.isHovered;
-        if (typeof isHovered !== "function") {
-            return boolbase_1.falseFunc;
-        }
-        return function hover(elem) {
-            return isHovered(elem) && next(elem);
-        };
-    },
-    visited: function (next, _rule, _a) {
-        var adapter = _a.adapter;
-        var isVisited = adapter.isVisited;
-        if (typeof isVisited !== "function") {
-            return boolbase_1.falseFunc;
-        }
-        return function visited(elem) {
-            return isVisited(elem) && next(elem);
-        };
-    },
-    active: function (next, _rule, _a) {
-        var adapter = _a.adapter;
-        var isActive = adapter.isActive;
-        if (typeof isActive !== "function") {
+        var func = adapter[name];
+        if (typeof func !== "function") {
             return boolbase_1.falseFunc;
         }
         return function active(elem) {
-            return isActive(elem) && next(elem);
+            return func(elem) && next(elem);
         };
-    },
-};
+    };
+}
 
 
 /***/ }),
@@ -5474,7 +5448,7 @@ exports.filters = {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.compilePseudoSelector = exports.pseudos = exports.filters = void 0;
+exports.compilePseudoSelector = exports.aliases = exports.pseudos = exports.filters = void 0;
 /*
  * Pseudo selectors
  *
@@ -5490,20 +5464,26 @@ exports.compilePseudoSelector = exports.pseudos = exports.filters = void 0;
  * Pseudos should be used to implement simple checks.
  */
 var boolbase_1 = __nccwpck_require__(4159);
+var css_what_1 = __nccwpck_require__(9218);
 var filters_1 = __nccwpck_require__(1686);
 Object.defineProperty(exports, "filters", ({ enumerable: true, get: function () { return filters_1.filters; } }));
 var pseudos_1 = __nccwpck_require__(8952);
 Object.defineProperty(exports, "pseudos", ({ enumerable: true, get: function () { return pseudos_1.pseudos; } }));
+var aliases_1 = __nccwpck_require__(4176);
+Object.defineProperty(exports, "aliases", ({ enumerable: true, get: function () { return aliases_1.aliases; } }));
 var subselects_1 = __nccwpck_require__(5813);
-// FIXME This is pretty hacky
-var reCSS3 = /^(?:(?:nth|last|first|only)-(?:child|of-type)|root|empty|(?:en|dis)abled|checked|not)$/;
 function compilePseudoSelector(next, selector, options, context, compileToken) {
     var name = selector.name, data = selector.data;
-    if (options.strict && !reCSS3.test(name)) {
-        throw new Error(":" + name + " isn't part of CSS3");
-    }
     if (Array.isArray(data)) {
         return subselects_1.subselects[name](next, data, options, context, compileToken);
+    }
+    if (name in aliases_1.aliases) {
+        if (data != null) {
+            throw new Error("Pseudo " + name + " doesn't have any arguments");
+        }
+        // The alias has to be parsed here, to make sure options are respected.
+        var alias = css_what_1.parse(aliases_1.aliases[name], options);
+        return subselects_1.subselects.is(next, alias, options, context, compileToken);
     }
     if (name in filters_1.filters) {
         return filters_1.filters[name](next, data, options, context);
@@ -5531,7 +5511,6 @@ exports.compilePseudoSelector = compilePseudoSelector;
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.verifyPseudoArgs = exports.pseudos = void 0;
-var isLinkTag = namePseudo(["a", "area", "link"]);
 // While filters are precompiled, pseudos get called when they are needed
 exports.pseudos = {
     empty: function (elem, _a) {
@@ -5606,132 +5585,15 @@ exports.pseudos = {
             .getSiblings(elem)
             .every(function (sibling) { return equals(elem, sibling) || !adapter.isTag(sibling); });
     },
-    // :matches(a, area, link)[href]
-    "any-link": function (elem, options) {
-        return (isLinkTag(elem, options) && options.adapter.hasAttrib(elem, "href"));
-    },
-    // :any-link:not(:visited)
-    link: function (elem, options) {
-        var _a, _b;
-        return (((_b = (_a = options.adapter).isVisited) === null || _b === void 0 ? void 0 : _b.call(_a, elem)) !== true &&
-            exports.pseudos["any-link"](elem, options));
-    },
-    /*
-     * Forms
-     * to consider: :target
-     */
-    // :matches([selected], select:not([multiple]):not(> option[selected]) > option:first-of-type)
-    selected: function (elem, _a) {
-        var adapter = _a.adapter, equals = _a.equals;
-        if (adapter.hasAttrib(elem, "selected"))
-            return true;
-        else if (adapter.getName(elem) !== "option")
-            return false;
-        // The first <option> in a <select> is also selected
-        var parent = adapter.getParent(elem);
-        if (!parent ||
-            !adapter.isTag(parent) ||
-            adapter.getName(parent) !== "select" ||
-            adapter.hasAttrib(parent, "multiple")) {
-            return false;
-        }
-        var siblings = adapter.getChildren(parent);
-        var sawElem = false;
-        for (var i = 0; i < siblings.length; i++) {
-            var currentSibling = siblings[i];
-            if (adapter.isTag(currentSibling)) {
-                if (equals(elem, currentSibling)) {
-                    sawElem = true;
-                }
-                else if (!sawElem) {
-                    return false;
-                }
-                else if (adapter.hasAttrib(currentSibling, "selected")) {
-                    return false;
-                }
-            }
-        }
-        return sawElem;
-    },
-    /*
-     * https://html.spec.whatwg.org/multipage/scripting.html#disabled-elements
-     * :matches(
-     *   :matches(button, input, select, textarea, menuitem, optgroup, option)[disabled],
-     *   optgroup[disabled] > option),
-     *  fieldset[disabled] * //TODO not child of first <legend>
-     * )
-     */
-    disabled: function (elem, _a) {
-        var adapter = _a.adapter;
-        return adapter.hasAttrib(elem, "disabled");
-    },
-    enabled: function (elem, _a) {
-        var adapter = _a.adapter;
-        return !adapter.hasAttrib(elem, "disabled");
-    },
-    // :matches(:matches(:radio, :checkbox)[checked], :selected) (TODO menuitem)
-    checked: function (elem, options) {
-        return (options.adapter.hasAttrib(elem, "checked") ||
-            exports.pseudos.selected(elem, options));
-    },
-    // :matches(input, select, textarea)[required]
-    required: function (elem, _a) {
-        var adapter = _a.adapter;
-        return adapter.hasAttrib(elem, "required");
-    },
-    // :matches(input, select, textarea):not([required])
-    optional: function (elem, _a) {
-        var adapter = _a.adapter;
-        return !adapter.hasAttrib(elem, "required");
-    },
-    // JQuery extensions
-    // :not(:empty)
-    parent: function (elem, options) {
-        return !exports.pseudos.empty(elem, options);
-    },
-    // :matches(h1, h2, h3, h4, h5, h6)
-    header: namePseudo(["h1", "h2", "h3", "h4", "h5", "h6"]),
-    // :matches(button, input[type=button])
-    button: function (elem, _a) {
-        var adapter = _a.adapter;
-        var name = adapter.getName(elem);
-        return (name === "button" ||
-            (name === "input" &&
-                adapter.getAttributeValue(elem, "type") === "button"));
-    },
-    // :matches(input, textarea, select, button)
-    input: namePseudo(["input", "textarea", "select", "button"]),
-    // `input:matches(:not([type!='']), [type='text' i])`
-    text: function (elem, _a) {
-        var adapter = _a.adapter;
-        var type = adapter.getAttributeValue(elem, "type");
-        return (adapter.getName(elem) === "input" &&
-            (!type || type.toLowerCase() === "text"));
-    },
 };
-function namePseudo(names) {
-    if (typeof Set !== "undefined") {
-        var nameSet_1 = new Set(names);
-        return function (elem, _a) {
-            var adapter = _a.adapter;
-            return nameSet_1.has(adapter.getName(elem));
-        };
-    }
-    return function (elem, _a) {
-        var adapter = _a.adapter;
-        return names.includes(adapter.getName(elem));
-    };
-}
 function verifyPseudoArgs(func, name, subselect) {
     if (subselect === null) {
-        if (func.length > 2 && name !== "scope") {
+        if (func.length > 2) {
             throw new Error("pseudo-selector :" + name + " requires an argument");
         }
     }
-    else {
-        if (func.length === 2) {
-            throw new Error("pseudo-selector :" + name + " doesn't have any arguments");
-        }
+    else if (func.length === 2) {
+        throw new Error("pseudo-selector :" + name + " doesn't have any arguments");
     }
 }
 exports.verifyPseudoArgs = verifyPseudoArgs;
@@ -5744,12 +5606,10 @@ exports.verifyPseudoArgs = verifyPseudoArgs;
 
 "use strict";
 
-var __spreadArrays = (this && this.__spreadArrays) || function () {
-    for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
-    for (var r = Array(s), k = 0, i = 0; i < il; i++)
-        for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
-            r[k] = a[j];
-    return r;
+var __spreadArray = (this && this.__spreadArray) || function (to, from) {
+    for (var i = 0, il = from.length, j = to.length; i < il; i++, j++)
+        to[j] = from[i];
+    return to;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.subselects = exports.getNextSiblings = exports.ensureIsTag = exports.PLACEHOLDER_ELEMENT = void 0;
@@ -5757,12 +5617,9 @@ var boolbase_1 = __nccwpck_require__(4159);
 var procedure_1 = __nccwpck_require__(7396);
 /** Used as a placeholder for :has. Will be replaced with the actual element. */
 exports.PLACEHOLDER_ELEMENT = {};
-function containsTraversal(t) {
-    return t.some(procedure_1.isTraversal);
-}
 function ensureIsTag(next, adapter) {
     if (next === boolbase_1.falseFunc)
-        return next;
+        return boolbase_1.falseFunc;
     return function (elem) { return adapter.isTag(elem) && next(elem); };
 }
 exports.ensureIsTag = ensureIsTag;
@@ -5776,40 +5633,32 @@ function getNextSiblings(elem, adapter) {
     return siblings.slice(elemIndex + 1).filter(adapter.isTag);
 }
 exports.getNextSiblings = getNextSiblings;
+var is = function (next, token, options, context, compileToken) {
+    var opts = {
+        xmlMode: !!options.xmlMode,
+        adapter: options.adapter,
+        equals: options.equals,
+    };
+    var func = compileToken(token, opts, context);
+    return function (elem) { return func(elem) && next(elem); };
+};
 /*
- * :not, :has and :matches have to compile selectors
+ * :not, :has, :is and :matches have to compile selectors
  * doing this in src/pseudos.ts would lead to circular dependencies,
  * so we add them here
  */
 exports.subselects = {
+    is: is,
     /**
-     * `:is` is an alias for `:matches`.
+     * `:matches` is an alias for `:is`.
      */
-    is: function (next, token, options, context, compileToken) {
-        return exports.subselects.matches(next, token, options, context, compileToken);
-    },
-    matches: function (next, token, options, context, compileToken) {
-        var opts = {
-            xmlMode: !!options.xmlMode,
-            strict: !!options.strict,
-            adapter: options.adapter,
-            equals: options.equals,
-            rootFunc: next,
-        };
-        return compileToken(token, opts, context);
-    },
+    matches: is,
     not: function (next, token, options, context, compileToken) {
         var opts = {
             xmlMode: !!options.xmlMode,
-            strict: !!options.strict,
             adapter: options.adapter,
             equals: options.equals,
         };
-        if (opts.strict) {
-            if (token.length > 1 || token.some(containsTraversal)) {
-                throw new Error("complex selectors in :not aren't allowed in strict mode");
-            }
-        }
         var func = compileToken(token, opts, context);
         if (func === boolbase_1.falseFunc)
             return next;
@@ -5823,12 +5672,13 @@ exports.subselects = {
         var adapter = options.adapter;
         var opts = {
             xmlMode: !!options.xmlMode,
-            strict: !!options.strict,
             adapter: adapter,
             equals: options.equals,
         };
         // @ts-expect-error Uses an array as a pointer to the current element (side effects)
-        var context = subselect.some(containsTraversal)
+        var context = subselect.some(function (s) {
+            return s.some(procedure_1.isTraversal);
+        })
             ? [exports.PLACEHOLDER_ELEMENT]
             : undefined;
         var compiled = compileToken(subselect, opts, context);
@@ -5850,7 +5700,7 @@ exports.subselects = {
                 context[0] = elem;
                 var childs = adapter.getChildren(elem);
                 var nextElements = shouldTestNextSiblings
-                    ? __spreadArrays(childs, getNextSiblings(elem, adapter)) : childs;
+                    ? __spreadArray(__spreadArray([], childs), getNextSiblings(elem, adapter)) : childs;
                 return (next(elem) && adapter.existsOne(hasElement, nextElements));
             };
         }
@@ -5990,29 +5840,23 @@ Object.defineProperty(exports, "stringify", ({ enumerable: true, get: function (
 
 "use strict";
 
-var __spreadArrays = (this && this.__spreadArrays) || function () {
-    for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
-    for (var r = Array(s), k = 0, i = 0; i < il; i++)
-        for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
-            r[k] = a[j];
-    return r;
+var __spreadArray = (this && this.__spreadArray) || function (to, from) {
+    for (var i = 0, il = from.length, j = to.length; i < il; i++, j++)
+        to[j] = from[i];
+    return to;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.isTraversal = void 0;
 var reName = /^[^\\#]?(?:\\(?:[\da-f]{1,6}\s?|.)|[\w\-\u00b0-\uFFFF])+/;
 var reEscape = /\\([\da-f]{1,6}\s?|(\s)|.)/gi;
-// Modified version of https://github.com/jquery/sizzle/blob/master/src/sizzle.js#L87
-var reAttr = /^\s*(?:(\*|[-\w]*)\|)?((?:\\.|[\w\u00b0-\uFFFF-])+)\s*(?:(\S?)=\s*(?:(['"])((?:[^\\]|\\[^])*?)\4|(#?(?:\\.|[\w\u00b0-\uFFFF-])*)|)|)\s*([iI])?\]/;
-var actionTypes = {
-    undefined: "exists",
-    "": "equals",
-    "~": "element",
-    "^": "start",
-    $: "end",
-    "*": "any",
-    "!": "not",
-    "|": "hyphen",
-};
+var actionTypes = new Map([
+    ["~", "element"],
+    ["^", "start"],
+    ["$", "end"],
+    ["*", "any"],
+    ["!", "not"],
+    ["|", "hyphen"],
+]);
 var Traversals = {
     ">": "child",
     "<": "parent",
@@ -6032,9 +5876,63 @@ var unpackPseudos = new Set([
     "host",
     "host-context",
 ]);
-var traversalNames = new Set(__spreadArrays([
+var traversalNames = new Set(__spreadArray([
     "descendant"
 ], Object.keys(Traversals).map(function (k) { return Traversals[k]; })));
+/**
+ * Attributes that are case-insensitive in HTML.
+ *
+ * @private
+ * @see https://html.spec.whatwg.org/multipage/semantics-other.html#case-sensitivity-of-selectors
+ */
+var caseInsensitiveAttributes = new Set([
+    "accept",
+    "accept-charset",
+    "align",
+    "alink",
+    "axis",
+    "bgcolor",
+    "charset",
+    "checked",
+    "clear",
+    "codetype",
+    "color",
+    "compact",
+    "declare",
+    "defer",
+    "dir",
+    "direction",
+    "disabled",
+    "enctype",
+    "face",
+    "frame",
+    "hreflang",
+    "http-equiv",
+    "lang",
+    "language",
+    "link",
+    "media",
+    "method",
+    "multiple",
+    "nohref",
+    "noresize",
+    "noshade",
+    "nowrap",
+    "readonly",
+    "rel",
+    "rev",
+    "rules",
+    "scope",
+    "scrolling",
+    "selected",
+    "shape",
+    "target",
+    "text",
+    "type",
+    "valign",
+    "valuetype",
+    "vlink",
+]);
 /**
  * Checks whether a specific selector is a traversal.
  * This is useful eg. in swapping the order of elements that
@@ -6136,6 +6034,13 @@ function parseSelector(subselects, selector, options, selectorIndex) {
             sawWS = false;
             stripWhitespace(1);
         }
+        else if (selector.startsWith("/*", selectorIndex)) {
+            var endIndex = selector.indexOf("*/", selectorIndex + 2);
+            if (endIndex < 0) {
+                throw new Error("Comment was not terminated");
+            }
+            selectorIndex = endIndex + 2;
+        }
         else {
             if (sawWS) {
                 ensureNotTraversal();
@@ -6149,31 +6054,108 @@ function parseSelector(subselects, selector, options, selectorIndex) {
                     name: name_1,
                     action: action,
                     value: getName(1),
-                    ignoreCase: false,
                     namespace: null,
+                    // TODO: Add quirksMode option, which makes `ignoreCase` `true` for HTML.
+                    ignoreCase: options.xmlMode ? null : false,
                 });
             }
             else if (firstChar === "[") {
-                var attributeMatch = selector
-                    .slice(selectorIndex + 1)
-                    .match(reAttr);
-                if (!attributeMatch) {
-                    throw new Error("Malformed attribute selector: " + selector.slice(selectorIndex));
+                stripWhitespace(1);
+                // Determine attribute name and namespace
+                var name_2 = void 0;
+                var namespace = null;
+                if (selector.charAt(selectorIndex) === "|") {
+                    namespace = "";
+                    selectorIndex += 1;
                 }
-                var completeSelector = attributeMatch[0], _d = attributeMatch[1], namespace = _d === void 0 ? null : _d, baseName = attributeMatch[2], actionType = attributeMatch[3], _e = attributeMatch[5], quotedValue = _e === void 0 ? "" : _e, _f = attributeMatch[6], value = _f === void 0 ? quotedValue : _f, ignoreCase = attributeMatch[7];
-                selectorIndex += completeSelector.length + 1;
-                var name_2 = unescapeCSS(baseName);
+                if (selector.startsWith("*|", selectorIndex)) {
+                    namespace = "*";
+                    selectorIndex += 2;
+                }
+                name_2 = getName(0);
+                if (namespace === null &&
+                    selector.charAt(selectorIndex) === "|" &&
+                    selector.charAt(selectorIndex + 1) !== "=") {
+                    namespace = name_2;
+                    name_2 = getName(1);
+                }
                 if ((_a = options.lowerCaseAttributeNames) !== null && _a !== void 0 ? _a : !options.xmlMode) {
                     name_2 = name_2.toLowerCase();
                 }
-                tokens.push({
+                stripWhitespace(0);
+                // Determine comparison operation
+                var action = "exists";
+                var possibleAction = actionTypes.get(selector.charAt(selectorIndex));
+                if (possibleAction) {
+                    action = possibleAction;
+                    if (selector.charAt(selectorIndex + 1) !== "=") {
+                        throw new Error("Expected `=`");
+                    }
+                    stripWhitespace(2);
+                }
+                else if (selector.charAt(selectorIndex) === "=") {
+                    action = "equals";
+                    stripWhitespace(1);
+                }
+                // Determine value
+                var value = "";
+                var ignoreCase = null;
+                if (action !== "exists") {
+                    if (quotes.has(selector.charAt(selectorIndex))) {
+                        var quote = selector.charAt(selectorIndex);
+                        var sectionEnd = selectorIndex + 1;
+                        while (sectionEnd < selector.length &&
+                            (selector.charAt(sectionEnd) !== quote ||
+                                isEscaped(sectionEnd))) {
+                            sectionEnd += 1;
+                        }
+                        if (selector.charAt(sectionEnd) !== quote) {
+                            throw new Error("Attribute value didn't end");
+                        }
+                        value = unescapeCSS(selector.slice(selectorIndex + 1, sectionEnd));
+                        selectorIndex = sectionEnd + 1;
+                    }
+                    else {
+                        var valueStart = selectorIndex;
+                        while (selectorIndex < selector.length &&
+                            ((!isWhitespace(selector.charAt(selectorIndex)) &&
+                                selector.charAt(selectorIndex) !== "]") ||
+                                isEscaped(selectorIndex))) {
+                            selectorIndex += 1;
+                        }
+                        value = unescapeCSS(selector.slice(valueStart, selectorIndex));
+                    }
+                    stripWhitespace(0);
+                    // See if we have a force ignore flag
+                    var forceIgnore = selector.charAt(selectorIndex);
+                    // If the forceIgnore flag is set (either `i` or `s`), use that value
+                    if (forceIgnore === "s" || forceIgnore === "S") {
+                        ignoreCase = false;
+                        stripWhitespace(1);
+                    }
+                    else if (forceIgnore === "i" || forceIgnore === "I") {
+                        ignoreCase = true;
+                        stripWhitespace(1);
+                    }
+                }
+                // If `xmlMode` is set, there are no rules; otherwise, use the `caseInsensitiveAttributes` list.
+                if (!options.xmlMode) {
+                    // TODO: Skip this for `exists`, as there is no value to compare to.
+                    ignoreCase !== null && ignoreCase !== void 0 ? ignoreCase : (ignoreCase = caseInsensitiveAttributes.has(name_2));
+                }
+                if (selector.charAt(selectorIndex) !== "]") {
+                    throw new Error("Attribute selector didn't terminate");
+                }
+                selectorIndex += 1;
+                var attributeSelector = {
                     type: "attribute",
                     name: name_2,
-                    action: actionTypes[actionType],
-                    value: unescapeCSS(value),
+                    action: action,
+                    value: value,
                     namespace: namespace,
-                    ignoreCase: !!ignoreCase,
-                });
+                    ignoreCase: ignoreCase,
+                };
+                tokens.push(attributeSelector);
             }
             else if (firstChar === ":") {
                 if (selector.charAt(selectorIndex + 1) === ":") {
@@ -6234,6 +6216,10 @@ function parseSelector(subselects, selector, options, selectorIndex) {
                     name_4 = "*";
                 }
                 else if (reName.test(selector.slice(selectorIndex))) {
+                    if (selector.charAt(selectorIndex) === "|") {
+                        namespace = "";
+                        selectorIndex += 1;
+                    }
                     name_4 = getName(0);
                 }
                 else {
@@ -6290,12 +6276,10 @@ function addToken(subselects, tokens) {
 
 "use strict";
 
-var __spreadArrays = (this && this.__spreadArrays) || function () {
-    for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
-    for (var r = Array(s), k = 0, i = 0; i < il; i++)
-        for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
-            r[k] = a[j];
-    return r;
+var __spreadArray = (this && this.__spreadArray) || function (to, from) {
+    for (var i = 0, il = from.length, j = to.length; i < il; i++, j++)
+        to[j] = from[i];
+    return to;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 var actionTypes = {
@@ -6307,9 +6291,9 @@ var actionTypes = {
     not: "!",
     hyphen: "|",
 };
-var charsToEscape = new Set(__spreadArrays(Object.keys(actionTypes)
+var charsToEscape = new Set(__spreadArray(__spreadArray([], Object.keys(actionTypes)
     .map(function (typeKey) { return actionTypes[typeKey]; })
-    .filter(Boolean), [
+    .filter(Boolean)), [
     ":",
     "[",
     "]",
@@ -6317,6 +6301,7 @@ var charsToEscape = new Set(__spreadArrays(Object.keys(actionTypes)
     "\\",
     "(",
     ")",
+    "'",
 ]));
 /**
  * Turns `selector` back into a string.
@@ -6373,7 +6358,7 @@ function stringifyToken(token) {
             if (token.action === "exists") {
                 return "[" + name_1 + "]";
             }
-            return "[" + name_1 + actionTypes[token.action] + "='" + escapeName(token.value) + "'" + (token.ignoreCase ? "i" : "") + "]";
+            return "[" + name_1 + actionTypes[token.action] + "='" + escapeName(token.value) + "'" + (token.ignoreCase ? "i" : token.ignoreCase === false ? "s" : "") + "]";
         }
     }
 }
@@ -6381,7 +6366,7 @@ function getNamespacedName(token) {
     return "" + getNamespace(token.namespace) + escapeName(token.name);
 }
 function getNamespace(namespace) {
-    return namespace
+    return namespace !== null
         ? (namespace === "*" ? "*" : escapeName(namespace)) + "|"
         : "";
 }
@@ -7365,10 +7350,11 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
  */
 var ElementType = __importStar(__nccwpck_require__(3944));
 var entities_1 = __nccwpck_require__(3000);
-/*
+/**
  * Mixed-case SVG and MathML tags & attributes
- * recognized by the HTML parser, see
- * https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inforeign
+ * recognized by the HTML parser.
+ *
+ * @see https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inforeign
  */
 var foreignNames_1 = __nccwpck_require__(4802);
 var unencodedElements = new Set([
@@ -7398,7 +7384,9 @@ function formatAttributes(attributes, opts) {
         if (!opts.emptyAttrs && !opts.xmlMode && value === "") {
             return key;
         }
-        return key + "=\"" + (opts.decodeEntities ? entities_1.encodeXML(value) : value.replace(/"/g, "&quot;")) + "\"";
+        return key + "=\"" + (opts.decodeEntities !== false
+            ? entities_1.encodeXML(value)
+            : value.replace(/"/g, "&quot;")) + "\"";
     })
         .join(" ");
 }
@@ -7436,8 +7424,7 @@ var singleTag = new Set([
  */
 function render(node, options) {
     if (options === void 0) { options = {}; }
-    // TODO: This is a bit hacky.
-    var nodes = Array.isArray(node) || node.cheerio ? node : [node];
+    var nodes = "length" in node ? node : [node];
     var output = "";
     for (var i = 0; i < nodes.length; i++) {
         output += renderNode(nodes[i], options);
@@ -7523,8 +7510,10 @@ function renderDirective(elem) {
 function renderText(elem, opts) {
     var data = elem.data || "";
     // If entities weren't decoded, no need to encode them back
-    if (opts.decodeEntities &&
-        !(elem.parent && unencodedElements.has(elem.parent.name))) {
+    if (opts.decodeEntities !== false &&
+        !(!opts.xmlMode &&
+            elem.parent &&
+            unencodedElements.has(elem.parent.name))) {
         data = entities_1.encodeXML(data);
     }
     return data;
@@ -7545,37 +7534,59 @@ function renderComment(elem) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.Doctype = exports.CDATA = exports.Tag = exports.Style = exports.Script = exports.Comment = exports.Directive = exports.Text = exports.Root = exports.isTag = void 0;
+exports.Doctype = exports.CDATA = exports.Tag = exports.Style = exports.Script = exports.Comment = exports.Directive = exports.Text = exports.Root = exports.isTag = exports.ElementType = void 0;
+/** Types of elements found in htmlparser2's DOM */
+var ElementType;
+(function (ElementType) {
+    /** Type for the root element of a document */
+    ElementType["Root"] = "root";
+    /** Type for Text */
+    ElementType["Text"] = "text";
+    /** Type for <? ... ?> */
+    ElementType["Directive"] = "directive";
+    /** Type for <!-- ... --> */
+    ElementType["Comment"] = "comment";
+    /** Type for <script> tags */
+    ElementType["Script"] = "script";
+    /** Type for <style> tags */
+    ElementType["Style"] = "style";
+    /** Type for Any tag */
+    ElementType["Tag"] = "tag";
+    /** Type for <![CDATA[ ... ]]> */
+    ElementType["CDATA"] = "cdata";
+    /** Type for <!doctype ...> */
+    ElementType["Doctype"] = "doctype";
+})(ElementType = exports.ElementType || (exports.ElementType = {}));
 /**
  * Tests whether an element is a tag or not.
  *
  * @param elem Element to test
  */
 function isTag(elem) {
-    return (elem.type === "tag" /* Tag */ ||
-        elem.type === "script" /* Script */ ||
-        elem.type === "style" /* Style */);
+    return (elem.type === ElementType.Tag ||
+        elem.type === ElementType.Script ||
+        elem.type === ElementType.Style);
 }
 exports.isTag = isTag;
 // Exports for backwards compatibility
 /** Type for the root element of a document */
-exports.Root = "root" /* Root */;
+exports.Root = ElementType.Root;
 /** Type for Text */
-exports.Text = "text" /* Text */;
+exports.Text = ElementType.Text;
 /** Type for <? ... ?> */
-exports.Directive = "directive" /* Directive */;
+exports.Directive = ElementType.Directive;
 /** Type for <!-- ... --> */
-exports.Comment = "comment" /* Comment */;
+exports.Comment = ElementType.Comment;
 /** Type for <script> tags */
-exports.Script = "script" /* Script */;
+exports.Script = ElementType.Script;
 /** Type for <style> tags */
-exports.Style = "style" /* Style */;
+exports.Style = ElementType.Style;
 /** Type for Any tag */
-exports.Tag = "tag" /* Tag */;
+exports.Tag = ElementType.Tag;
 /** Type for <![CDATA[ ... ]]> */
-exports.CDATA = "cdata" /* CDATA */;
+exports.CDATA = ElementType.CDATA;
 /** Type for <!doctype ...> */
-exports.Doctype = "doctype" /* Doctype */;
+exports.Doctype = ElementType.Doctype;
 
 
 /***/ }),
@@ -7597,6 +7608,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.DomHandler = void 0;
+var domelementtype_1 = __nccwpck_require__(3944);
 var node_1 = __nccwpck_require__(7822);
 __exportStar(__nccwpck_require__(7822), exports);
 var reWhitespace = /\s+/g;
@@ -7672,14 +7684,15 @@ var DomHandler = /** @class */ (function () {
             this.elementCB(elem);
     };
     DomHandler.prototype.onopentag = function (name, attribs) {
-        var element = new node_1.Element(name, attribs);
+        var type = this.options.xmlMode ? domelementtype_1.ElementType.Tag : undefined;
+        var element = new node_1.Element(name, attribs, undefined, type);
         this.addNode(element);
         this.tagStack.push(element);
     };
     DomHandler.prototype.ontext = function (data) {
         var normalizeWhitespace = this.options.normalizeWhitespace;
         var lastNode = this.lastNode;
-        if (lastNode && lastNode.type === "text" /* Text */) {
+        if (lastNode && lastNode.type === domelementtype_1.ElementType.Text) {
             if (normalizeWhitespace) {
                 lastNode.data = (lastNode.data + data).replace(reWhitespace, " ");
             }
@@ -7697,7 +7710,7 @@ var DomHandler = /** @class */ (function () {
         }
     };
     DomHandler.prototype.oncomment = function (data) {
-        if (this.lastNode && this.lastNode.type === "comment" /* Comment */) {
+        if (this.lastNode && this.lastNode.type === domelementtype_1.ElementType.Comment) {
             this.lastNode.data += data;
             return;
         }
@@ -7710,7 +7723,7 @@ var DomHandler = /** @class */ (function () {
     };
     DomHandler.prototype.oncdatastart = function () {
         var text = new node_1.Text("");
-        var node = new node_1.NodeWithChildren("cdata" /* CDATA */, [text]);
+        var node = new node_1.NodeWithChildren(domelementtype_1.ElementType.CDATA, [text]);
         this.addNode(node);
         text.parent = node;
         this.lastNode = text;
@@ -7747,10 +7760,6 @@ var DomHandler = /** @class */ (function () {
         node.parent = parent;
         this.lastNode = null;
     };
-    DomHandler.prototype.addDataNode = function (node) {
-        this.addNode(node);
-        this.lastNode = node;
-    };
     return DomHandler;
 }());
 exports.DomHandler = DomHandler;
@@ -7760,7 +7769,7 @@ exports.default = DomHandler;
 /***/ }),
 
 /***/ 7822:
-/***/ (function(__unused_webpack_module, exports) {
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
@@ -7772,6 +7781,8 @@ var __extends = (this && this.__extends) || (function () {
         return extendStatics(d, b);
     };
     return function (d, b) {
+        if (typeof b !== "function" && b !== null)
+            throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
         extendStatics(d, b);
         function __() { this.constructor = d; }
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
@@ -7789,16 +7800,17 @@ var __assign = (this && this.__assign) || function () {
     return __assign.apply(this, arguments);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.cloneNode = exports.Element = exports.Document = exports.NodeWithChildren = exports.ProcessingInstruction = exports.Comment = exports.Text = exports.DataNode = exports.Node = void 0;
+exports.cloneNode = exports.hasChildren = exports.isDocument = exports.isDirective = exports.isComment = exports.isText = exports.isCDATA = exports.isTag = exports.Element = exports.Document = exports.NodeWithChildren = exports.ProcessingInstruction = exports.Comment = exports.Text = exports.DataNode = exports.Node = void 0;
+var domelementtype_1 = __nccwpck_require__(3944);
 var nodeTypes = new Map([
-    ["tag" /* Tag */, 1],
-    ["script" /* Script */, 1],
-    ["style" /* Style */, 1],
-    ["directive" /* Directive */, 1],
-    ["text" /* Text */, 3],
-    ["cdata" /* CDATA */, 4],
-    ["comment" /* Comment */, 8],
-    ["root" /* Root */, 9],
+    [domelementtype_1.ElementType.Tag, 1],
+    [domelementtype_1.ElementType.Script, 1],
+    [domelementtype_1.ElementType.Style, 1],
+    [domelementtype_1.ElementType.Directive, 1],
+    [domelementtype_1.ElementType.Text, 3],
+    [domelementtype_1.ElementType.CDATA, 4],
+    [domelementtype_1.ElementType.Comment, 8],
+    [domelementtype_1.ElementType.Root, 9],
 ]);
 /**
  * This object will be used as the prototype for Nodes when creating a
@@ -7902,7 +7914,7 @@ exports.DataNode = DataNode;
 var Text = /** @class */ (function (_super) {
     __extends(Text, _super);
     function Text(data) {
-        return _super.call(this, "text" /* Text */, data) || this;
+        return _super.call(this, domelementtype_1.ElementType.Text, data) || this;
     }
     return Text;
 }(DataNode));
@@ -7910,7 +7922,7 @@ exports.Text = Text;
 var Comment = /** @class */ (function (_super) {
     __extends(Comment, _super);
     function Comment(data) {
-        return _super.call(this, "comment" /* Comment */, data) || this;
+        return _super.call(this, domelementtype_1.ElementType.Comment, data) || this;
     }
     return Comment;
 }(DataNode));
@@ -7918,7 +7930,7 @@ exports.Comment = Comment;
 var ProcessingInstruction = /** @class */ (function (_super) {
     __extends(ProcessingInstruction, _super);
     function ProcessingInstruction(name, data) {
-        var _this = _super.call(this, "directive" /* Directive */, data) || this;
+        var _this = _super.call(this, domelementtype_1.ElementType.Directive, data) || this;
         _this.name = name;
         return _this;
     }
@@ -7973,7 +7985,7 @@ exports.NodeWithChildren = NodeWithChildren;
 var Document = /** @class */ (function (_super) {
     __extends(Document, _super);
     function Document(children) {
-        return _super.call(this, "root" /* Root */, children) || this;
+        return _super.call(this, domelementtype_1.ElementType.Root, children) || this;
     }
     return Document;
 }(NodeWithChildren));
@@ -7985,15 +7997,15 @@ var Element = /** @class */ (function (_super) {
      * @param attribs Object mapping attribute names to attribute values.
      * @param children Children of the node.
      */
-    function Element(name, attribs, children) {
+    function Element(name, attribs, children, type) {
         if (children === void 0) { children = []; }
-        var _this = _super.call(this, name === "script"
-            ? "script" /* Script */
+        if (type === void 0) { type = name === "script"
+            ? domelementtype_1.ElementType.Script
             : name === "style"
-                ? "style" /* Style */
-                : "tag" /* Tag */, children) || this;
+                ? domelementtype_1.ElementType.Style
+                : domelementtype_1.ElementType.Tag; }
+        var _this = _super.call(this, type, children) || this;
         _this.name = name;
-        _this.attribs = attribs;
         _this.attribs = attribs;
         return _this;
     }
@@ -8028,6 +8040,62 @@ var Element = /** @class */ (function (_super) {
 }(NodeWithChildren));
 exports.Element = Element;
 /**
+ * @param node Node to check.
+ * @returns `true` if the node is a `Element`, `false` otherwise.
+ */
+function isTag(node) {
+    return domelementtype_1.isTag(node);
+}
+exports.isTag = isTag;
+/**
+ * @param node Node to check.
+ * @returns `true` if the node has the type `CDATA`, `false` otherwise.
+ */
+function isCDATA(node) {
+    return node.type === domelementtype_1.ElementType.CDATA;
+}
+exports.isCDATA = isCDATA;
+/**
+ * @param node Node to check.
+ * @returns `true` if the node has the type `Text`, `false` otherwise.
+ */
+function isText(node) {
+    return node.type === domelementtype_1.ElementType.Text;
+}
+exports.isText = isText;
+/**
+ * @param node Node to check.
+ * @returns `true` if the node has the type `Comment`, `false` otherwise.
+ */
+function isComment(node) {
+    return node.type === domelementtype_1.ElementType.Comment;
+}
+exports.isComment = isComment;
+/**
+ * @param node Node to check.
+ * @returns `true` if the node has the type `ProcessingInstruction`, `false` otherwise.
+ */
+function isDirective(node) {
+    return node.type === domelementtype_1.ElementType.Directive;
+}
+exports.isDirective = isDirective;
+/**
+ * @param node Node to check.
+ * @returns `true` if the node has the type `ProcessingInstruction`, `false` otherwise.
+ */
+function isDocument(node) {
+    return node.type === domelementtype_1.ElementType.Root;
+}
+exports.isDocument = isDocument;
+/**
+ * @param node Node to check.
+ * @returns `true` if the node is a `NodeWithChildren` (has children), `false` otherwise.
+ */
+function hasChildren(node) {
+    return Object.prototype.hasOwnProperty.call(node, "children");
+}
+exports.hasChildren = hasChildren;
+/**
  * Clone a node, and optionally its children.
  *
  * @param recursive Clone child nodes as well.
@@ -8036,62 +8104,50 @@ exports.Element = Element;
 function cloneNode(node, recursive) {
     if (recursive === void 0) { recursive = false; }
     var result;
-    switch (node.type) {
-        case "text" /* Text */:
-            result = new Text(node.data);
-            break;
-        case "directive" /* Directive */: {
-            var instr = node;
-            result = new ProcessingInstruction(instr.name, instr.data);
-            if (instr["x-name"] != null) {
-                result["x-name"] = instr["x-name"];
-                result["x-publicId"] = instr["x-publicId"];
-                result["x-systemId"] = instr["x-systemId"];
-            }
-            break;
+    if (isText(node)) {
+        result = new Text(node.data);
+    }
+    else if (isComment(node)) {
+        result = new Comment(node.data);
+    }
+    else if (isTag(node)) {
+        var children = recursive ? cloneChildren(node.children) : [];
+        var clone_1 = new Element(node.name, __assign({}, node.attribs), children);
+        children.forEach(function (child) { return (child.parent = clone_1); });
+        if (node["x-attribsNamespace"]) {
+            clone_1["x-attribsNamespace"] = __assign({}, node["x-attribsNamespace"]);
         }
-        case "comment" /* Comment */:
-            result = new Comment(node.data);
-            break;
-        case "tag" /* Tag */:
-        case "script" /* Script */:
-        case "style" /* Style */: {
-            var elem = node;
-            var children = recursive ? cloneChildren(elem.children) : [];
-            var clone_1 = new Element(elem.name, __assign({}, elem.attribs), children);
-            children.forEach(function (child) { return (child.parent = clone_1); });
-            if (elem["x-attribsNamespace"]) {
-                clone_1["x-attribsNamespace"] = __assign({}, elem["x-attribsNamespace"]);
-            }
-            if (elem["x-attribsPrefix"]) {
-                clone_1["x-attribsPrefix"] = __assign({}, elem["x-attribsPrefix"]);
-            }
-            result = clone_1;
-            break;
+        if (node["x-attribsPrefix"]) {
+            clone_1["x-attribsPrefix"] = __assign({}, node["x-attribsPrefix"]);
         }
-        case "cdata" /* CDATA */: {
-            var cdata = node;
-            var children = recursive ? cloneChildren(cdata.children) : [];
-            var clone_2 = new NodeWithChildren(node.type, children);
-            children.forEach(function (child) { return (child.parent = clone_2); });
-            result = clone_2;
-            break;
+        result = clone_1;
+    }
+    else if (isCDATA(node)) {
+        var children = recursive ? cloneChildren(node.children) : [];
+        var clone_2 = new NodeWithChildren(domelementtype_1.ElementType.CDATA, children);
+        children.forEach(function (child) { return (child.parent = clone_2); });
+        result = clone_2;
+    }
+    else if (isDocument(node)) {
+        var children = recursive ? cloneChildren(node.children) : [];
+        var clone_3 = new Document(children);
+        children.forEach(function (child) { return (child.parent = clone_3); });
+        if (node["x-mode"]) {
+            clone_3["x-mode"] = node["x-mode"];
         }
-        case "root" /* Root */: {
-            var doc = node;
-            var children = recursive ? cloneChildren(doc.children) : [];
-            var clone_3 = new Document(children);
-            children.forEach(function (child) { return (child.parent = clone_3); });
-            if (doc["x-mode"]) {
-                clone_3["x-mode"] = doc["x-mode"];
-            }
-            result = clone_3;
-            break;
+        result = clone_3;
+    }
+    else if (isDirective(node)) {
+        var instruction = new ProcessingInstruction(node.name, node.data);
+        if (node["x-name"] != null) {
+            instruction["x-name"] = node["x-name"];
+            instruction["x-publicId"] = node["x-publicId"];
+            instruction["x-systemId"] = node["x-systemId"];
         }
-        case "doctype" /* Doctype */: {
-            // This type isn't used yet.
-            throw new Error("Not implemented yet: ElementType.Doctype case");
-        }
+        result = instruction;
+    }
+    else {
+        throw new Error("Not implemented yet: " + node.type);
     }
     result.startIndex = node.startIndex;
     result.endIndex = node.endIndex;
@@ -8117,7 +8173,7 @@ function cloneChildren(childs) {
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.uniqueSort = exports.compareDocumentPosition = exports.removeSubsets = void 0;
-var tagtypes_1 = __nccwpck_require__(5370);
+var domhandler_1 = __nccwpck_require__(4038);
 /**
  * Given an array of nodes, remove any member that is contained by another.
  *
@@ -8182,12 +8238,12 @@ function compareDocumentPosition(nodeA, nodeB) {
     if (nodeA === nodeB) {
         return 0;
     }
-    var current = tagtypes_1.hasChildren(nodeA) ? nodeA : nodeA.parent;
+    var current = domhandler_1.hasChildren(nodeA) ? nodeA : nodeA.parent;
     while (current) {
         aParents.unshift(current);
         current = current.parent;
     }
-    current = tagtypes_1.hasChildren(nodeB) ? nodeB : nodeB.parent;
+    current = domhandler_1.hasChildren(nodeB) ? nodeB : nodeB.parent;
     while (current) {
         bParents.unshift(current);
         current = current.parent;
@@ -8259,13 +8315,20 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.hasChildren = exports.isDocument = exports.isComment = exports.isText = exports.isCDATA = exports.isTag = void 0;
 __exportStar(__nccwpck_require__(9561), exports);
 __exportStar(__nccwpck_require__(9228), exports);
 __exportStar(__nccwpck_require__(177), exports);
 __exportStar(__nccwpck_require__(9908), exports);
 __exportStar(__nccwpck_require__(2185), exports);
 __exportStar(__nccwpck_require__(1447), exports);
-__exportStar(__nccwpck_require__(5370), exports);
+var domhandler_1 = __nccwpck_require__(4038);
+Object.defineProperty(exports, "isTag", ({ enumerable: true, get: function () { return domhandler_1.isTag; } }));
+Object.defineProperty(exports, "isCDATA", ({ enumerable: true, get: function () { return domhandler_1.isCDATA; } }));
+Object.defineProperty(exports, "isText", ({ enumerable: true, get: function () { return domhandler_1.isText; } }));
+Object.defineProperty(exports, "isComment", ({ enumerable: true, get: function () { return domhandler_1.isComment; } }));
+Object.defineProperty(exports, "isDocument", ({ enumerable: true, get: function () { return domhandler_1.isDocument; } }));
+Object.defineProperty(exports, "hasChildren", ({ enumerable: true, get: function () { return domhandler_1.hasChildren; } }));
 
 
 /***/ }),
@@ -8277,17 +8340,17 @@ __exportStar(__nccwpck_require__(5370), exports);
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getElementsByTagType = exports.getElementsByTagName = exports.getElementById = exports.getElements = exports.testElement = void 0;
+var domhandler_1 = __nccwpck_require__(4038);
 var querying_1 = __nccwpck_require__(9908);
-var tagtypes_1 = __nccwpck_require__(5370);
 var Checks = {
     tag_name: function (name) {
         if (typeof name === "function") {
-            return function (elem) { return tagtypes_1.isTag(elem) && name(elem.name); };
+            return function (elem) { return domhandler_1.isTag(elem) && name(elem.name); };
         }
         else if (name === "*") {
-            return tagtypes_1.isTag;
+            return domhandler_1.isTag;
         }
-        return function (elem) { return tagtypes_1.isTag(elem) && elem.name === name; };
+        return function (elem) { return domhandler_1.isTag(elem) && elem.name === name; };
     },
     tag_type: function (type) {
         if (typeof type === "function") {
@@ -8297,9 +8360,9 @@ var Checks = {
     },
     tag_contains: function (data) {
         if (typeof data === "function") {
-            return function (elem) { return tagtypes_1.isText(elem) && data(elem.data); };
+            return function (elem) { return domhandler_1.isText(elem) && data(elem.data); };
         }
-        return function (elem) { return tagtypes_1.isText(elem) && elem.data === data; };
+        return function (elem) { return domhandler_1.isText(elem) && elem.data === data; };
     },
 };
 /**
@@ -8309,9 +8372,9 @@ var Checks = {
  */
 function getAttribCheck(attrib, value) {
     if (typeof value === "function") {
-        return function (elem) { return tagtypes_1.isTag(elem) && value(elem.attribs[attrib]); };
+        return function (elem) { return domhandler_1.isTag(elem) && value(elem.attribs[attrib]); };
     }
-    return function (elem) { return tagtypes_1.isTag(elem) && elem.attribs[attrib] === value; };
+    return function (elem) { return domhandler_1.isTag(elem) && elem.attribs[attrib] === value; };
 }
 /**
  * @param a First function to combine.
@@ -8546,7 +8609,7 @@ exports.prepend = prepend;
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.findAll = exports.existsOne = exports.findOne = exports.findOneChild = exports.find = exports.filter = void 0;
-var tagtypes_1 = __nccwpck_require__(5370);
+var domhandler_1 = __nccwpck_require__(4038);
 /**
  * Search a node and its children for nodes passing a test function.
  *
@@ -8582,7 +8645,7 @@ function find(test, nodes, recurse, limit) {
             if (--limit <= 0)
                 break;
         }
-        if (recurse && tagtypes_1.hasChildren(elem) && elem.children.length > 0) {
+        if (recurse && domhandler_1.hasChildren(elem) && elem.children.length > 0) {
             var children = find(test, elem.children, recurse, limit);
             result.push.apply(result, children);
             limit -= children.length;
@@ -8617,7 +8680,7 @@ function findOne(test, nodes, recurse) {
     var elem = null;
     for (var i = 0; i < nodes.length && !elem; i++) {
         var checked = nodes[i];
-        if (!tagtypes_1.isTag(checked)) {
+        if (!domhandler_1.isTag(checked)) {
             continue;
         }
         else if (test(checked)) {
@@ -8637,7 +8700,7 @@ exports.findOne = findOne;
  */
 function existsOne(test, nodes) {
     return nodes.some(function (checked) {
-        return tagtypes_1.isTag(checked) &&
+        return domhandler_1.isTag(checked) &&
             (test(checked) ||
                 (checked.children.length > 0 &&
                     existsOne(test, checked.children)));
@@ -8656,10 +8719,10 @@ exports.existsOne = existsOne;
 function findAll(test, nodes) {
     var _a;
     var result = [];
-    var stack = nodes.filter(tagtypes_1.isTag);
+    var stack = nodes.filter(domhandler_1.isTag);
     var elem;
     while ((elem = stack.shift())) {
-        var children = (_a = elem.children) === null || _a === void 0 ? void 0 : _a.filter(tagtypes_1.isTag);
+        var children = (_a = elem.children) === null || _a === void 0 ? void 0 : _a.filter(domhandler_1.isTag);
         if (children && children.length > 0) {
             stack.unshift.apply(stack, children);
         }
@@ -8682,9 +8745,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getText = exports.getInnerHTML = exports.getOuterHTML = void 0;
-var tagtypes_1 = __nccwpck_require__(5370);
+exports.innerText = exports.textContent = exports.getText = exports.getInnerHTML = exports.getOuterHTML = void 0;
+var domhandler_1 = __nccwpck_require__(4038);
 var dom_serializer_1 = __importDefault(__nccwpck_require__(8621));
+var domelementtype_1 = __nccwpck_require__(3944);
 /**
  * @param node Node to get the outer HTML of.
  * @param options Options for serialization.
@@ -8702,81 +8766,69 @@ exports.getOuterHTML = getOuterHTML;
  * @returns `node`'s inner HTML.
  */
 function getInnerHTML(node, options) {
-    return tagtypes_1.hasChildren(node)
+    return domhandler_1.hasChildren(node)
         ? node.children.map(function (node) { return getOuterHTML(node, options); }).join("")
         : "";
 }
 exports.getInnerHTML = getInnerHTML;
 /**
- * Get a node's inner text.
+ * Get a node's inner text. Same as `textContent`, but inserts newlines for `<br>` tags.
  *
+ * @deprecated Use `textContent` instead.
  * @param node Node to get the inner text of.
  * @returns `node`'s inner text.
  */
 function getText(node) {
     if (Array.isArray(node))
         return node.map(getText).join("");
-    if (tagtypes_1.isTag(node))
+    if (domhandler_1.isTag(node))
         return node.name === "br" ? "\n" : getText(node.children);
-    if (tagtypes_1.isCDATA(node))
+    if (domhandler_1.isCDATA(node))
         return getText(node.children);
-    if (tagtypes_1.isText(node))
+    if (domhandler_1.isText(node))
         return node.data;
     return "";
 }
 exports.getText = getText;
-
-
-/***/ }),
-
-/***/ 5370:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.hasChildren = exports.isComment = exports.isText = exports.isCDATA = exports.isTag = void 0;
-var domelementtype_1 = __nccwpck_require__(3944);
 /**
- * @param node Node to check.
- * @returns `true` if the node is a `Element`, `false` otherwise.
+ * Get a node's text content.
+ *
+ * @param node Node to get the text content of.
+ * @returns `node`'s text content.
+ * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Node/textContent}
  */
-function isTag(node) {
-    return domelementtype_1.isTag(node);
+function textContent(node) {
+    if (Array.isArray(node))
+        return node.map(textContent).join("");
+    if (domhandler_1.isTag(node))
+        return textContent(node.children);
+    if (domhandler_1.isCDATA(node))
+        return textContent(node.children);
+    if (domhandler_1.isText(node))
+        return node.data;
+    return "";
 }
-exports.isTag = isTag;
+exports.textContent = textContent;
 /**
- * @param node Node to check.
- * @returns `true` if the node is a `NodeWithChildren`, `false` otherwise.
+ * Get a node's inner text.
+ *
+ * @param node Node to get the inner text of.
+ * @returns `node`'s inner text.
+ * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Node/innerText}
  */
-function isCDATA(node) {
-    return node.type === "cdata" /* CDATA */;
+function innerText(node) {
+    if (Array.isArray(node))
+        return node.map(innerText).join("");
+    if (domhandler_1.hasChildren(node) && node.type === domelementtype_1.ElementType.Tag) {
+        return innerText(node.children);
+    }
+    if (domhandler_1.isCDATA(node))
+        return innerText(node.children);
+    if (domhandler_1.isText(node))
+        return node.data;
+    return "";
 }
-exports.isCDATA = isCDATA;
-/**
- * @param node Node to check.
- * @returns `true` if the node is a `DataNode`, `false` otherwise.
- */
-function isText(node) {
-    return node.type === "text" /* Text */;
-}
-exports.isText = isText;
-/**
- * @param node Node to check.
- * @returns `true` if the node is a `DataNode`, `false` otherwise.
- */
-function isComment(node) {
-    return node.type === "comment" /* Comment */;
-}
-exports.isComment = isComment;
-/**
- * @param node Node to check.
- * @returns `true` if the node is a `NodeWithChildren` (has children), `false` otherwise.
- */
-function hasChildren(node) {
-    return Object.prototype.hasOwnProperty.call(node, "children");
-}
-exports.hasChildren = hasChildren;
+exports.innerText = innerText;
 
 
 /***/ }),
@@ -8787,8 +8839,8 @@ exports.hasChildren = hasChildren;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.nextElementSibling = exports.getName = exports.hasAttrib = exports.getAttributeValue = exports.getSiblings = exports.getParent = exports.getChildren = void 0;
-var tagtypes_1 = __nccwpck_require__(5370);
+exports.prevElementSibling = exports.nextElementSibling = exports.getName = exports.hasAttrib = exports.getAttributeValue = exports.getSiblings = exports.getParent = exports.getChildren = void 0;
+var domhandler_1 = __nccwpck_require__(4038);
 var emptyArray = [];
 /**
  * Get a node's children.
@@ -8883,11 +8935,25 @@ exports.getName = getName;
 function nextElementSibling(elem) {
     var _a;
     var next = elem.next;
-    while (next !== null && !tagtypes_1.isTag(next))
+    while (next !== null && !domhandler_1.isTag(next))
         (_a = next, next = _a.next);
     return next;
 }
 exports.nextElementSibling = nextElementSibling;
+/**
+ * Returns the previous element sibling of a node.
+ *
+ * @param elem The element to get the previous sibling of.
+ * @returns `elem`'s previous sibling that is a tag.
+ */
+function prevElementSibling(elem) {
+    var _a;
+    var prev = elem.prev;
+    while (prev !== null && !domhandler_1.isTag(prev))
+        (_a = prev, prev = _a.prev);
+    return prev;
+}
+exports.prevElementSibling = prevElementSibling;
 
 
 /***/ }),
@@ -8906,14 +8972,12 @@ var entities_json_1 = __importDefault(__nccwpck_require__(4007));
 var legacy_json_1 = __importDefault(__nccwpck_require__(7802));
 var xml_json_1 = __importDefault(__nccwpck_require__(2228));
 var decode_codepoint_1 = __importDefault(__nccwpck_require__(1227));
+var strictEntityRe = /&(?:[a-zA-Z0-9]+|#[xX][\da-fA-F]+|#\d+);/g;
 exports.decodeXML = getStrictDecoder(xml_json_1.default);
 exports.decodeHTMLStrict = getStrictDecoder(entities_json_1.default);
 function getStrictDecoder(map) {
-    var keys = Object.keys(map).join("|");
     var replace = getReplacer(map);
-    keys += "|#[xX][\\da-fA-F]+|#\\d+";
-    var re = new RegExp("&(?:" + keys + ");", "g");
-    return function (str) { return String(str).replace(re, replace); };
+    return function (str) { return String(str).replace(strictEntityRe, replace); };
 }
 var sorter = function (a, b) { return (a < b ? 1 : -1); };
 exports.decodeHTML = (function () {
@@ -8947,7 +9011,8 @@ function getReplacer(map) {
             }
             return decode_codepoint_1.default(parseInt(str.substr(2), 10));
         }
-        return map[str.slice(1, -1)];
+        // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+        return map[str.slice(1, -1)] || str;
     };
 }
 
@@ -8964,7 +9029,20 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 var decode_json_1 = __importDefault(__nccwpck_require__(4589));
-// Modified version of https://github.com/mathiasbynens/he/blob/master/src/he.js#L94-L119
+// Adapted from https://github.com/mathiasbynens/he/blob/master/src/he.js#L94-L119
+var fromCodePoint = 
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+String.fromCodePoint ||
+    function (codePoint) {
+        var output = "";
+        if (codePoint > 0xffff) {
+            codePoint -= 0x10000;
+            output += String.fromCharCode(((codePoint >>> 10) & 0x3ff) | 0xd800);
+            codePoint = 0xdc00 | (codePoint & 0x3ff);
+        }
+        output += String.fromCharCode(codePoint);
+        return output;
+    };
 function decodeCodePoint(codePoint) {
     if ((codePoint >= 0xd800 && codePoint <= 0xdfff) || codePoint > 0x10ffff) {
         return "\uFFFD";
@@ -8972,14 +9050,7 @@ function decodeCodePoint(codePoint) {
     if (codePoint in decode_json_1.default) {
         codePoint = decode_json_1.default[codePoint];
     }
-    var output = "";
-    if (codePoint > 0xffff) {
-        codePoint -= 0x10000;
-        output += String.fromCharCode(((codePoint >>> 10) & 0x3ff) | 0xd800);
-        codePoint = 0xdc00 | (codePoint & 0x3ff);
-    }
-    output += String.fromCharCode(codePoint);
-    return output;
+    return fromCodePoint(codePoint);
 }
 exports.default = decodeCodePoint;
 
@@ -8995,15 +9066,40 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.escape = exports.encodeHTML = exports.encodeXML = void 0;
+exports.escapeUTF8 = exports.escape = exports.encodeNonAsciiHTML = exports.encodeHTML = exports.encodeXML = void 0;
 var xml_json_1 = __importDefault(__nccwpck_require__(2228));
 var inverseXML = getInverseObj(xml_json_1.default);
 var xmlReplacer = getInverseReplacer(inverseXML);
-exports.encodeXML = getInverse(inverseXML, xmlReplacer);
+/**
+ * Encodes all non-ASCII characters, as well as characters not valid in XML
+ * documents using XML entities.
+ *
+ * If a character has no equivalent entity, a
+ * numeric hexadecimal reference (eg. `&#xfc;`) will be used.
+ */
+exports.encodeXML = getASCIIEncoder(inverseXML);
 var entities_json_1 = __importDefault(__nccwpck_require__(4007));
 var inverseHTML = getInverseObj(entities_json_1.default);
 var htmlReplacer = getInverseReplacer(inverseHTML);
+/**
+ * Encodes all entities and non-ASCII characters in the input.
+ *
+ * This includes characters that are valid ASCII characters in HTML documents.
+ * For example `#` will be encoded as `&num;`. To get a more compact output,
+ * consider using the `encodeNonAsciiHTML` function.
+ *
+ * If a character has no equivalent entity, a
+ * numeric hexadecimal reference (eg. `&#xfc;`) will be used.
+ */
 exports.encodeHTML = getInverse(inverseHTML, htmlReplacer);
+/**
+ * Encodes all non-ASCII characters, as well as characters not valid in HTML
+ * documents using HTML entities.
+ *
+ * If a character has no equivalent entity, a
+ * numeric hexadecimal reference (eg. `&#xfc;`) will be used.
+ */
+exports.encodeNonAsciiHTML = getASCIIEncoder(inverseHTML);
 function getInverseObj(obj) {
     return Object.keys(obj)
         .sort()
@@ -9044,10 +9140,24 @@ function getInverseReplacer(inverse) {
     multiple.unshift("[" + single.join("") + "]");
     return new RegExp(multiple.join("|"), "g");
 }
+// /[^\0-\x7F]/gu
 var reNonASCII = /(?:[\x80-\uD7FF\uE000-\uFFFF]|[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF])/g;
+var getCodePoint = 
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+String.prototype.codePointAt != null
+    ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        function (str) { return str.codePointAt(0); }
+    : // http://mathiasbynens.be/notes/javascript-encoding#surrogate-formulae
+        function (c) {
+            return (c.charCodeAt(0) - 0xd800) * 0x400 +
+                c.charCodeAt(1) -
+                0xdc00 +
+                0x10000;
+        };
 function singleCharReplacer(c) {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    return "&#x" + c.codePointAt(0).toString(16).toUpperCase() + ";";
+    return "&#x" + (c.length > 1 ? getCodePoint(c) : c.charCodeAt(0))
+        .toString(16)
+        .toUpperCase() + ";";
 }
 function getInverse(inverse, re) {
     return function (data) {
@@ -9056,13 +9166,37 @@ function getInverse(inverse, re) {
             .replace(reNonASCII, singleCharReplacer);
     };
 }
-var reXmlChars = getInverseReplacer(inverseXML);
+var reEscapeChars = new RegExp(xmlReplacer.source + "|" + reNonASCII.source, "g");
+/**
+ * Encodes all non-ASCII characters, as well as characters not valid in XML
+ * documents using numeric hexadecimal reference (eg. `&#xfc;`).
+ *
+ * Have a look at `escapeUTF8` if you want a more concise output at the expense
+ * of reduced transportability.
+ *
+ * @param data String to escape.
+ */
 function escape(data) {
-    return data
-        .replace(reXmlChars, singleCharReplacer)
-        .replace(reNonASCII, singleCharReplacer);
+    return data.replace(reEscapeChars, singleCharReplacer);
 }
 exports.escape = escape;
+/**
+ * Encodes all characters not valid in XML documents using numeric hexadecimal
+ * reference (eg. `&#xfc;`).
+ *
+ * Note that the output will be character-set dependent.
+ *
+ * @param data String to escape.
+ */
+function escapeUTF8(data) {
+    return data.replace(xmlReplacer, singleCharReplacer);
+}
+exports.escapeUTF8 = escapeUTF8;
+function getASCIIEncoder(obj) {
+    return function (data) {
+        return data.replace(reEscapeChars, function (c) { return obj[c] || singleCharReplacer(c); });
+    };
+}
 
 
 /***/ }),
@@ -9073,7 +9207,7 @@ exports.escape = escape;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.decodeXMLStrict = exports.decodeHTML5Strict = exports.decodeHTML4Strict = exports.decodeHTML5 = exports.decodeHTML4 = exports.decodeHTMLStrict = exports.decodeHTML = exports.decodeXML = exports.encodeHTML5 = exports.encodeHTML4 = exports.escape = exports.encodeHTML = exports.encodeXML = exports.encode = exports.decodeStrict = exports.decode = void 0;
+exports.decodeXMLStrict = exports.decodeHTML5Strict = exports.decodeHTML4Strict = exports.decodeHTML5 = exports.decodeHTML4 = exports.decodeHTMLStrict = exports.decodeHTML = exports.decodeXML = exports.encodeHTML5 = exports.encodeHTML4 = exports.escapeUTF8 = exports.escape = exports.encodeNonAsciiHTML = exports.encodeHTML = exports.encodeXML = exports.encode = exports.decodeStrict = exports.decode = void 0;
 var decode_1 = __nccwpck_require__(5107);
 var encode_1 = __nccwpck_require__(2006);
 /**
@@ -9081,6 +9215,7 @@ var encode_1 = __nccwpck_require__(2006);
  *
  * @param data String to decode.
  * @param level Optional level to decode at. 0 = XML, 1 = HTML. Default is 0.
+ * @deprecated Use `decodeXML` or `decodeHTML` directly.
  */
 function decode(data, level) {
     return (!level || level <= 0 ? decode_1.decodeXML : decode_1.decodeHTML)(data);
@@ -9091,6 +9226,7 @@ exports.decode = decode;
  *
  * @param data String to decode.
  * @param level Optional level to decode at. 0 = XML, 1 = HTML. Default is 0.
+ * @deprecated Use `decodeHTMLStrict` or `decodeXML` directly.
  */
 function decodeStrict(data, level) {
     return (!level || level <= 0 ? decode_1.decodeXML : decode_1.decodeHTMLStrict)(data);
@@ -9101,6 +9237,7 @@ exports.decodeStrict = decodeStrict;
  *
  * @param data String to encode.
  * @param level Optional level to encode at. 0 = XML, 1 = HTML. Default is 0.
+ * @deprecated Use `encodeHTML`, `encodeXML` or `encodeNonAsciiHTML` directly.
  */
 function encode(data, level) {
     return (!level || level <= 0 ? encode_1.encodeXML : encode_1.encodeHTML)(data);
@@ -9109,15 +9246,17 @@ exports.encode = encode;
 var encode_2 = __nccwpck_require__(2006);
 Object.defineProperty(exports, "encodeXML", ({ enumerable: true, get: function () { return encode_2.encodeXML; } }));
 Object.defineProperty(exports, "encodeHTML", ({ enumerable: true, get: function () { return encode_2.encodeHTML; } }));
+Object.defineProperty(exports, "encodeNonAsciiHTML", ({ enumerable: true, get: function () { return encode_2.encodeNonAsciiHTML; } }));
 Object.defineProperty(exports, "escape", ({ enumerable: true, get: function () { return encode_2.escape; } }));
-// Legacy aliases
+Object.defineProperty(exports, "escapeUTF8", ({ enumerable: true, get: function () { return encode_2.escapeUTF8; } }));
+// Legacy aliases (deprecated)
 Object.defineProperty(exports, "encodeHTML4", ({ enumerable: true, get: function () { return encode_2.encodeHTML; } }));
 Object.defineProperty(exports, "encodeHTML5", ({ enumerable: true, get: function () { return encode_2.encodeHTML; } }));
 var decode_2 = __nccwpck_require__(5107);
 Object.defineProperty(exports, "decodeXML", ({ enumerable: true, get: function () { return decode_2.decodeXML; } }));
 Object.defineProperty(exports, "decodeHTML", ({ enumerable: true, get: function () { return decode_2.decodeHTML; } }));
 Object.defineProperty(exports, "decodeHTMLStrict", ({ enumerable: true, get: function () { return decode_2.decodeHTMLStrict; } }));
-// Legacy aliases
+// Legacy aliases (deprecated)
 Object.defineProperty(exports, "decodeHTML4", ({ enumerable: true, get: function () { return decode_2.decodeHTML; } }));
 Object.defineProperty(exports, "decodeHTML5", ({ enumerable: true, get: function () { return decode_2.decodeHTML; } }));
 Object.defineProperty(exports, "decodeHTML4Strict", ({ enumerable: true, get: function () { return decode_2.decodeHTMLStrict; } }));
@@ -9777,9 +9916,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.Gaxios = void 0;
 const extend_1 = __importDefault(__nccwpck_require__(8171));
+const https_1 = __nccwpck_require__(7211);
 const node_fetch_1 = __importDefault(__nccwpck_require__(467));
 const querystring_1 = __importDefault(__nccwpck_require__(1191));
 const is_stream_1 = __importDefault(__nccwpck_require__(1554));
+const url_1 = __nccwpck_require__(8835);
 const common_1 = __nccwpck_require__(6129);
 const retry_1 = __nccwpck_require__(1052);
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -9789,6 +9930,21 @@ function hasWindow() {
 }
 function hasFetch() {
     return hasWindow() && !!window.fetch;
+}
+function hasBuffer() {
+    return typeof Buffer !== 'undefined';
+}
+function hasHeader(options, header) {
+    return !!getHeader(options, header);
+}
+function getHeader(options, header) {
+    header = header.toLowerCase();
+    for (const key of Object.keys((options === null || options === void 0 ? void 0 : options.headers) || {})) {
+        if (header === key.toLowerCase()) {
+            return options.headers[key];
+        }
+    }
+    return undefined;
 }
 let HttpsProxyAgent;
 function loadProxy() {
@@ -9809,7 +9965,7 @@ function skipProxy(url) {
         return false;
     }
     const noProxyUrls = noProxyEnv.split(',');
-    const parsedURL = new URL(url);
+    const parsedURL = new url_1.URL(url);
     return !!noProxyUrls.find(url => {
         if (url.startsWith('*.') || url.startsWith('.')) {
             url = url.replace('*', '');
@@ -9878,7 +10034,8 @@ class Gaxios {
             err.config = opts;
             const { shouldRetry, config } = await retry_1.getRetryConfig(e);
             if (shouldRetry && config) {
-                err.config.retryConfig.currentRetryAttempt = config.retryConfig.currentRetryAttempt;
+                err.config.retryConfig.currentRetryAttempt =
+                    config.retryConfig.currentRetryAttempt;
                 return this._request(err.config);
             }
             throw err;
@@ -9940,19 +10097,25 @@ class Gaxios {
             if (is_stream_1.default.readable(opts.data)) {
                 opts.body = opts.data;
             }
-            else if (typeof opts.data === 'object') {
-                opts.body = JSON.stringify(opts.data);
-                // Allow the user to specifiy their own content type,
-                // such as application/json-patch+json; for historical reasons this
-                // content type must currently be a json type, as we are relying on
-                // application/x-www-form-urlencoded (which is incompatible with
-                // upstream GCP APIs) being rewritten to application/json.
-                //
-                // TODO: refactor upstream dependencies to stop relying on this
-                // side-effect.
-                if (!opts.headers['Content-Type'] ||
-                    !opts.headers['Content-Type'].includes('json')) {
+            else if (hasBuffer() && Buffer.isBuffer(opts.data)) {
+                // Do not attempt to JSON.stringify() a Buffer:
+                opts.body = opts.data;
+                if (!hasHeader(opts, 'Content-Type')) {
                     opts.headers['Content-Type'] = 'application/json';
+                }
+            }
+            else if (typeof opts.data === 'object') {
+                // If www-form-urlencoded content type has been set, but data is
+                // provided as an object, serialize the content using querystring:
+                if (getHeader(opts, 'content-type') ===
+                    'application/x-www-form-urlencoded') {
+                    opts.body = opts.paramsSerializer(opts.data);
+                }
+                else {
+                    if (!hasHeader(opts, 'Content-Type')) {
+                        opts.headers['Content-Type'] = 'application/json';
+                    }
+                    opts.body = JSON.stringify(opts.data);
                 }
             }
             else {
@@ -9971,8 +10134,34 @@ class Gaxios {
                 opts.agent = this.agentCache.get(proxy);
             }
             else {
-                opts.agent = new HttpsProxyAgent(proxy);
+                // Proxy is being used in conjunction with mTLS.
+                if (opts.cert && opts.key) {
+                    const parsedURL = new url_1.URL(proxy);
+                    opts.agent = new HttpsProxyAgent({
+                        port: parsedURL.port,
+                        host: parsedURL.host,
+                        protocol: parsedURL.protocol,
+                        cert: opts.cert,
+                        key: opts.key,
+                    });
+                }
+                else {
+                    opts.agent = new HttpsProxyAgent(proxy);
+                }
                 this.agentCache.set(proxy, opts.agent);
+            }
+        }
+        else if (opts.cert && opts.key) {
+            // Configure client for mTLS:
+            if (this.agentCache.has(opts.key)) {
+                opts.agent = this.agentCache.get(opts.key);
+            }
+            else {
+                opts.agent = new https_1.Agent({
+                    cert: opts.cert,
+                    key: opts.key,
+                });
+                this.agentCache.set(opts.key, opts.agent);
             }
         }
         return opts;
@@ -11764,6 +11953,8 @@ var __extends = (this && this.__extends) || (function () {
         return extendStatics(d, b);
     };
     return function (d, b) {
+        if (typeof b !== "function" && b !== null)
+            throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
         extendStatics(d, b);
         function __() { this.constructor = d; }
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
@@ -12113,7 +12304,8 @@ var Parser = /** @class */ (function () {
         this.options = options;
         this.cbs = cbs !== null && cbs !== void 0 ? cbs : {};
         this.lowerCaseTagNames = (_a = options.lowerCaseTags) !== null && _a !== void 0 ? _a : !options.xmlMode;
-        this.lowerCaseAttributeNames = (_b = options.lowerCaseAttributeNames) !== null && _b !== void 0 ? _b : !options.xmlMode;
+        this.lowerCaseAttributeNames =
+            (_b = options.lowerCaseAttributeNames) !== null && _b !== void 0 ? _b : !options.xmlMode;
         this.tokenizer = new ((_c = options.Tokenizer) !== null && _c !== void 0 ? _c : Tokenizer_1.default)(this.options, this);
         (_e = (_d = this.cbs).onparserinit) === null || _e === void 0 ? void 0 : _e.call(_d, this);
     }
@@ -12554,6 +12746,16 @@ var Tokenizer = /** @class */ (function () {
             this.sectionStart = this._index;
         }
     };
+    /**
+     * HTML only allows ASCII alpha characters (a-z and A-Z) at the beginning of a tag name.
+     *
+     * XML allows a lot more characters here (@see https://www.w3.org/TR/REC-xml/#NT-NameStartChar).
+     * We allow anything that wouldn't end the tag.
+     */
+    Tokenizer.prototype.isTagStartChar = function (c) {
+        return (isASCIIAlpha(c) ||
+            (this.xmlMode && !whitespace(c) && c !== "/" && c !== ">"));
+    };
     Tokenizer.prototype.stateBeforeTagName = function (c) {
         if (c === "/") {
             this._state = 5 /* BeforeClosingTagName */;
@@ -12575,7 +12777,7 @@ var Tokenizer = /** @class */ (function () {
             this._state = 17 /* InProcessingInstruction */;
             this.sectionStart = this._index + 1;
         }
-        else if (!isASCIIAlpha(c)) {
+        else if (!this.isTagStartChar(c)) {
             this._state = 1 /* Text */;
         }
         else {
@@ -12603,10 +12805,11 @@ var Tokenizer = /** @class */ (function () {
             this._state = 1 /* Text */;
         }
         else if (this.special !== 1 /* None */) {
-            if (c === "s" || c === "S") {
+            if (this.special !== 4 /* Title */ && (c === "s" || c === "S")) {
                 this._state = 33 /* BeforeSpecialSEnd */;
             }
-            else if (c === "t" || c === "T") {
+            else if (this.special === 4 /* Title */ &&
+                (c === "t" || c === "T")) {
                 this._state = 53 /* BeforeSpecialTEnd */;
             }
             else {
@@ -12614,7 +12817,7 @@ var Tokenizer = /** @class */ (function () {
                 this._index--;
             }
         }
-        else if (!isASCIIAlpha(c)) {
+        else if (!this.isTagStartChar(c)) {
             this._state = 20 /* InSpecialComment */;
             this.sectionStart = this._index;
         }
@@ -13955,6 +14158,15 @@ class LinkChecker extends events_1.EventEmitter {
      */
     async crawl(opts) {
         var _a;
+        // apply any regex url replacements
+        if (opts.checkOptions.urlRewriteExpressions) {
+            for (const exp of opts.checkOptions.urlRewriteExpressions) {
+                const newUrl = opts.url.href.replace(exp.pattern, exp.replacement);
+                if (opts.url.href !== newUrl) {
+                    opts.url.href = newUrl;
+                }
+            }
+        }
         // explicitly skip non-http[s] links before making the request
         const proto = opts.url.protocol;
         if (proto !== 'http:' && proto !== 'https:') {
@@ -14252,7 +14464,7 @@ function mapUrl(url, options) {
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getLinks = void 0;
-const cheerio = __nccwpck_require__(3094);
+const cheerio = __nccwpck_require__(4612);
 const url_1 = __nccwpck_require__(8835);
 const linksAttr = {
     background: ['body'],
@@ -14791,9 +15003,22 @@ module.exports = class Lexer {
     if (this.options.pedantic) {
       src = src.replace(/^ +$/gm, '');
     }
-    let token, i, l, lastToken;
+    let token, i, l, lastToken, cutSrc, lastParagraphClipped;
 
     while (src) {
+      if (this.options.extensions
+        && this.options.extensions.block
+        && this.options.extensions.block.some((extTokenizer) => {
+          if (token = extTokenizer.call(this, src, tokens)) {
+            src = src.substring(token.raw.length);
+            tokens.push(token);
+            return true;
+          }
+          return false;
+        })) {
+        continue;
+      }
+
       // newline
       if (token = this.tokenizer.space(src)) {
         src = src.substring(token.raw.length);
@@ -14898,9 +15123,30 @@ module.exports = class Lexer {
       }
 
       // top-level paragraph
-      if (top && (token = this.tokenizer.paragraph(src))) {
+      // prevent paragraph consuming extensions by clipping 'src' to extension start
+      cutSrc = src;
+      if (this.options.extensions && this.options.extensions.startBlock) {
+        let startIndex = Infinity;
+        const tempSrc = src.slice(1);
+        let tempStart;
+        this.options.extensions.startBlock.forEach(function(getStartIndex) {
+          tempStart = getStartIndex.call(this, tempSrc);
+          if (typeof tempStart === 'number' && tempStart >= 0) { startIndex = Math.min(startIndex, tempStart); }
+        });
+        if (startIndex < Infinity && startIndex >= 0) {
+          cutSrc = src.substring(0, startIndex + 1);
+        }
+      }
+      if (top && (token = this.tokenizer.paragraph(cutSrc))) {
+        lastToken = tokens[tokens.length - 1];
+        if (lastParagraphClipped && lastToken.type === 'paragraph') {
+          lastToken.raw += '\n' + token.raw;
+          lastToken.text += '\n' + token.text;
+        } else {
+          tokens.push(token);
+        }
+        lastParagraphClipped = (cutSrc.length !== src.length);
         src = src.substring(token.raw.length);
-        tokens.push(token);
         continue;
       }
 
@@ -15000,7 +15246,7 @@ module.exports = class Lexer {
    * Lexing/Compiling
    */
   inlineTokens(src, tokens = [], inLink = false, inRawBlock = false) {
-    let token, lastToken;
+    let token, lastToken, cutSrc;
 
     // String with links masked to avoid interference with em and strong
     let maskedSrc = src;
@@ -15034,6 +15280,20 @@ module.exports = class Lexer {
       }
       keepPrevChar = false;
 
+      // extensions
+      if (this.options.extensions
+        && this.options.extensions.inline
+        && this.options.extensions.inline.some((extTokenizer) => {
+          if (token = extTokenizer.call(this, src, tokens)) {
+            src = src.substring(token.raw.length);
+            tokens.push(token);
+            return true;
+          }
+          return false;
+        })) {
+        continue;
+      }
+
       // escape
       if (token = this.tokenizer.escape(src)) {
         src = src.substring(token.raw.length);
@@ -15046,7 +15306,7 @@ module.exports = class Lexer {
         src = src.substring(token.raw.length);
         inLink = token.inLink;
         inRawBlock = token.inRawBlock;
-        const lastToken = tokens[tokens.length - 1];
+        lastToken = tokens[tokens.length - 1];
         if (lastToken && token.type === 'text' && lastToken.type === 'text') {
           lastToken.raw += token.raw;
           lastToken.text += token.text;
@@ -15069,7 +15329,7 @@ module.exports = class Lexer {
       // reflink, nolink
       if (token = this.tokenizer.reflink(src, this.tokens.links)) {
         src = src.substring(token.raw.length);
-        const lastToken = tokens[tokens.length - 1];
+        lastToken = tokens[tokens.length - 1];
         if (token.type === 'link') {
           token.tokens = this.inlineTokens(token.text, [], true, inRawBlock);
           tokens.push(token);
@@ -15127,7 +15387,21 @@ module.exports = class Lexer {
       }
 
       // text
-      if (token = this.tokenizer.inlineText(src, inRawBlock, smartypants)) {
+      // prevent inlineText consuming extensions by clipping 'src' to extension start
+      cutSrc = src;
+      if (this.options.extensions && this.options.extensions.startInline) {
+        let startIndex = Infinity;
+        const tempSrc = src.slice(1);
+        let tempStart;
+        this.options.extensions.startInline.forEach(function(getStartIndex) {
+          tempStart = getStartIndex.call(this, tempSrc);
+          if (typeof tempStart === 'number' && tempStart >= 0) { startIndex = Math.min(startIndex, tempStart); }
+        });
+        if (startIndex < Infinity && startIndex >= 0) {
+          cutSrc = src.substring(0, startIndex + 1);
+        }
+      }
+      if (token = this.tokenizer.inlineText(cutSrc, inRawBlock, smartypants)) {
         src = src.substring(token.raw.length);
         if (token.raw.slice(-1) !== '_') { // Track prevChar before string of ____ started
           prevChar = token.raw.slice(-1);
@@ -15223,11 +15497,22 @@ module.exports = class Parser {
       item,
       checked,
       task,
-      checkbox;
+      checkbox,
+      ret;
 
     const l = tokens.length;
     for (i = 0; i < l; i++) {
       token = tokens[i];
+
+      // Run any renderer extensions
+      if (this.options.extensions && this.options.extensions.renderers && this.options.extensions.renderers[token.type]) {
+        ret = this.options.extensions.renderers[token.type].call(this, token);
+        if (ret !== false || !['space', 'hr', 'heading', 'code', 'table', 'blockquote', 'list', 'html', 'paragraph', 'text'].includes(token.type)) {
+          out += ret || '';
+          continue;
+        }
+      }
+
       switch (token.type) {
         case 'space': {
           continue;
@@ -15345,6 +15630,7 @@ module.exports = class Parser {
           out += top ? this.renderer.paragraph(body) : body;
           continue;
         }
+
         default: {
           const errMsg = 'Token with "' + token.type + '" type was not found.';
           if (this.options.silent) {
@@ -15367,11 +15653,22 @@ module.exports = class Parser {
     renderer = renderer || this.renderer;
     let out = '',
       i,
-      token;
+      token,
+      ret;
 
     const l = tokens.length;
     for (i = 0; i < l; i++) {
       token = tokens[i];
+
+      // Run any renderer extensions
+      if (this.options.extensions && this.options.extensions.renderers && this.options.extensions.renderers[token.type]) {
+        ret = this.options.extensions.renderers[token.type].call(this, token);
+        if (ret !== false || !['escape', 'html', 'link', 'image', 'strong', 'em', 'codespan', 'br', 'del', 'text'].includes(token.type)) {
+          out += ret || '';
+          continue;
+        }
+      }
+
       switch (token.type) {
         case 'escape': {
           out += renderer.text(token.text);
@@ -15934,7 +16231,8 @@ module.exports = class Tokenizer {
         addBack,
         loose,
         istask,
-        ischecked;
+        ischecked,
+        endMatch;
 
       let l = itemMatch.length;
       bcurr = this.rules.block.listItemStart.exec(itemMatch[0]);
@@ -15942,31 +16240,42 @@ module.exports = class Tokenizer {
         item = itemMatch[i];
         raw = item;
 
+        if (!this.options.pedantic) {
+          // Determine if current item contains the end of the list
+          endMatch = item.match(new RegExp('\\n\\s*\\n {0,' + (bcurr[0].length - 1) + '}\\S'));
+          if (endMatch) {
+            addBack = item.length - endMatch.index + itemMatch.slice(i + 1).join('\n').length;
+            list.raw = list.raw.substring(0, list.raw.length - addBack);
+
+            item = item.substring(0, endMatch.index);
+            raw = item;
+            l = i + 1;
+          }
+        }
+
         // Determine whether the next list item belongs here.
         // Backpedal if it does not belong in this list.
         if (i !== l - 1) {
           bnext = this.rules.block.listItemStart.exec(itemMatch[i + 1]);
           if (
             !this.options.pedantic
-              ? bnext[1].length > bcurr[0].length || bnext[1].length > 3
+              ? bnext[1].length >= bcurr[0].length || bnext[1].length > 3
               : bnext[1].length > bcurr[1].length
           ) {
-            // nested list
-            itemMatch.splice(i, 2, itemMatch[i] + '\n' + itemMatch[i + 1]);
+            // nested list or continuation
+            itemMatch.splice(i, 2, itemMatch[i] + (!this.options.pedantic && bnext[1].length < bcurr[0].length && !itemMatch[i].match(/\n$/) ? '' : '\n') + itemMatch[i + 1]);
             i--;
             l--;
             continue;
-          } else {
-            if (
-              // different bullet style
-              !this.options.pedantic || this.options.smartLists
-                ? bnext[2][bnext[2].length - 1] !== bull[bull.length - 1]
-                : isordered === (bnext[2].length === 1)
-            ) {
-              addBack = itemMatch.slice(i + 1).join('\n');
-              list.raw = list.raw.substring(0, list.raw.length - addBack.length);
-              i = l - 1;
-            }
+          } else if (
+            // different bullet style
+            !this.options.pedantic || this.options.smartLists
+              ? bnext[2][bnext[2].length - 1] !== bull[bull.length - 1]
+              : isordered === (bnext[2].length === 1)
+          ) {
+            addBack = itemMatch.slice(i + 1).join('\n').length;
+            list.raw = list.raw.substring(0, list.raw.length - addBack);
+            i = l - 1;
           }
           bcurr = bnext;
         }
@@ -15985,12 +16294,18 @@ module.exports = class Tokenizer {
             : item.replace(/^ {1,4}/gm, '');
         }
 
+        // trim item newlines at end
+        item = rtrim(item, '\n');
+        if (i !== l - 1) {
+          raw = raw + '\n';
+        }
+
         // Determine whether item is loose or not.
         // Use: /(^|\n)(?! )[^\n]+\n\n(?!\s*$)/
         // for discount behavior.
-        loose = next || /\n\n(?!\s*$)/.test(item);
+        loose = next || /\n\n(?!\s*$)/.test(raw);
         if (i !== l - 1) {
-          next = item.charAt(item.length - 1) === '\n';
+          next = raw.slice(-2) === '\n\n';
           if (!loose) loose = next;
         }
 
@@ -16043,6 +16358,7 @@ module.exports = class Tokenizer {
       if (cap[3]) cap[3] = cap[3].substring(1, cap[3].length - 1);
       const tag = cap[1].toLowerCase().replace(/\s+/g, ' ');
       return {
+        type: 'def',
         tag,
         raw: cap[0],
         href: cap[2],
@@ -16245,7 +16561,8 @@ module.exports = class Tokenizer {
     let match = this.rules.inline.emStrong.lDelim.exec(src);
     if (!match) return;
 
-    if (match[3] && prevChar.match(/[\p{L}\p{N}]/u)) return; // _ can't be between two alphanumerics. \p{L}\p{N} includes non-english alphabet/numbers as well
+    // _ can't be between two alphanumerics. \p{L}\p{N} includes non-english alphabet/numbers as well
+    if (match[3] && prevChar.match(/[\p{L}\p{N}]/u)) return;
 
     const nextChar = match[1] || match[2] || '';
 
@@ -16256,12 +16573,13 @@ module.exports = class Tokenizer {
       const endReg = match[0][0] === '*' ? this.rules.inline.emStrong.rDelimAst : this.rules.inline.emStrong.rDelimUnd;
       endReg.lastIndex = 0;
 
-      maskedSrc = maskedSrc.slice(-1 * src.length + lLength); // Bump maskedSrc to same section of string as src (move to lexer?)
+      // Clip maskedSrc to same section of string as src (move to lexer?)
+      maskedSrc = maskedSrc.slice(-1 * src.length + lLength);
 
       while ((match = endReg.exec(maskedSrc)) != null) {
         rDelim = match[1] || match[2] || match[3] || match[4] || match[5] || match[6];
 
-        if (!rDelim) continue; // matched the first alternative in rules.js (skip the * in __abc*abc__)
+        if (!rDelim) continue; // skip single * in __abc*abc__
 
         rLength = rDelim.length;
 
@@ -16279,11 +16597,10 @@ module.exports = class Tokenizer {
 
         if (delimTotal > 0) continue; // Haven't found enough closing delimiters
 
-        // If this is the last rDelimiter, remove extra characters. *a*** -> *a*
-        if (delimTotal + midDelimTotal - rLength <= 0 && !maskedSrc.slice(endReg.lastIndex).match(endReg)) {
-          rLength = Math.min(rLength, rLength + delimTotal + midDelimTotal);
-        }
+        // Remove extra characters. *a*** -> *a*
+        rLength = Math.min(rLength, rLength + delimTotal + midDelimTotal);
 
+        // Create `em` if smallest delimiter has odd char count. *a***
         if (Math.min(lLength, rLength) % 2) {
           return {
             type: 'em',
@@ -16291,13 +16608,13 @@ module.exports = class Tokenizer {
             text: src.slice(1, lLength + match.index + rLength)
           };
         }
-        if (Math.min(lLength, rLength) % 2 === 0) {
-          return {
-            type: 'strong',
-            raw: src.slice(0, lLength + match.index + rLength + 1),
-            text: src.slice(2, lLength + match.index + rLength - 1)
-          };
-        }
+
+        // Create 'strong' if smallest delimiter has even char count. **a***
+        return {
+          type: 'strong',
+          raw: src.slice(0, lLength + match.index + rLength + 1),
+          text: src.slice(2, lLength + match.index + rLength - 1)
+        };
       }
     }
   }
@@ -16434,6 +16751,7 @@ function getDefaults() {
   return {
     baseUrl: null,
     breaks: false,
+    extensions: null,
     gfm: true,
     headerIds: true,
     headerPrefix: '',
@@ -16789,6 +17107,9 @@ function marked(src, opt, callback) {
 
       if (!err) {
         try {
+          if (opt.walkTokens) {
+            marked.walkTokens(tokens, opt.walkTokens);
+          }
           out = Parser.parse(tokens, opt);
         } catch (e) {
           err = e;
@@ -16876,46 +17197,114 @@ marked.defaults = defaults;
  * Use Extension
  */
 
-marked.use = function(extension) {
-  const opts = merge({}, extension);
-  if (extension.renderer) {
-    const renderer = marked.defaults.renderer || new Renderer();
-    for (const prop in extension.renderer) {
-      const prevRenderer = renderer[prop];
-      renderer[prop] = (...args) => {
-        let ret = extension.renderer[prop].apply(renderer, args);
-        if (ret === false) {
-          ret = prevRenderer.apply(renderer, args);
+marked.use = function(...args) {
+  const opts = merge({}, ...args);
+  const extensions = marked.defaults.extensions || { renderers: {}, childTokens: {} };
+  let hasExtensions;
+
+  args.forEach((pack) => {
+    // ==-- Parse "addon" extensions --== //
+    if (pack.extensions) {
+      hasExtensions = true;
+      pack.extensions.forEach((ext) => {
+        if (!ext.name) {
+          throw new Error('extension name required');
         }
-        return ret;
-      };
-    }
-    opts.renderer = renderer;
-  }
-  if (extension.tokenizer) {
-    const tokenizer = marked.defaults.tokenizer || new Tokenizer();
-    for (const prop in extension.tokenizer) {
-      const prevTokenizer = tokenizer[prop];
-      tokenizer[prop] = (...args) => {
-        let ret = extension.tokenizer[prop].apply(tokenizer, args);
-        if (ret === false) {
-          ret = prevTokenizer.apply(tokenizer, args);
+        if (ext.renderer) { // Renderer extensions
+          const prevRenderer = extensions.renderers ? extensions.renderers[ext.name] : null;
+          if (prevRenderer) {
+            // Replace extension with func to run new extension but fall back if false
+            extensions.renderers[ext.name] = function(...args) {
+              let ret = ext.renderer.apply(this, args);
+              if (ret === false) {
+                ret = prevRenderer.apply(this, args);
+              }
+              return ret;
+            };
+          } else {
+            extensions.renderers[ext.name] = ext.renderer;
+          }
         }
-        return ret;
-      };
+        if (ext.tokenizer) { // Tokenizer Extensions
+          if (!ext.level || (ext.level !== 'block' && ext.level !== 'inline')) {
+            throw new Error("extension level must be 'block' or 'inline'");
+          }
+          if (extensions[ext.level]) {
+            extensions[ext.level].unshift(ext.tokenizer);
+          } else {
+            extensions[ext.level] = [ext.tokenizer];
+          }
+          if (ext.start) { // Function to check for start of token
+            if (ext.level === 'block') {
+              if (extensions.startBlock) {
+                extensions.startBlock.push(ext.start);
+              } else {
+                extensions.startBlock = [ext.start];
+              }
+            } else if (ext.level === 'inline') {
+              if (extensions.startInline) {
+                extensions.startInline.push(ext.start);
+              } else {
+                extensions.startInline = [ext.start];
+              }
+            }
+          }
+        }
+        if (ext.childTokens) { // Child tokens to be visited by walkTokens
+          extensions.childTokens[ext.name] = ext.childTokens;
+        }
+      });
     }
-    opts.tokenizer = tokenizer;
-  }
-  if (extension.walkTokens) {
-    const walkTokens = marked.defaults.walkTokens;
-    opts.walkTokens = (token) => {
-      extension.walkTokens(token);
-      if (walkTokens) {
-        walkTokens(token);
+
+    // ==-- Parse "overwrite" extensions --== //
+    if (pack.renderer) {
+      const renderer = marked.defaults.renderer || new Renderer();
+      for (const prop in pack.renderer) {
+        const prevRenderer = renderer[prop];
+        // Replace renderer with func to run extension, but fall back if false
+        renderer[prop] = (...args) => {
+          let ret = pack.renderer[prop].apply(renderer, args);
+          if (ret === false) {
+            ret = prevRenderer.apply(renderer, args);
+          }
+          return ret;
+        };
       }
-    };
-  }
-  marked.setOptions(opts);
+      opts.renderer = renderer;
+    }
+    if (pack.tokenizer) {
+      const tokenizer = marked.defaults.tokenizer || new Tokenizer();
+      for (const prop in pack.tokenizer) {
+        const prevTokenizer = tokenizer[prop];
+        // Replace tokenizer with func to run extension, but fall back if false
+        tokenizer[prop] = (...args) => {
+          let ret = pack.tokenizer[prop].apply(tokenizer, args);
+          if (ret === false) {
+            ret = prevTokenizer.apply(tokenizer, args);
+          }
+          return ret;
+        };
+      }
+      opts.tokenizer = tokenizer;
+    }
+
+    // ==-- Parse WalkTokens extensions --== //
+    if (pack.walkTokens) {
+      const walkTokens = marked.defaults.walkTokens;
+      opts.walkTokens = (token) => {
+        pack.walkTokens.call(this, token);
+        if (walkTokens) {
+          walkTokens(token);
+        }
+      };
+    }
+
+    if (hasExtensions) {
+      opts.extensions = extensions;
+    }
+
+    marked.setOptions(opts);
+  });
 };
 
 /**
@@ -16942,7 +17331,11 @@ marked.walkTokens = function(tokens, callback) {
         break;
       }
       default: {
-        if (token.tokens) {
+        if (marked.defaults.extensions && marked.defaults.extensions.childTokens && marked.defaults.extensions.childTokens[token.type]) { // Walk any extensions
+          marked.defaults.extensions.childTokens[token.type].forEach(function(childTokens) {
+            marked.walkTokens(token[childTokens], callback);
+          });
+        } else if (token.tokens) {
           marked.walkTokens(token.tokens, callback);
         }
       }
@@ -17028,14 +17421,14 @@ const block = {
   blockquote: /^( {0,3}> ?(paragraph|[^\n]*)(?:\n|$))+/,
   list: /^( {0,3})(bull) [\s\S]+?(?:hr|def|\n{2,}(?! )(?! {0,3}bull )\n*|\s*$)/,
   html: '^ {0,3}(?:' // optional indentation
-    + '<(script|pre|style)[\\s>][\\s\\S]*?(?:</\\1>[^\\n]*\\n+|$)' // (1)
+    + '<(script|pre|style|textarea)[\\s>][\\s\\S]*?(?:</\\1>[^\\n]*\\n+|$)' // (1)
     + '|comment[^\\n]*(\\n+|$)' // (2)
     + '|<\\?[\\s\\S]*?(?:\\?>\\n*|$)' // (3)
     + '|<![A-Z][\\s\\S]*?(?:>\\n*|$)' // (4)
     + '|<!\\[CDATA\\[[\\s\\S]*?(?:\\]\\]>\\n*|$)' // (5)
-    + '|</?(tag)(?: +|\\n|/?>)[\\s\\S]*?(?:\\n{2,}|$)' // (6)
-    + '|<(?!script|pre|style)([a-z][\\w-]*)(?:attribute)*? */?>(?=[ \\t]*(?:\\n|$))[\\s\\S]*?(?:\\n{2,}|$)' // (7) open tag
-    + '|</(?!script|pre|style)[a-z][\\w-]*\\s*>(?=[ \\t]*(?:\\n|$))[\\s\\S]*?(?:\\n{2,}|$)' // (7) closing tag
+    + '|</?(tag)(?: +|\\n|/?>)[\\s\\S]*?(?:(?:\\n *)+\\n|$)' // (6)
+    + '|<(?!script|pre|style|textarea)([a-z][\\w-]*)(?:attribute)*? */?>(?=[ \\t]*(?:\\n|$))[\\s\\S]*?(?:(?:\\n *)+\\n|$)' // (7) open tag
+    + '|</(?!script|pre|style|textarea)[a-z][\\w-]*\\s*>(?=[ \\t]*(?:\\n|$))[\\s\\S]*?(?:(?:\\n *)+\\n|$)' // (7) closing tag
     + ')',
   def: /^ {0,3}\[(label)\]: *\n? *<?([^\s>]+)>?(?:(?: +\n? *| *\n *)(title))? *(?:\n+|$)/,
   nptable: noopTest,
@@ -17060,7 +17453,7 @@ block.item = edit(block.item, 'gm')
   .replace(/bull/g, block.bullet)
   .getRegex();
 
-block.listItemStart = edit(/^( *)(bull)/)
+block.listItemStart = edit(/^( *)(bull) */)
   .replace('bull', block.bullet)
   .getRegex();
 
@@ -17090,7 +17483,7 @@ block.paragraph = edit(block._paragraph)
   .replace('blockquote', ' {0,3}>')
   .replace('fences', ' {0,3}(?:`{3,}(?=[^`\\n]*\\n)|~{3,})[^\\n]*\\n')
   .replace('list', ' {0,3}(?:[*+-]|1[.)]) ') // only lists starting from 1 can interrupt
-  .replace('html', '</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|!--)')
+  .replace('html', '</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|textarea|!--)')
   .replace('tag', block._tag) // pars can be interrupted by type (6) html blocks
   .getRegex();
 
@@ -17124,7 +17517,7 @@ block.gfm.nptable = edit(block.gfm.nptable)
   .replace('code', ' {4}[^\\n]')
   .replace('fences', ' {0,3}(?:`{3,}(?=[^`\\n]*\\n)|~{3,})[^\\n]*\\n')
   .replace('list', ' {0,3}(?:[*+-]|1[.)]) ') // only lists starting from 1 can interrupt
-  .replace('html', '</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|!--)')
+  .replace('html', '</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|textarea|!--)')
   .replace('tag', block._tag) // tables can be interrupted by type (6) html blocks
   .getRegex();
 
@@ -17135,7 +17528,7 @@ block.gfm.table = edit(block.gfm.table)
   .replace('code', ' {4}[^\\n]')
   .replace('fences', ' {0,3}(?:`{3,}(?=[^`\\n]*\\n)|~{3,})[^\\n]*\\n')
   .replace('list', ' {0,3}(?:[*+-]|1[.)]) ') // only lists starting from 1 can interrupt
-  .replace('html', '</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|!--)')
+  .replace('html', '</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|textarea|!--)')
   .replace('tag', block._tag) // tables can be interrupted by type (6) html blocks
   .getRegex();
 
@@ -17188,9 +17581,9 @@ const inline = {
   emStrong: {
     lDelim: /^(?:\*+(?:([punct_])|[^\s*]))|^_+(?:([punct*])|([^\s_]))/,
     //        (1) and (2) can only be a Right Delimiter. (3) and (4) can only be Left.  (5) and (6) can be either Left or Right.
-    //        () Skip other delimiter (1) #***                (2) a***#, a***                   (3) #***a, ***a                 (4) ***#              (5) #***#                 (6) a***a
-    rDelimAst: /\_\_[^_]*?\*[^_]*?\_\_|[punct_](\*+)(?=[\s]|$)|[^punct*_\s](\*+)(?=[punct_\s]|$)|[punct_\s](\*+)(?=[^punct*_\s])|[\s](\*+)(?=[punct_])|[punct_](\*+)(?=[punct_])|[^punct*_\s](\*+)(?=[^punct*_\s])/,
-    rDelimUnd: /\*\*[^*]*?\_[^*]*?\*\*|[punct*](\_+)(?=[\s]|$)|[^punct*_\s](\_+)(?=[punct*\s]|$)|[punct*\s](\_+)(?=[^punct*_\s])|[\s](\_+)(?=[punct*])|[punct*](\_+)(?=[punct*])/ // ^- Not allowed for _
+    //        () Skip other delimiter (1) #***                   (2) a***#, a***                   (3) #***a, ***a                 (4) ***#              (5) #***#                 (6) a***a
+    rDelimAst: /\_\_[^_*]*?\*[^_*]*?\_\_|[punct_](\*+)(?=[\s]|$)|[^punct*_\s](\*+)(?=[punct_\s]|$)|[punct_\s](\*+)(?=[^punct*_\s])|[\s](\*+)(?=[punct_])|[punct_](\*+)(?=[punct_])|[^punct*_\s](\*+)(?=[^punct*_\s])/,
+    rDelimUnd: /\*\*[^_*]*?\_[^_*]*?\*\*|[punct*](\_+)(?=[\s]|$)|[^punct*_\s](\_+)(?=[punct*\s]|$)|[punct*\s](\_+)(?=[^punct*_\s])|[\s](\_+)(?=[punct*])|[punct*](\_+)(?=[punct*])/ // ^- Not allowed for _
   },
   code: /^(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/,
   br: /^( {2,}|\\)\n(?!\s*$)/,
@@ -17298,7 +17691,7 @@ inline.gfm = merge({}, inline.normal, {
   url: /^((?:ftp|https?):\/\/|www\.)(?:[a-zA-Z0-9\-]+\.?)+[^\s<]*|^email/,
   _backpedal: /(?:[^?!.,:;*_~()&]+|\([^)]*\)|&(?![a-zA-Z0-9]+;$)|[?!.,:;*_~)]+(?!$))+/,
   del: /^(~~?)(?=[^\s~])([\s\S]*?[^\s~])\1(?=[^~]|$)/,
-  text: /^([`~]+|[^`~])(?:(?= {2,}\n)|[\s\S]*?(?:(?=[\\<!\[`*~_]|\b_|https?:\/\/|ftp:\/\/|www\.|$)|[^ ](?= {2,}\n)|[^a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-](?=[a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-]+@))|(?=[a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-]+@))/
+  text: /^([`~]+|[^`~])(?:(?= {2,}\n)|(?=[a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-]+@)|[\s\S]*?(?:(?=[\\<!\[`*~_]|\b_|https?:\/\/|ftp:\/\/|www\.|$)|[^ ](?= {2,}\n)|[^a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-](?=[a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-]+@)))/
 });
 
 inline.gfm.url = edit(inline.gfm.url, 'i')
@@ -29090,6 +29483,319 @@ module.exports = {
 
 /***/ }),
 
+/***/ 9679:
+/***/ ((module) => {
+
+/*! *****************************************************************************
+Copyright (c) Microsoft Corporation.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+***************************************************************************** */
+/* global global, define, System, Reflect, Promise */
+var __extends;
+var __assign;
+var __rest;
+var __decorate;
+var __param;
+var __metadata;
+var __awaiter;
+var __generator;
+var __exportStar;
+var __values;
+var __read;
+var __spread;
+var __spreadArrays;
+var __spreadArray;
+var __await;
+var __asyncGenerator;
+var __asyncDelegator;
+var __asyncValues;
+var __makeTemplateObject;
+var __importStar;
+var __importDefault;
+var __classPrivateFieldGet;
+var __classPrivateFieldSet;
+var __createBinding;
+(function (factory) {
+    var root = typeof global === "object" ? global : typeof self === "object" ? self : typeof this === "object" ? this : {};
+    if (typeof define === "function" && define.amd) {
+        define("tslib", ["exports"], function (exports) { factory(createExporter(root, createExporter(exports))); });
+    }
+    else if ( true && typeof module.exports === "object") {
+        factory(createExporter(root, createExporter(module.exports)));
+    }
+    else {
+        factory(createExporter(root));
+    }
+    function createExporter(exports, previous) {
+        if (exports !== root) {
+            if (typeof Object.create === "function") {
+                Object.defineProperty(exports, "__esModule", { value: true });
+            }
+            else {
+                exports.__esModule = true;
+            }
+        }
+        return function (id, v) { return exports[id] = previous ? previous(id, v) : v; };
+    }
+})
+(function (exporter) {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
+
+    __extends = function (d, b) {
+        if (typeof b !== "function" && b !== null)
+            throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+
+    __assign = Object.assign || function (t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
+        }
+        return t;
+    };
+
+    __rest = function (s, e) {
+        var t = {};
+        for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+            t[p] = s[p];
+        if (s != null && typeof Object.getOwnPropertySymbols === "function")
+            for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+                if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                    t[p[i]] = s[p[i]];
+            }
+        return t;
+    };
+
+    __decorate = function (decorators, target, key, desc) {
+        var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+        if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+        else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+        return c > 3 && r && Object.defineProperty(target, key, r), r;
+    };
+
+    __param = function (paramIndex, decorator) {
+        return function (target, key) { decorator(target, key, paramIndex); }
+    };
+
+    __metadata = function (metadataKey, metadataValue) {
+        if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(metadataKey, metadataValue);
+    };
+
+    __awaiter = function (thisArg, _arguments, P, generator) {
+        function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+        return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+            function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+            function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+        });
+    };
+
+    __generator = function (thisArg, body) {
+        var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
+        return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+        function verb(n) { return function (v) { return step([n, v]); }; }
+        function step(op) {
+            if (f) throw new TypeError("Generator is already executing.");
+            while (_) try {
+                if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+                if (y = 0, t) op = [op[0] & 2, t.value];
+                switch (op[0]) {
+                    case 0: case 1: t = op; break;
+                    case 4: _.label++; return { value: op[1], done: false };
+                    case 5: _.label++; y = op[1]; op = [0]; continue;
+                    case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                    default:
+                        if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                        if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                        if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                        if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                        if (t[2]) _.ops.pop();
+                        _.trys.pop(); continue;
+                }
+                op = body.call(thisArg, _);
+            } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+            if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+        }
+    };
+
+    __exportStar = function(m, o) {
+        for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(o, p)) __createBinding(o, m, p);
+    };
+
+    __createBinding = Object.create ? (function(o, m, k, k2) {
+        if (k2 === undefined) k2 = k;
+        Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+    }) : (function(o, m, k, k2) {
+        if (k2 === undefined) k2 = k;
+        o[k2] = m[k];
+    });
+
+    __values = function (o) {
+        var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
+        if (m) return m.call(o);
+        if (o && typeof o.length === "number") return {
+            next: function () {
+                if (o && i >= o.length) o = void 0;
+                return { value: o && o[i++], done: !o };
+            }
+        };
+        throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
+    };
+
+    __read = function (o, n) {
+        var m = typeof Symbol === "function" && o[Symbol.iterator];
+        if (!m) return o;
+        var i = m.call(o), r, ar = [], e;
+        try {
+            while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+        }
+        catch (error) { e = { error: error }; }
+        finally {
+            try {
+                if (r && !r.done && (m = i["return"])) m.call(i);
+            }
+            finally { if (e) throw e.error; }
+        }
+        return ar;
+    };
+
+    /** @deprecated */
+    __spread = function () {
+        for (var ar = [], i = 0; i < arguments.length; i++)
+            ar = ar.concat(__read(arguments[i]));
+        return ar;
+    };
+
+    /** @deprecated */
+    __spreadArrays = function () {
+        for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
+        for (var r = Array(s), k = 0, i = 0; i < il; i++)
+            for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
+                r[k] = a[j];
+        return r;
+    };
+
+    __spreadArray = function (to, from, pack) {
+        if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
+            if (ar || !(i in from)) {
+                if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+                ar[i] = from[i];
+            }
+        }
+        return to.concat(ar || from);
+    };
+
+    __await = function (v) {
+        return this instanceof __await ? (this.v = v, this) : new __await(v);
+    };
+
+    __asyncGenerator = function (thisArg, _arguments, generator) {
+        if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+        var g = generator.apply(thisArg, _arguments || []), i, q = [];
+        return i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i;
+        function verb(n) { if (g[n]) i[n] = function (v) { return new Promise(function (a, b) { q.push([n, v, a, b]) > 1 || resume(n, v); }); }; }
+        function resume(n, v) { try { step(g[n](v)); } catch (e) { settle(q[0][3], e); } }
+        function step(r) { r.value instanceof __await ? Promise.resolve(r.value.v).then(fulfill, reject) : settle(q[0][2], r);  }
+        function fulfill(value) { resume("next", value); }
+        function reject(value) { resume("throw", value); }
+        function settle(f, v) { if (f(v), q.shift(), q.length) resume(q[0][0], q[0][1]); }
+    };
+
+    __asyncDelegator = function (o) {
+        var i, p;
+        return i = {}, verb("next"), verb("throw", function (e) { throw e; }), verb("return"), i[Symbol.iterator] = function () { return this; }, i;
+        function verb(n, f) { i[n] = o[n] ? function (v) { return (p = !p) ? { value: __await(o[n](v)), done: n === "return" } : f ? f(v) : v; } : f; }
+    };
+
+    __asyncValues = function (o) {
+        if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+        var m = o[Symbol.asyncIterator], i;
+        return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i);
+        function verb(n) { i[n] = o[n] && function (v) { return new Promise(function (resolve, reject) { v = o[n](v), settle(resolve, reject, v.done, v.value); }); }; }
+        function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
+    };
+
+    __makeTemplateObject = function (cooked, raw) {
+        if (Object.defineProperty) { Object.defineProperty(cooked, "raw", { value: raw }); } else { cooked.raw = raw; }
+        return cooked;
+    };
+
+    var __setModuleDefault = Object.create ? (function(o, v) {
+        Object.defineProperty(o, "default", { enumerable: true, value: v });
+    }) : function(o, v) {
+        o["default"] = v;
+    };
+
+    __importStar = function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+
+    __importDefault = function (mod) {
+        return (mod && mod.__esModule) ? mod : { "default": mod };
+    };
+
+    __classPrivateFieldGet = function (receiver, state, kind, f) {
+        if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
+        if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
+        return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
+    };
+
+    __classPrivateFieldSet = function (receiver, state, value, kind, f) {
+        if (kind === "m") throw new TypeError("Private method is not writable");
+        if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
+        if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
+        return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
+    };
+
+    exporter("__extends", __extends);
+    exporter("__assign", __assign);
+    exporter("__rest", __rest);
+    exporter("__decorate", __decorate);
+    exporter("__param", __param);
+    exporter("__metadata", __metadata);
+    exporter("__awaiter", __awaiter);
+    exporter("__generator", __generator);
+    exporter("__exportStar", __exportStar);
+    exporter("__createBinding", __createBinding);
+    exporter("__values", __values);
+    exporter("__read", __read);
+    exporter("__spread", __spread);
+    exporter("__spreadArrays", __spreadArrays);
+    exporter("__spreadArray", __spreadArray);
+    exporter("__await", __await);
+    exporter("__asyncGenerator", __asyncGenerator);
+    exporter("__asyncDelegator", __asyncDelegator);
+    exporter("__asyncValues", __asyncValues);
+    exporter("__makeTemplateObject", __makeTemplateObject);
+    exporter("__importStar", __importStar);
+    exporter("__importDefault", __importDefault);
+    exporter("__classPrivateFieldGet", __classPrivateFieldGet);
+    exporter("__classPrivateFieldSet", __classPrivateFieldSet);
+});
+
+
+/***/ }),
+
 /***/ 2940:
 /***/ ((module) => {
 
@@ -29162,6 +29868,16 @@ async function getFullConfig () {
     verbosity: parseString('verbosity'),
     config: parseString('config')
   };
+  const urlRewriteSearch = parseString('urlRewriteSearch');
+  const urlRewriteReplace = parseString('urlRewriteReplace');
+  if (urlRewriteSearch && urlRewriteReplace) {
+    actionsConfig.urlRewriteExpressions = [
+      {
+        pattern: urlRewriteSearch,
+        replacement: urlRewriteReplace
+      }
+    ];
+  }
   const fileConfig = await getConfig(actionsConfig);
   const config = Object.assign({}, defaults, fileConfig);
   config.linksToSkip = config.skip;
@@ -29309,14 +30025,6 @@ if (require.main === require.cache[eval('__filename')]) {
 
 module.exports = eval("require")("encoding");
 
-
-/***/ }),
-
-/***/ 1526:
-/***/ ((module) => {
-
-"use strict";
-module.exports = JSON.parse("{\"version\":\"1.0.0-rc.5\"}");
 
 /***/ }),
 

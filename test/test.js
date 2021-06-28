@@ -217,4 +217,25 @@ describe('linkinator action', () => {
     await action();
     assert.ok(/must be one of/.test(setFailedStub.getCalls()[0].args[0]));
   });
+
+  it('should respect url rewrite rules', async () => {
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
+    inputStub.withArgs('urlRewriteSearch').returns('fake.local');
+    inputStub.withArgs('urlRewriteReplace').returns('real.remote');
+    inputStub.returns('');
+    const setOutputStub = sinon.stub(core, 'setOutput');
+    const infoStub = sinon.stub(core, 'info');
+    sinon.stub(core, 'setFailed').callsFake(output => {
+      throw new Error(output);
+    });
+    const scope = nock('http://real.remote')
+      .head('/').reply(200)
+      .head('/fake').reply(200);
+    await action();
+    assert.ok(inputStub.called);
+    assert.ok(infoStub.called);
+    assert.ok(setOutputStub.called);
+    scope.done();
+  });
 });
