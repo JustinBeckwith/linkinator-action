@@ -48,6 +48,8 @@ async function main () {
     const config = await getFullConfig();
     const verbosity = getVerbosity(config.verbosity);
     const logger = new Logger(verbosity);
+    core.info(`GITHUB_HEAD_REF: ${process.env.GITHUB_HEAD_REF}`);
+    core.info(`GITHUB_BASE_REF: ${process.env.GITHUB_BASE_REF}`);
 
     const checker = new LinkChecker()
       .on('link', link => {
