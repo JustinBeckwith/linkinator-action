@@ -62,7 +62,5 @@ jobs:
 ## Debugging
 To view skipped links, failure details, and more debugging information [enable step debug logging](https://docs.github.com/en/free-pro-team@latest/actions/managing-workflow-runs/enabling-debug-logging#enabling-step-debug-logging).
 
-[new file](https://github.com/JustinBeckwith/linkinator-action/blob/main/newfile.md)
-
 ## License
 [MIT](LICENSE)
