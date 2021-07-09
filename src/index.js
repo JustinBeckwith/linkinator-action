@@ -29,13 +29,14 @@ async function getFullConfig () {
   };
   const urlRewriteSearch = parseString('urlRewriteSearch');
   const urlRewriteReplace = parseString('urlRewriteReplace');
+  actionsConfig.urlRewriteExpressions = [];
   if (urlRewriteSearch && urlRewriteReplace) {
-    actionsConfig.urlRewriteExpressions = [
+    actionsConfig.urlRewriteExpressions.push(
       {
         pattern: urlRewriteSearch,
         replacement: urlRewriteReplace
       }
-    ];
+    );
   }
   const fileConfig = await getConfig(actionsConfig);
   const config = Object.assign({}, defaults, fileConfig);
@@ -48,8 +49,16 @@ async function main () {
     const config = await getFullConfig();
     const verbosity = getVerbosity(config.verbosity);
     const logger = new Logger(verbosity);
-    core.info(`GITHUB_HEAD_REF: ${process.env.GITHUB_HEAD_REF}`);
-    core.info(`GITHUB_BASE_REF: ${process.env.GITHUB_BASE_REF}`);
+    const {GITHUB_HEAD_REF, GITHUB_BASE_REF, GITHUB_REPOSITORY} = process.env;
+    core.info(`GITHUB_HEAD_REF: ${GITHUB_HEAD_REF}`);
+    core.info(`GITHUB_BASE_REF: ${GITHUB_BASE_REF}`);
+    core.info(`GITHUB_REPOSITORY: ${GITHUB_REPOSITORY}`);
+    config.urlRewriteExpressions.push({
+      // r = new RegExp('(github.com\/JustinBeckwith\/linkinator\/.*\/)(main)\/(.*)')
+      // o.replace(r, '$1boop/$2')
+      pattern: new RegExp(`(github.com\/${GITHUB_REPOSITORY}\/.*\/)(${GITHUB_BASE_REF})\/(.*)`),
+      replacement: `$1${GITHUB_HEAD_REF}/$2`,
+    });
 
     const checker = new LinkChecker()
       .on('link', link => {
