@@ -49,15 +49,13 @@ async function main () {
     const config = await getFullConfig();
     const verbosity = getVerbosity(config.verbosity);
     const logger = new Logger(verbosity);
-    const {GITHUB_HEAD_REF, GITHUB_BASE_REF, GITHUB_REPOSITORY} = process.env;
+    const { GITHUB_HEAD_REF, GITHUB_BASE_REF, GITHUB_REPOSITORY } = process.env;
     core.info(`GITHUB_HEAD_REF: ${GITHUB_HEAD_REF}`);
     core.info(`GITHUB_BASE_REF: ${GITHUB_BASE_REF}`);
     core.info(`GITHUB_REPOSITORY: ${GITHUB_REPOSITORY}`);
     config.urlRewriteExpressions.push({
-      // r = new RegExp('(github.com\/JustinBeckwith\/linkinator\/.*\/)(main)\/(.*)')
-      // o.replace(r, '$1boop/$2')
-      pattern: new RegExp(`(github.com\/${GITHUB_REPOSITORY}\/.*\/)(${GITHUB_BASE_REF})\/(.*)`),
-      replacement: `$1${GITHUB_HEAD_REF}/$3`,
+      pattern: new RegExp(`(github.com/${GITHUB_REPOSITORY}/.*/)(${GITHUB_BASE_REF})/(.*)`),
+      replacement: `$1${GITHUB_HEAD_REF}/$3`
     });
 
     const checker = new LinkChecker()
