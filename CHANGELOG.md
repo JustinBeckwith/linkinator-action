@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.5.4...v1.6.0) (2021-07-09)
+
+
+### Features
+
+* add automatic branch url rewriting ([#75](https://www.github.com/JustinBeckwith/linkinator-action/issues/75)) ([446da1b](https://www.github.com/JustinBeckwith/linkinator-action/commit/446da1bed5a7babb38d0acc3d9da5f7f0c6b924c))
+* add url rewrites feature ([#73](https://www.github.com/JustinBeckwith/linkinator-action/issues/73)) ([2d47504](https://www.github.com/JustinBeckwith/linkinator-action/commit/2d475047904ed8dae142adabcbee292961d565a0))
+
 ### [1.5.4](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.5.3...v1.5.4) (2021-02-21)
 
 
