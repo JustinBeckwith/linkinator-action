@@ -50,9 +50,6 @@ async function main () {
     const verbosity = getVerbosity(config.verbosity);
     const logger = new Logger(verbosity);
     const { GITHUB_HEAD_REF, GITHUB_BASE_REF, GITHUB_REPOSITORY } = process.env;
-    core.info(`GITHUB_HEAD_REF: ${GITHUB_HEAD_REF}`);
-    core.info(`GITHUB_BASE_REF: ${GITHUB_BASE_REF}`);
-    core.info(`GITHUB_REPOSITORY: ${GITHUB_REPOSITORY}`);
     config.urlRewriteExpressions.push({
       pattern: new RegExp(`(github.com/${GITHUB_REPOSITORY}/.*/)(${GITHUB_BASE_REF})/(.*)`),
       replacement: `$1${GITHUB_HEAD_REF}/$3`
