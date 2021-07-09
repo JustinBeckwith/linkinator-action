@@ -238,4 +238,26 @@ describe('linkinator action', () => {
     assert.ok(setOutputStub.called);
     scope.done();
   });
+
+  it('should automatically rewrite urls on the incoming branch', async () => {
+    sinon.stub(process, 'env').value({
+      GITHUB_HEAD_REF: 'incoming',
+      GITHUB_BASE_REF: 'main',
+      GITHUB_REPOSITORY: 'JustinBeckwith/linkinator-action'
+    });
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/github.md');
+    inputStub.returns('');
+    const setOutputStub = sinon.stub(core, 'setOutput');
+    const setFailedStub = sinon.stub(core, 'setFailed');
+    const infoStub = sinon.stub(core, 'info');
+    const scope = nock('https://github.com')
+      .get('/JustinBeckwith/linkinator-action/blob/incoming/LICENSE').reply(200);
+    await action();
+    assert.ok(inputStub.called);
+    assert.ok(setOutputStub.called);
+    assert.ok(setFailedStub.notCalled);
+    assert.ok(infoStub.called);
+    scope.done();
+  });
 });

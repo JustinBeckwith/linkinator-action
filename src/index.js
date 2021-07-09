@@ -29,13 +29,14 @@ async function getFullConfig () {
   };
   const urlRewriteSearch = parseString('urlRewriteSearch');
   const urlRewriteReplace = parseString('urlRewriteReplace');
+  actionsConfig.urlRewriteExpressions = [];
   if (urlRewriteSearch && urlRewriteReplace) {
-    actionsConfig.urlRewriteExpressions = [
+    actionsConfig.urlRewriteExpressions.push(
       {
         pattern: urlRewriteSearch,
         replacement: urlRewriteReplace
       }
-    ];
+    );
   }
   const fileConfig = await getConfig(actionsConfig);
   const config = Object.assign({}, defaults, fileConfig);
@@ -48,6 +49,11 @@ async function main () {
     const config = await getFullConfig();
     const verbosity = getVerbosity(config.verbosity);
     const logger = new Logger(verbosity);
+    const { GITHUB_HEAD_REF, GITHUB_BASE_REF, GITHUB_REPOSITORY } = process.env;
+    config.urlRewriteExpressions.push({
+      pattern: new RegExp(`(github.com/${GITHUB_REPOSITORY}/.*/)(${GITHUB_BASE_REF})/(.*)`),
+      replacement: `$1${GITHUB_HEAD_REF}/$3`
+    });
 
     const checker = new LinkChecker()
       .on('link', link => {
