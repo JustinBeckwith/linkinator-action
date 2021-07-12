@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.6.1](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.6.0...v1.6.1) (2021-07-12)
+
+
+### Bug Fixes
+
+* show per-page rollup on failures ([#76](https://www.github.com/JustinBeckwith/linkinator-action/issues/76)) ([493ec2b](https://www.github.com/JustinBeckwith/linkinator-action/commit/493ec2b63286faaaaeea8e0bf81a78ec96405893))
+
 ## [1.6.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.5.4...v1.6.0) (2021-07-09)
 
 
