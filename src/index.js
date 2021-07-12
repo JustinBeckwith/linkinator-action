@@ -77,13 +77,23 @@ async function main () {
     if (!result.passed) {
       const brokenLinks = result.links.filter(x => x.state === 'BROKEN');
       let failureOutput = `Detected ${brokenLinks.length} broken links.`;
-      for (const link of brokenLinks) {
-        // Only show the rollup of failures if verbosity is hiding ok links.
-        // If all you see is erros, getting a list of errors twice don't look right.
-        if (verbosity < LogLevel.ERROR) {
-          failureOutput += `\n [${link.status}] ${link.url}`;
+
+      // build a map of failed links by the parent document
+      const parents = brokenLinks.reduce((acc, curr) => {
+        const parent = curr.parent || '';
+        if (!acc[parent]) {
+          acc[parent] = [];
         }
-        logger.debug(JSON.stringify(link.failureDetails, null, 2));
+        acc[parent].push(curr);
+        return acc;
+      }, {});
+
+      for (const parent of Object.keys(parents)) {
+        failureOutput += `\n ${parent}`;
+        for (const link of parents[parent]) {
+          failureOutput += `\n   [${link.status}] ${link.url}`;
+          logger.debug(JSON.stringify(link.failureDetails, null, 2));
+        }
       }
       core.setFailed(failureOutput);
     }
