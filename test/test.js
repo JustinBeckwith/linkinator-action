@@ -125,8 +125,8 @@ describe('linkinator action', () => {
       .head('/fake').reply(500);
     await action();
     assert.ok(inputStub.called);
-    assert.ok(setOutputStub.calledOnce);
-    assert.ok(setFailedStub.calledOnce);
+    assert.strictEqual(setOutputStub.callCount, 1);
+    assert.strictEqual(setFailedStub.callCount, 1);
 
     // ensure `Scanning ...` is always shown
     assert.strictEqual(infoStub.getCalls().filter(x => {
@@ -135,11 +135,11 @@ describe('linkinator action', () => {
 
     // Ensure total count is always shown
     assert.strictEqual(setFailedStub.getCalls().filter(x => {
-      return x.args[0] === 'Detected 1 broken links.';
+      return x.args[0] === 'Detected 1 broken links.\n test/fixtures/test.md\n   [500] http://fake.local/fake';
     }).length, 1);
 
     // Ensure `core.error` is called for each failure
-    assert.ok(errorStub.calledOnce);
+    assert.strictEqual(errorStub.callCount, 1);
     const expected = '[500] http://fake.local/fake';
     assert.strictEqual(errorStub.getCalls()[0].args[0], expected);
 
@@ -159,7 +159,7 @@ describe('linkinator action', () => {
     const scope = nock('http://fake.local').head('/').reply(200);
     await action();
     assert.ok(inputStub.called);
-    assert.ok(setOutputStub.calledOnce);
+    assert.strictEqual(setOutputStub.callCount, 1);
     assert.ok(setFailedStub.notCalled);
     assert.ok(errorStub.notCalled);
     assert.strictEqual(infoStub.getCalls().length, 5);
@@ -183,9 +183,9 @@ describe('linkinator action', () => {
     await action();
     assert.ok(inputStub.called);
     assert.ok(infoStub.called);
-    assert.ok(setOutputStub.calledOnce);
-    assert.ok(setFailedStub.calledOnce);
-    assert.ok(errorStub.calledOnce);
+    assert.strictEqual(setOutputStub.callCount, 1);
+    assert.strictEqual(setFailedStub.callCount, 1);
+    assert.strictEqual(errorStub.callCount, 1);
     const expected = /No match for request/;
     assert.ok(infoStub.getCalls().find(x => expected.test(x.args[0])));
     scope.done();
