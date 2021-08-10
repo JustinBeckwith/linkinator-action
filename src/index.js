@@ -58,6 +58,7 @@ async function main () {
         const payload = JSON.parse(payloadRaw);
         if (payload?.pull_request?.head) {
           const repo = payload.pull_request.head.repo.full_name;
+          core.info(`rewrite repo to ${repo}`);
           config.urlRewriteExpressions.push({
             pattern: new RegExp(`github.com/${GITHUB_REPOSITORY}(/.*/)(${GITHUB_BASE_REF})/(.*)`),
             replacement: `github.com/${repo}$1${GITHUB_HEAD_REF}/$3`

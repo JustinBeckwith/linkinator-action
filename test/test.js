@@ -147,6 +147,10 @@ describe('linkinator action', () => {
   });
 
   it('should show skipped links when verbosity is INFO', async () => {
+    // Unset GITHUB_EVENT_PATH, so that no replacement is attempted.
+    sinon.stub(process, 'env').value({
+      GITHUB_EVENT_PATH: undefined
+    });
     const inputStub = sinon.stub(core, 'getInput');
     inputStub.withArgs('paths').returns('test/fixtures/test.md');
     inputStub.withArgs('skip').returns('http://fake.local/fake');
