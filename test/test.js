@@ -147,6 +147,10 @@ describe('linkinator action', () => {
   });
 
   it('should show skipped links when verbosity is INFO', async () => {
+    // Unset GITHUB_EVENT_PATH, so that no replacement is attempted.
+    sinon.stub(process, 'env').value({
+      GITHUB_EVENT_PATH: undefined
+    });
     const inputStub = sinon.stub(core, 'getInput');
     inputStub.withArgs('paths').returns('test/fixtures/test.md');
     inputStub.withArgs('skip').returns('http://fake.local/fake');
@@ -243,7 +247,8 @@ describe('linkinator action', () => {
     sinon.stub(process, 'env').value({
       GITHUB_HEAD_REF: 'incoming',
       GITHUB_BASE_REF: 'main',
-      GITHUB_REPOSITORY: 'JustinBeckwith/linkinator-action'
+      GITHUB_REPOSITORY: 'JustinBeckwith/linkinator-action',
+      GITHUB_EVENT_PATH: './test/fixtures/payload.json'
     });
     const inputStub = sinon.stub(core, 'getInput');
     inputStub.withArgs('paths').returns('test/fixtures/github.md');
@@ -252,7 +257,7 @@ describe('linkinator action', () => {
     const setFailedStub = sinon.stub(core, 'setFailed');
     const infoStub = sinon.stub(core, 'info');
     const scope = nock('https://github.com')
-      .get('/JustinBeckwith/linkinator-action/blob/incoming/LICENSE').reply(200);
+      .get('/Codertocat/Hello-World/blob/incoming/LICENSE').reply(200);
     await action();
     assert.ok(inputStub.called);
     assert.ok(setOutputStub.called);

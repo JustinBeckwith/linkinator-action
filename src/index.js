@@ -1,6 +1,7 @@
 const core = require('@actions/core');
 const { LinkChecker, LinkState } = require('linkinator');
 const { getConfig } = require('linkinator/build/src/config');
+const { readFile } = require('fs').promises;
 
 async function getFullConfig () {
   const defaults = {
@@ -49,11 +50,26 @@ async function main () {
     const config = await getFullConfig();
     const verbosity = getVerbosity(config.verbosity);
     const logger = new Logger(verbosity);
-    const { GITHUB_HEAD_REF, GITHUB_BASE_REF, GITHUB_REPOSITORY } = process.env;
-    config.urlRewriteExpressions.push({
-      pattern: new RegExp(`(github.com/${GITHUB_REPOSITORY}/.*/)(${GITHUB_BASE_REF})/(.*)`),
-      replacement: `$1${GITHUB_HEAD_REF}/$3`
-    });
+    const { GITHUB_HEAD_REF, GITHUB_BASE_REF, GITHUB_REPOSITORY, GITHUB_EVENT_PATH } = process.env;
+    // Read pull_request payload and use it to determine head user/repo:
+    if (GITHUB_EVENT_PATH) {
+      try {
+        const payloadRaw = await readFile(GITHUB_EVENT_PATH, 'utf8');
+        const payload = JSON.parse(payloadRaw);
+        if (payload && payload.pull_request && payload.pull_request.head) {
+          const repo = payload.pull_request.head.repo.full_name;
+          core.info(`rewrite repo to ${repo}`);
+          config.urlRewriteExpressions.push({
+            pattern: new RegExp(`github.com/${GITHUB_REPOSITORY}(/.*/)(${GITHUB_BASE_REF})/(.*)`),
+            replacement: `github.com/${repo}$1${GITHUB_HEAD_REF}/$3`
+          });
+        } else {
+          core.warn('unexpected payload structure', payload);
+        }
+      } catch (err) {
+        core.warn(err);
+      }
+    }
 
     const checker = new LinkChecker()
       .on('link', link => {
