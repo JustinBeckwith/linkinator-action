@@ -56,7 +56,7 @@ async function main () {
       try {
         const payloadRaw = await readFile(GITHUB_EVENT_PATH, 'utf8');
         const payload = JSON.parse(payloadRaw);
-        if (payload?.pull_request?.head) {
+        if (payload && payload.pull_request && payload.pull_request.head) {
           const repo = payload.pull_request.head.repo.full_name;
           core.info(`rewrite repo to ${repo}`);
           config.urlRewriteExpressions.push({
