@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.6.2](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.6.1...v1.6.2) (2021-08-11)
+
+
+### Bug Fixes
+
+* **replace:** support running against fork ([#81](https://www.github.com/JustinBeckwith/linkinator-action/issues/81)) ([e749101](https://www.github.com/JustinBeckwith/linkinator-action/commit/e749101a16b1c931eeeb2d0c04a3799830c270e1))
+
 ### [1.6.1](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.6.0...v1.6.1) (2021-07-12)
 
 
