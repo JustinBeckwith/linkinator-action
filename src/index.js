@@ -64,10 +64,10 @@ async function main () {
             replacement: `github.com/${repo}$1${GITHUB_HEAD_REF}/$3`
           });
         } else {
-          core.warn('unexpected payload structure', payload);
+          core.warning('unexpected payload structure', payload);
         }
       } catch (err) {
-        core.warn(err);
+        core.warning(err);
       }
     }
 
