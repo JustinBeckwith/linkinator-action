@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.6.3](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.6.2...v1.6.3) (2021-08-12)
+
+
+### Bug Fixes
+
+* use core.warning ([#83](https://www.github.com/JustinBeckwith/linkinator-action/issues/83)) ([9059023](https://www.github.com/JustinBeckwith/linkinator-action/commit/9059023adceea2d8e220fa88e320dc923eb7a607))
+
 ### [1.6.2](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.6.1...v1.6.2) (2021-08-11)
 
 
