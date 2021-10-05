@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.6.4...v1.7.0) (2021-10-05)
+
+
+### Features
+
+* update linkinator to 2.14.2 ([#93](https://www.github.com/JustinBeckwith/linkinator-action/issues/93)) ([78a842e](https://www.github.com/JustinBeckwith/linkinator-action/commit/78a842e12a8d7e68c90ad82c8bba8e0f850a8036))
+
 ### [1.6.4](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.6.3...v1.6.4) (2021-10-05)
 
 
