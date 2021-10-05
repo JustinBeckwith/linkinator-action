@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.6.4](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.6.3...v1.6.4) (2021-10-05)
+
+
+### Bug Fixes
+
+* **deps:** update dependency linkinator to v2.14.1 ([#91](https://www.github.com/JustinBeckwith/linkinator-action/issues/91)) ([e25cb18](https://www.github.com/JustinBeckwith/linkinator-action/commit/e25cb18a26feed20fe7949a452dc6172acceb0f6))
+
 ### [1.6.3](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.6.2...v1.6.3) (2021-08-12)
 
 
