@@ -27,7 +27,7 @@
   "dependencies": {
     "@actions/core": "^1.2.6",
     "chalk": "^4.1.0",
-    "linkinator": "2.14.3"
+    "linkinator": "2.14.4"
   },
   "devDependencies": {
     "@vercel/ncc": "^0.31.0",
