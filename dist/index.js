@@ -6677,13 +6677,17 @@ class LinkChecker extends events_1.EventEmitter {
         let server;
         const hasHttpPaths = options.path.find(x => x.startsWith('http'));
         if (!hasHttpPaths) {
-            const port = options.port || 5000 + Math.round(Math.random() * 1000);
+            let port = options.port;
             server = await server_1.startWebServer({
                 root: options.serverRoot,
                 port,
                 markdown: options.markdown,
                 directoryListing: options.directoryListing,
             });
+            if (port === undefined) {
+                const addr = server.address();
+                port = addr.port;
+            }
             for (let i = 0; i < options.path.length; i++) {
                 if (options.path[i].startsWith('/')) {
                     options.path[i] = options.path[i].slice(1);
@@ -7379,8 +7383,12 @@ async function startWebServer(options) {
     return new Promise((resolve, reject) => {
         const server = http
             .createServer((req, res) => handleRequest(req, res, root, options))
-            .listen(options.port, () => resolve(server))
+            .listen(options.port || 0, () => resolve(server))
             .on('error', reject);
+        if (!options.port) {
+            const addr = server.address();
+            options.port = addr.port;
+        }
         enableDestroy(server);
     });
 }
