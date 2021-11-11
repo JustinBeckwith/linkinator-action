@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.8.0...v1.9.0) (2021-11-11)
+
+
+### Features
+
+* linkinator with exponential backoff ([#105](https://www.github.com/JustinBeckwith/linkinator-action/issues/105)) ([f0460ff](https://www.github.com/JustinBeckwith/linkinator-action/commit/f0460ff2f7d7bcaf02a30a95e323be21646b3ddf))
+
 ## [1.8.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.7.3...v1.8.0) (2021-11-11)
 
 
