@@ -15812,6 +15812,9 @@ async function main () {
             logger.info(`[SKP] ${link.url}`);
             break;
         }
+      })
+      .on('retry', retryInfo => {
+        logger.info('[RETRY]', retryInfo);
       });
 
     core.info(`Scanning ${config.path.join(', ')}`);
