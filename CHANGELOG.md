@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.7.3...v1.8.0) (2021-11-11)
+
+
+### Features
+
+* log on retries ([#103](https://www.github.com/JustinBeckwith/linkinator-action/issues/103)) ([d22e2e7](https://www.github.com/JustinBeckwith/linkinator-action/commit/d22e2e749d4802af199ed216568639d8adca56b6))
+
 ### [1.7.3](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.7.2...v1.7.3) (2021-11-10)
 
 
