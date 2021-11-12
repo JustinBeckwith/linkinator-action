@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.9.1](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.9.0...v1.9.1) (2021-11-12)
+
+
+### Bug Fixes
+
+* **retry-errors:** fix for retry-errors behavior ([#107](https://www.github.com/JustinBeckwith/linkinator-action/issues/107)) ([40ce63a](https://www.github.com/JustinBeckwith/linkinator-action/commit/40ce63ab3f1b213d2926ab23e14d42d3897c99ce))
+
 ## [1.9.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.8.0...v1.9.0) (2021-11-11)
 
 
