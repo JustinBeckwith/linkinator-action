@@ -1,5 +1,14 @@
 # Changelog
 
+### [1.9.2](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.9.1...v1.9.2) (2021-12-17)
+
+
+### Bug Fixes
+
+* drop dependency on chalk ([#114](https://www.github.com/JustinBeckwith/linkinator-action/issues/114)) ([258cd43](https://www.github.com/JustinBeckwith/linkinator-action/commit/258cd438ce9858cb07ced2e8f2d9759b6b5d2f9a))
+* stop warning for missing PR on target ([#115](https://www.github.com/JustinBeckwith/linkinator-action/issues/115)) ([5fd3952](https://www.github.com/JustinBeckwith/linkinator-action/commit/5fd395232f0163c3bd079628715f9eed1f8a3331))
+* use node16 for the action ([#99](https://www.github.com/JustinBeckwith/linkinator-action/issues/99)) ([286adda](https://www.github.com/JustinBeckwith/linkinator-action/commit/286adda63ab2ab4446223c7fc06bd78c5b58627a))
+
 ### [1.9.1](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.9.0...v1.9.1) (2021-11-12)
 
 
