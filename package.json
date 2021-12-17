@@ -9,6 +9,9 @@
     "lint": "semistandard",
     "build": "ncc build src/index.js --license licenses.txt --source-map"
   },
+  "engines": {
+    "node": ">=16"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/JustinBeckwith/linkinator-action.git"
