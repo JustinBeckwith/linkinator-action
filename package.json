@@ -29,7 +29,6 @@
   "homepage": "https://github.com/JustinBeckwith/linkinator-action#readme",
   "dependencies": {
     "@actions/core": "^1.2.6",
-    "chalk": "^4.1.0",
     "linkinator": "^2.16.1"
   },
   "devDependencies": {
