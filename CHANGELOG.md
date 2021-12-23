@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.9.2...v1.10.0) (2021-12-23)
+
+
+### Features
+
+* switch to linkinator 3 and esm ([#117](https://www.github.com/JustinBeckwith/linkinator-action/issues/117)) ([a6c5f5f](https://www.github.com/JustinBeckwith/linkinator-action/commit/a6c5f5fdb2a4e14d3669f194ecbe7005b2caa6d2))
+
 ### [1.9.2](https://www.github.com/JustinBeckwith/linkinator-action/compare/v1.9.1...v1.9.2) (2021-12-17)
 
 
