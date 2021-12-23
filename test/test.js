@@ -1,9 +1,9 @@
-const assert = require('assert');
-const core = require('@actions/core');
-const { describe, it, afterEach } = require('mocha');
-const sinon = require('sinon');
-const nock = require('nock');
-const { action, getFullConfig } = require('../src/index.js');
+import assert from 'assert';
+import core from '@actions/core';
+import { describe, it, afterEach } from 'mocha';
+import sinon from 'sinon';
+import nock from 'nock';
+import { main, getFullConfig } from '../src/action.js';
 
 nock.disableNetConnect();
 nock.enableNetConnect('localhost');
@@ -24,7 +24,7 @@ describe('linkinator action', () => {
     const scope = nock('http://fake.local')
       .head('/').reply(200)
       .head('/fake').reply(200);
-    await action();
+    await main();
     assert.ok(inputStub.called);
     assert.ok(setOutputStub.called);
     assert.ok(setFailedStub.notCalled);
@@ -43,7 +43,7 @@ describe('linkinator action', () => {
     const scope = nock('http://fake.local')
       .head('/').reply(404)
       .head('/fake').reply(404);
-    await action();
+    await main();
     assert.ok(inputStub.called);
     assert.ok(setFailedStub.called);
     assert.ok(infoStub.called);
@@ -54,7 +54,7 @@ describe('linkinator action', () => {
   it('should surface exceptions from linkinator with call stack', async () => {
     const inputStub = sinon.stub(core, 'getInput').throws(new Error('😱'));
     const setFailedStub = sinon.stub(core, 'setFailed');
-    await action();
+    await main();
     assert.ok(inputStub.called);
     assert.ok(setFailedStub.called);
     assert.ok(setFailedStub.firstCall.firstArg.includes('test.js:'));
@@ -70,7 +70,7 @@ describe('linkinator action', () => {
     sinon.stub(core, 'setFailed').callsFake(output => {
       throw new Error(output);
     });
-    await action();
+    await main();
     assert.ok(inputStub.called);
     assert.ok(infoStub.called);
     assert.ok(setOutputStub.called);
@@ -86,7 +86,7 @@ describe('linkinator action', () => {
     sinon.stub(core, 'setFailed').callsFake(output => {
       throw new Error(output);
     });
-    await action();
+    await main();
     assert.ok(inputStub.called);
     assert.ok(infoStub.called);
     assert.ok(setOutputStub.called);
@@ -104,7 +104,7 @@ describe('linkinator action', () => {
     const scope = nock('http://fake.local')
       .head('/').reply(200)
       .head('/fake').reply(200);
-    await action();
+    await main();
     assert.ok(inputStub.called);
     assert.ok(infoStub.called);
     assert.ok(setOutputStub.called);
@@ -123,7 +123,7 @@ describe('linkinator action', () => {
     const scope = nock('http://fake.local')
       .head('/').reply(200)
       .head('/fake').reply(500);
-    await action();
+    await main();
     assert.ok(inputStub.called);
     assert.strictEqual(setOutputStub.callCount, 1);
     assert.strictEqual(setFailedStub.callCount, 1);
@@ -161,7 +161,7 @@ describe('linkinator action', () => {
     const infoStub = sinon.stub(core, 'info');
     const errorStub = sinon.stub(core, 'error');
     const scope = nock('http://fake.local').head('/').reply(200);
-    await action();
+    await main();
     assert.ok(inputStub.called);
     assert.strictEqual(setOutputStub.callCount, 1);
     assert.ok(setFailedStub.notCalled);
@@ -184,7 +184,7 @@ describe('linkinator action', () => {
     const scope = nock('http://fake.local')
       .head('/').reply(200)
       .head('/fake').reply(500);
-    await action();
+    await main();
     assert.ok(inputStub.called);
     assert.ok(infoStub.called);
     assert.strictEqual(setOutputStub.callCount, 1);
@@ -218,7 +218,7 @@ describe('linkinator action', () => {
     inputStub.withArgs('verbosity').returns('NOT_VALID');
     inputStub.returns('');
     const setFailedStub = sinon.stub(core, 'setFailed');
-    await action();
+    await main();
     assert.ok(/must be one of/.test(setFailedStub.getCalls()[0].args[0]));
   });
 
@@ -236,7 +236,7 @@ describe('linkinator action', () => {
     const scope = nock('http://real.remote')
       .head('/').reply(200)
       .head('/fake').reply(200);
-    await action();
+    await main();
     assert.ok(inputStub.called);
     assert.ok(infoStub.called);
     assert.ok(setOutputStub.called);
@@ -258,7 +258,7 @@ describe('linkinator action', () => {
     const infoStub = sinon.stub(core, 'info');
     const scope = nock('https://github.com')
       .get('/Codertocat/Hello-World/blob/incoming/LICENSE').reply(200);
-    await action();
+    await main();
     assert.ok(inputStub.called);
     assert.ok(setOutputStub.called);
     assert.ok(setFailedStub.notCalled);

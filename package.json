@@ -9,6 +9,7 @@
     "lint": "semistandard",
     "build": "ncc build src/index.js --license licenses.txt --source-map"
   },
+  "type": "module",
   "engines": {
     "node": ">=16"
   },
@@ -29,7 +30,7 @@
   "homepage": "https://github.com/JustinBeckwith/linkinator-action#readme",
   "dependencies": {
     "@actions/core": "^1.2.6",
-    "linkinator": "^2.16.1"
+    "linkinator": "^3.0.3"
   },
   "devDependencies": {
     "@vercel/ncc": "^0.33.0",
