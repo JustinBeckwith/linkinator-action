@@ -1,3 +1,3 @@
 
-import {main} from './action.js';
+import { main } from './action.js';
 main();

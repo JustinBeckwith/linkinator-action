@@ -42,7 +42,7 @@
   },
   "semistandard": {
     "ignore": [
-      "dist/*.js"
+      "dist/*.*"
     ]
   }
 }
