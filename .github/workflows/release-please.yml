@@ -8,14 +8,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Create Release PR
-        uses: GoogleCloudPlatform/release-please-action@v2
+        uses: GoogleCloudPlatform/release-please-action@v3
         with:
           token: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
           release-type: node
           package-name: linkinator-action
           command: 'release-pr'
       - name: Create GitHub Release
-        uses: GoogleCloudPlatform/release-please-action@v2
+        uses: GoogleCloudPlatform/release-please-action@v3
         id: release
         with:
           token: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
