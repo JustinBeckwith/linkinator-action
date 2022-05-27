@@ -15,7 +15,7 @@ jobs:
   linkinator:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: JustinBeckwith/linkinator-action@v1
 ```
 
@@ -32,7 +32,7 @@ jobs:
   linkinator:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: JustinBeckwith/linkinator-action@v1
         with:
           paths: test/fixtures/test.md
