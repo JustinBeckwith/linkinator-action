@@ -49,7 +49,7 @@ jobs:
 - `linksToSkip` - List of urls in regexy form to not include in the check. (`skip` is also accepted)
 - `timeout` - Request timeout in ms.  Defaults to 0 (no timeout).
 - `markdown` - Automatically parse and scan markdown if scanning from a location on disk. Defaults to `true`.
-- `serverRoot` - When scanning a locally directory, customize the location on disk where the server is started.  Defaults to the root of your GitHub repository.
+- `serverRoot` - When scanning a local directory, customize the location on disk where the server is started.  Defaults to the root of your GitHub repository.
 - `directoryListing` - Include an automatic directory index file when linking to a directory. Defaults to `false`.
 - `retry` - Automatically retry requests that return HTTP 429 responses and include a `retry-after` header.
 - `urlRewriteSearch` - Pattern to search for in urls.  Must be used with `urlRewriteReplace`.
