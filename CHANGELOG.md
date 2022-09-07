@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.3](https://github.com/JustinBeckwith/linkinator-action/compare/v1.10.2...v1.10.3) (2022-09-07)
+
+
+### Bug Fixes
+
+* **deps:** update dependency linkinator to v4.0.3 ([#141](https://github.com/JustinBeckwith/linkinator-action/issues/141)) ([a3a83c1](https://github.com/JustinBeckwith/linkinator-action/commit/a3a83c1977df232d1f1bd5c4f67e2d869b9854f0))
+
 ## [1.10.2](https://github.com/JustinBeckwith/linkinator-action/compare/v1.10.1...v1.10.2) (2022-07-11)
 
 
