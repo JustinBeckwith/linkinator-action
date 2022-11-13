@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.10.4](https://github.com/JustinBeckwith/linkinator-action/compare/v1.10.3...v1.10.4) (2022-11-13)
+
+
+### Bug Fixes
+
+* **deps:** patch out of date dependencies ([#145](https://github.com/JustinBeckwith/linkinator-action/issues/145)) ([da9bb75](https://github.com/JustinBeckwith/linkinator-action/commit/da9bb75f19eb15611d9580eabdc31595ec75eb71))
+* **deps:** update to linkinator 4.1.1 ([#147](https://github.com/JustinBeckwith/linkinator-action/issues/147)) ([202477c](https://github.com/JustinBeckwith/linkinator-action/commit/202477cf17723814aa65c44f27f36490495e2298))
+
 ## [1.10.3](https://github.com/JustinBeckwith/linkinator-action/compare/v1.10.2...v1.10.3) (2022-09-07)
 
 
