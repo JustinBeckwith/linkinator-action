@@ -17720,22 +17720,13 @@ async function processOptions(opts) {
 //# sourceMappingURL=options.js.map
 ;// CONCATENATED MODULE: ./node_modules/linkinator/build/src/config.js
 
+
 async function getConfig(flags) {
     // check to see if a config file path was passed
     const configPath = flags.config || 'linkinator.config.json';
-    let configData;
-    try {
-        configData = await external_fs_.promises.readFile(configPath, { encoding: 'utf8' });
-    }
-    catch (e) {
-        if (flags.config) {
-            console.error(`Unable to find config file ${flags.config}`);
-            throw e;
-        }
-    }
     let config = {};
-    if (configData) {
-        config = JSON.parse(configData);
+    if (flags.config) {
+        config = await parseConfigFile(configPath);
     }
     // `meow` is set up to pass boolean flags as `undefined` if not passed.
     // copy the struct, and delete properties that are `undefined` so the merge
@@ -17751,6 +17742,41 @@ async function getConfig(flags) {
     // with CLI flags getting precedence
     config = Object.assign({}, config, strippedFlags);
     return config;
+}
+const validConfigExtensions = ['.js', '.mjs', '.cjs', '.json'];
+async function parseConfigFile(configPath) {
+    const typeOfConfig = getTypeOfConfig(configPath);
+    switch (typeOfConfig) {
+        case '.json':
+            return readJsonConfigFile(configPath);
+        case '.js':
+        case '.mjs':
+        case '.cjs':
+            return importConfigFile(configPath);
+    }
+    throw new Error(`Config file ${configPath} is invalid`);
+}
+function getTypeOfConfig(configPath) {
+    // Returning json in case file doesn't have an extension for backward compatibility
+    const configExtension = external_path_.extname(configPath) || '.json';
+    if (validConfigExtensions.includes(configExtension)) {
+        return configExtension;
+    }
+    throw new Error(`Config file should be either of extensions ${validConfigExtensions.join(',')}`);
+}
+async function importConfigFile(configPath) {
+    // Use a filthy hack to prevent ncc / webpack from trying to process
+    // the runtime dynamic import.  This hurt me more than it disgusts
+    // whoever is reading the code.
+    const _import = new Function('p', 'return import(p)');
+    const config = (await _import(`file://${external_path_.resolve(process.cwd(), configPath)}`)).default;
+    return config;
+}
+async function readJsonConfigFile(configPath) {
+    const configFileContents = await external_fs_.promises.readFile(configPath, {
+        encoding: 'utf-8',
+    });
+    return JSON.parse(configFileContents);
 }
 //# sourceMappingURL=config.js.map
 ;// CONCATENATED MODULE: ./node_modules/linkinator/build/src/index.js
