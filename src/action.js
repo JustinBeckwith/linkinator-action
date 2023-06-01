@@ -11,6 +11,9 @@ export async function getFullConfig () {
     timeout: 0,
     markdown: true,
     retry: false,
+    retryErrors: false,
+    retryErrorsCount: 5,
+    retryErrorsJitter: 3000,
     verbosity: 'WARNING'
   };
   // The options returned from `getInput` appear to always be strings.
@@ -24,6 +27,9 @@ export async function getFullConfig () {
     serverRoot: parseString('serverRoot'),
     directoryListing: parseBoolean('directoryListing'),
     retry: parseBoolean('retry'),
+    retryErrors: parseBoolean('retryErrors'),
+    retryErrorsCount: parseNumber('retryErrorsCount'),
+    retryErrorsJitter: parseNumber('retryErrorsDelay'),
     verbosity: parseString('verbosity'),
     config: parseString('config')
   };
