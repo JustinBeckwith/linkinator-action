@@ -37,10 +37,12 @@ export async function getFullConfig () {
   const urlRewriteReplace = parseString('urlRewriteReplace');
   actionsConfig.urlRewriteExpressions = [];
   if (urlRewriteSearch && urlRewriteReplace) {
-    actionsConfig.urlRewriteExpressions.push({
-      pattern: urlRewriteSearch,
-      replacement: urlRewriteReplace
-    });
+    actionsConfig.urlRewriteExpressions.push(
+      {
+        pattern: urlRewriteSearch,
+        replacement: urlRewriteReplace
+      }
+    );
   }
   const fileConfig = await getConfig(actionsConfig);
   const config = Object.assign({}, defaults, fileConfig);
@@ -76,7 +78,7 @@ export async function main () {
     }
 
     const checker = new LinkChecker()
-      .on('link', (link) => {
+      .on('link', link => {
         switch (link.state) {
           case LinkState.BROKEN:
             logger.error(`[${link.status.toString()}] ${link.url}`);
@@ -89,15 +91,15 @@ export async function main () {
             break;
         }
       })
-      .on('retry', (retryInfo) => {
+      .on('retry', retryInfo => {
         logger.info('[RETRY]', retryInfo);
       });
     core.info(`Scanning ${config.path.join(', ')}`);
     const result = await checker.check(config);
-    const nonSkippedLinks = result.links.filter((x) => x.state !== 'SKIPPED');
+    const nonSkippedLinks = result.links.filter(x => x.state !== 'SKIPPED');
     core.info(`Scanned total of ${nonSkippedLinks.length} links!`);
     if (!result.passed) {
-      const brokenLinks = result.links.filter((x) => x.state === 'BROKEN');
+      const brokenLinks = result.links.filter(x => x.state === 'BROKEN');
       let failureOutput = `Detected ${brokenLinks.length} broken links.`;
 
       // build a map of failed links by the parent document
@@ -132,10 +134,7 @@ function parseString (input) {
 function parseList (input) {
   const value = core.getInput(input) || undefined;
   if (value) {
-    return value
-      .split(/[\s,]+/)
-      .map((x) => x.trim())
-      .filter((x) => !!x);
+    return value.split(/[\s,]+/).map(x => x.trim()).filter(x => !!x);
   }
   return undefined;
 }
@@ -160,7 +159,9 @@ function getVerbosity (verbosity) {
   verbosity = verbosity.toUpperCase();
   const options = Object.keys(LogLevel);
   if (!options.includes(verbosity)) {
-    throw new Error(`Invalid flag: VERBOSITY must be one of [${options.join(',')}]`);
+    throw new Error(
+      `Invalid flag: VERBOSITY must be one of [${options.join(',')}]`
+    );
   }
   return LogLevel[verbosity];
 }
