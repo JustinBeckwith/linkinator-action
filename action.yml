@@ -42,6 +42,18 @@ inputs:
     description: 'Automatically retry requests that return HTTP 429 responses and include a "retry-after" header.'
     default: 'false'
     required: false
+  retryErrors:
+    description: 'Automatically retry requests that return 5xx or unknown response.'
+    default: 'false'
+    required: false
+  retryErrorsCount:
+    description: 'How many times should an error be retried'
+    default: '5'
+    required: false
+  retryErrorsJitter:
+    description: 'Random jitter applied to error retry'
+    default: '3000'
+    required: false
   verbosity:
     description: 'Override the default verbosity for this command. Available options are "DEBUG", "INFO", "WARNING", "ERROR", and "NONE".  Defaults to "WARNING".'
     default: 'WARNING'
