@@ -8,7 +8,7 @@ jobs:
   linkinator:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4
+      - uses: actions/checkout@v3
       - uses: ./
         with:
           skip: "CHANGELOG.md"
@@ -21,33 +21,33 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4
+      - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
-          node-version: 16
+          node-version: 20
       - run: npm install
       - run: npm test
       - uses: codecov/codecov-action@v4
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4
+      - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
-          node-version: 16
+          node-version: 20
       - run: npm install
       - run: npm run lint
   ncc:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4
+      - uses: actions/checkout@v3
         with:
           ref: ${{github.event.pull_request.head.ref}}
           repository: ${{github.event.pull_request.head.repo.full_name}}
           token: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
       - uses: actions/setup-node@v3
         with:
-          node-version: 16
+          node-version: 20
       - run: npm install
       - run: npm run build
       - name: git config
