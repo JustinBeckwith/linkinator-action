@@ -1752,236 +1752,193 @@ exports.checkBypass = checkBypass;
 
 /***/ }),
 
-/***/ 9690:
-/***/ (function(module, __unused_webpack_exports, __nccwpck_require__) {
+/***/ 8348:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-const events_1 = __nccwpck_require__(2361);
-const debug_1 = __importDefault(__nccwpck_require__(8237));
-const promisify_1 = __importDefault(__nccwpck_require__(6570));
-const debug = debug_1.default('agent-base');
-function isAgent(v) {
-    return Boolean(v) && typeof v.addRequest === 'function';
-}
-function isSecureEndpoint() {
-    const { stack } = new Error();
-    if (typeof stack !== 'string')
-        return false;
-    return stack.split('\n').some(l => l.indexOf('(https.js:') !== -1 || l.indexOf('node:https:') !== -1);
-}
-function createAgent(callback, opts) {
-    return new createAgent.Agent(callback, opts);
-}
-(function (createAgent) {
-    /**
-     * Base `http.Agent` implementation.
-     * No pooling/keep-alive is implemented by default.
-     *
-     * @param {Function} callback
-     * @api public
-     */
-    class Agent extends events_1.EventEmitter {
-        constructor(callback, _opts) {
-            super();
-            let opts = _opts;
-            if (typeof callback === 'function') {
-                this.callback = callback;
-            }
-            else if (callback) {
-                opts = callback;
-            }
-            // Timeout for the socket to be returned from the callback
-            this.timeout = null;
-            if (opts && typeof opts.timeout === 'number') {
-                this.timeout = opts.timeout;
-            }
-            // These aren't actually used by `agent-base`, but are required
-            // for the TypeScript definition files in `@types/node` :/
-            this.maxFreeSockets = 1;
-            this.maxSockets = 1;
-            this.maxTotalSockets = Infinity;
-            this.sockets = {};
-            this.freeSockets = {};
-            this.requests = {};
-            this.options = {};
-        }
-        get defaultPort() {
-            if (typeof this.explicitDefaultPort === 'number') {
-                return this.explicitDefaultPort;
-            }
-            return isSecureEndpoint() ? 443 : 80;
-        }
-        set defaultPort(v) {
-            this.explicitDefaultPort = v;
-        }
-        get protocol() {
-            if (typeof this.explicitProtocol === 'string') {
-                return this.explicitProtocol;
-            }
-            return isSecureEndpoint() ? 'https:' : 'http:';
-        }
-        set protocol(v) {
-            this.explicitProtocol = v;
-        }
-        callback(req, opts, fn) {
-            throw new Error('"agent-base" has no default implementation, you must subclass and override `callback()`');
-        }
-        /**
-         * Called by node-core's "_http_client.js" module when creating
-         * a new HTTP request with this Agent instance.
-         *
-         * @api public
-         */
-        addRequest(req, _opts) {
-            const opts = Object.assign({}, _opts);
-            if (typeof opts.secureEndpoint !== 'boolean') {
-                opts.secureEndpoint = isSecureEndpoint();
-            }
-            if (opts.host == null) {
-                opts.host = 'localhost';
-            }
-            if (opts.port == null) {
-                opts.port = opts.secureEndpoint ? 443 : 80;
-            }
-            if (opts.protocol == null) {
-                opts.protocol = opts.secureEndpoint ? 'https:' : 'http:';
-            }
-            if (opts.host && opts.path) {
-                // If both a `host` and `path` are specified then it's most
-                // likely the result of a `url.parse()` call... we need to
-                // remove the `path` portion so that `net.connect()` doesn't
-                // attempt to open that as a unix socket file.
-                delete opts.path;
-            }
-            delete opts.agent;
-            delete opts.hostname;
-            delete opts._defaultAgent;
-            delete opts.defaultPort;
-            delete opts.createConnection;
-            // Hint to use "Connection: close"
-            // XXX: non-documented `http` module API :(
-            req._last = true;
-            req.shouldKeepAlive = false;
-            let timedOut = false;
-            let timeoutId = null;
-            const timeoutMs = opts.timeout || this.timeout;
-            const onerror = (err) => {
-                if (req._hadError)
-                    return;
-                req.emit('error', err);
-                // For Safety. Some additional errors might fire later on
-                // and we need to make sure we don't double-fire the error event.
-                req._hadError = true;
-            };
-            const ontimeout = () => {
-                timeoutId = null;
-                timedOut = true;
-                const err = new Error(`A "socket" was not created for HTTP request before ${timeoutMs}ms`);
-                err.code = 'ETIMEOUT';
-                onerror(err);
-            };
-            const callbackError = (err) => {
-                if (timedOut)
-                    return;
-                if (timeoutId !== null) {
-                    clearTimeout(timeoutId);
-                    timeoutId = null;
-                }
-                onerror(err);
-            };
-            const onsocket = (socket) => {
-                if (timedOut)
-                    return;
-                if (timeoutId != null) {
-                    clearTimeout(timeoutId);
-                    timeoutId = null;
-                }
-                if (isAgent(socket)) {
-                    // `socket` is actually an `http.Agent` instance, so
-                    // relinquish responsibility for this `req` to the Agent
-                    // from here on
-                    debug('Callback returned another Agent instance %o', socket.constructor.name);
-                    socket.addRequest(req, opts);
-                    return;
-                }
-                if (socket) {
-                    socket.once('free', () => {
-                        this.freeSocket(socket, opts);
-                    });
-                    req.onSocket(socket);
-                    return;
-                }
-                const err = new Error(`no Duplex stream was returned to agent-base for \`${req.method} ${req.path}\``);
-                onerror(err);
-            };
-            if (typeof this.callback !== 'function') {
-                onerror(new Error('`callback` is not defined'));
-                return;
-            }
-            if (!this.promisifiedCallback) {
-                if (this.callback.length >= 3) {
-                    debug('Converting legacy callback function to promise');
-                    this.promisifiedCallback = promisify_1.default(this.callback);
-                }
-                else {
-                    this.promisifiedCallback = this.callback;
-                }
-            }
-            if (typeof timeoutMs === 'number' && timeoutMs > 0) {
-                timeoutId = setTimeout(ontimeout, timeoutMs);
-            }
-            if ('port' in opts && typeof opts.port !== 'number') {
-                opts.port = Number(opts.port);
-            }
-            try {
-                debug('Resolving socket for %o request: %o', opts.protocol, `${req.method} ${req.path}`);
-                Promise.resolve(this.promisifiedCallback(req, opts)).then(onsocket, callbackError);
-            }
-            catch (err) {
-                Promise.reject(err).catch(callbackError);
-            }
-        }
-        freeSocket(socket, opts) {
-            debug('Freeing socket %o %o', socket.constructor.name, opts);
-            socket.destroy();
-        }
-        destroy() {
-            debug('Destroying agent %o', this.constructor.name);
-        }
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
     }
-    createAgent.Agent = Agent;
-    // So that `instanceof` works correctly
-    createAgent.prototype = createAgent.Agent.prototype;
-})(createAgent || (createAgent = {}));
-module.exports = createAgent;
-//# sourceMappingURL=index.js.map
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.req = exports.json = exports.toBuffer = void 0;
+const http = __importStar(__nccwpck_require__(3685));
+const https = __importStar(__nccwpck_require__(5687));
+async function toBuffer(stream) {
+    let length = 0;
+    const chunks = [];
+    for await (const chunk of stream) {
+        length += chunk.length;
+        chunks.push(chunk);
+    }
+    return Buffer.concat(chunks, length);
+}
+exports.toBuffer = toBuffer;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function json(stream) {
+    const buf = await toBuffer(stream);
+    const str = buf.toString('utf8');
+    try {
+        return JSON.parse(str);
+    }
+    catch (_err) {
+        const err = _err;
+        err.message += ` (input: ${str})`;
+        throw err;
+    }
+}
+exports.json = json;
+function req(url, opts = {}) {
+    const href = typeof url === 'string' ? url : url.href;
+    const req = (href.startsWith('https:') ? https : http).request(url, opts);
+    const promise = new Promise((resolve, reject) => {
+        req
+            .once('response', resolve)
+            .once('error', reject)
+            .end();
+    });
+    req.then = promise.then.bind(promise);
+    return req;
+}
+exports.req = req;
+//# sourceMappingURL=helpers.js.map
 
 /***/ }),
 
-/***/ 6570:
-/***/ ((__unused_webpack_module, exports) => {
+/***/ 694:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-function promisify(fn) {
-    return function (req, opts) {
-        return new Promise((resolve, reject) => {
-            fn.call(this, req, opts, (err, rtn) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve(rtn);
-                }
-            });
-        });
-    };
+exports.Agent = void 0;
+const http = __importStar(__nccwpck_require__(3685));
+__exportStar(__nccwpck_require__(8348), exports);
+const INTERNAL = Symbol('AgentBaseInternalState');
+class Agent extends http.Agent {
+    constructor(opts) {
+        super(opts);
+        this[INTERNAL] = {};
+    }
+    /**
+     * Determine whether this is an `http` or `https` request.
+     */
+    isSecureEndpoint(options) {
+        if (options) {
+            // First check the `secureEndpoint` property explicitly, since this
+            // means that a parent `Agent` is "passing through" to this instance.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if (typeof options.secureEndpoint === 'boolean') {
+                return options.secureEndpoint;
+            }
+            // If no explicit `secure` endpoint, check if `protocol` property is
+            // set. This will usually be the case since using a full string URL
+            // or `URL` instance should be the most common usage.
+            if (typeof options.protocol === 'string') {
+                return options.protocol === 'https:';
+            }
+        }
+        // Finally, if no `protocol` property was set, then fall back to
+        // checking the stack trace of the current call stack, and try to
+        // detect the "https" module.
+        const { stack } = new Error();
+        if (typeof stack !== 'string')
+            return false;
+        return stack
+            .split('\n')
+            .some((l) => l.indexOf('(https.js:') !== -1 ||
+            l.indexOf('node:https:') !== -1);
+    }
+    createSocket(req, options, cb) {
+        const connectOpts = {
+            ...options,
+            secureEndpoint: this.isSecureEndpoint(options),
+        };
+        Promise.resolve()
+            .then(() => this.connect(req, connectOpts))
+            .then((socket) => {
+            if (socket instanceof http.Agent) {
+                // @ts-expect-error `addRequest()` isn't defined in `@types/node`
+                return socket.addRequest(req, connectOpts);
+            }
+            this[INTERNAL].currentSocket = socket;
+            // @ts-expect-error `createSocket()` isn't defined in `@types/node`
+            super.createSocket(req, options, cb);
+        }, cb);
+    }
+    createConnection() {
+        const socket = this[INTERNAL].currentSocket;
+        this[INTERNAL].currentSocket = undefined;
+        if (!socket) {
+            throw new Error('No socket was returned in the `connect()` function');
+        }
+        return socket;
+    }
+    get defaultPort() {
+        return (this[INTERNAL].defaultPort ??
+            (this.protocol === 'https:' ? 443 : 80));
+    }
+    set defaultPort(v) {
+        if (this[INTERNAL]) {
+            this[INTERNAL].defaultPort = v;
+        }
+    }
+    get protocol() {
+        return (this[INTERNAL].protocol ??
+            (this.isSecureEndpoint() ? 'https:' : 'http:'));
+    }
+    set protocol(v) {
+        if (this[INTERNAL]) {
+            this[INTERNAL].protocol = v;
+        }
+    }
 }
-exports["default"] = promisify;
-//# sourceMappingURL=promisify.js.map
+exports.Agent = Agent;
+//# sourceMappingURL=index.js.map
 
 /***/ }),
 
@@ -3318,7 +3275,7 @@ module.exports = function extend() {
 /***/ }),
 
 /***/ 6129:
-/***/ ((__unused_webpack_module, exports) => {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 
 // Copyright 2018 Google LLC
@@ -3334,17 +3291,127 @@ module.exports = function extend() {
 // See the License for the specific language governing permissions and
 // limitations under the License.
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.GaxiosError = void 0;
+exports.defaultErrorRedactor = exports.GaxiosError = void 0;
+const url_1 = __nccwpck_require__(7310);
 /* eslint-disable @typescript-eslint/no-explicit-any */
 class GaxiosError extends Error {
-    constructor(message, options, response) {
+    constructor(message, config, response, error) {
         super(message);
+        this.config = config;
         this.response = response;
-        this.config = options;
-        this.code = response.status.toString();
+        this.error = error;
+        if (this.response) {
+            try {
+                this.response.data = translateData(config.responseType, response === null || response === void 0 ? void 0 : response.data);
+            }
+            catch (_a) {
+                // best effort - don't throw an error within an error
+                // we could set `this.response.config.responseType = 'unknown'`, but
+                // that would mutate future calls with this config object.
+            }
+            this.status = this.response.status;
+        }
+        if (error && 'code' in error && error.code) {
+            this.code = error.code;
+        }
+        if (config.errorRedactor) {
+            const errorRedactor = (config.errorRedactor);
+            // shallow-copy config for redaction as we do not want
+            // future requests to have redacted information
+            this.config = { ...config };
+            if (this.response) {
+                // copy response's config, as it may be recursively redacted
+                this.response = { ...this.response, config: { ...this.response.config } };
+            }
+            const results = errorRedactor({ config, response });
+            this.config = { ...config, ...results.config };
+            if (this.response) {
+                this.response = { ...this.response, ...results.response, config };
+            }
+        }
     }
 }
 exports.GaxiosError = GaxiosError;
+function translateData(responseType, data) {
+    switch (responseType) {
+        case 'stream':
+            return data;
+        case 'json':
+            return JSON.parse(JSON.stringify(data));
+        case 'arraybuffer':
+            return JSON.parse(Buffer.from(data).toString('utf8'));
+        case 'blob':
+            return JSON.parse(data.text());
+        default:
+            return data;
+    }
+}
+/**
+ * An experimental error redactor.
+ *
+ * @param config Config to potentially redact properties of
+ * @param response Config to potentially redact properties of
+ *
+ * @experimental
+ */
+function defaultErrorRedactor(data) {
+    const REDACT = '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.';
+    function redactHeaders(headers) {
+        if (!headers)
+            return;
+        for (const key of Object.keys(headers)) {
+            // any casing of `Authentication`
+            if (/^authentication$/.test(key)) {
+                headers[key] = REDACT;
+            }
+        }
+    }
+    function redactString(obj, key) {
+        if (typeof obj === 'object' &&
+            obj !== null &&
+            typeof obj[key] === 'string') {
+            const text = obj[key];
+            if (/grant_type=/.test(text) || /assertion=/.test(text)) {
+                obj[key] = REDACT;
+            }
+        }
+    }
+    function redactObject(obj) {
+        if (typeof obj === 'object' && obj !== null) {
+            if ('grant_type' in obj) {
+                obj['grant_type'] = REDACT;
+            }
+            if ('assertion' in obj) {
+                obj['assertion'] = REDACT;
+            }
+        }
+    }
+    if (data.config) {
+        redactHeaders(data.config.headers);
+        redactString(data.config, 'data');
+        redactObject(data.config.data);
+        redactString(data.config, 'body');
+        redactObject(data.config.body);
+        try {
+            const url = new url_1.URL(data.config.url || '');
+            if (url.searchParams.has('token')) {
+                url.searchParams.set('token', REDACT);
+            }
+            data.config.url = url.toString();
+        }
+        catch (_a) {
+            // ignore error - no need to parse an invalid URL
+        }
+    }
+    if (data.response) {
+        defaultErrorRedactor({ config: data.response.config });
+        redactHeaders(data.response.headers);
+        redactString(data.response, 'data');
+        redactObject(data.response.data);
+    }
+    return data;
+}
+exports.defaultErrorRedactor = defaultErrorRedactor;
 //# sourceMappingURL=common.js.map
 
 /***/ }),
@@ -3378,6 +3445,7 @@ const is_stream_1 = __importDefault(__nccwpck_require__(1554));
 const url_1 = __nccwpck_require__(7310);
 const common_1 = __nccwpck_require__(6129);
 const retry_1 = __nccwpck_require__(1052);
+const https_proxy_agent_1 = __nccwpck_require__(7219);
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const fetch = hasFetch() ? window.fetch : node_fetch_1.default;
 function hasWindow() {
@@ -3409,7 +3477,7 @@ function loadProxy() {
         ((_c = process === null || process === void 0 ? void 0 : process.env) === null || _c === void 0 ? void 0 : _c.HTTP_PROXY) ||
         ((_d = process === null || process === void 0 ? void 0 : process.env) === null || _d === void 0 ? void 0 : _d.http_proxy);
     if (proxy) {
-        HttpsProxyAgent = __nccwpck_require__(7219);
+        HttpsProxyAgent = https_proxy_agent_1.HttpsProxyAgent;
     }
     return proxy;
 }
@@ -3481,13 +3549,24 @@ class Gaxios {
                 translatedResponse = await this._defaultAdapter(opts);
             }
             if (!opts.validateStatus(translatedResponse.status)) {
+                if (opts.responseType === 'stream') {
+                    let response = '';
+                    await new Promise(resolve => {
+                        (translatedResponse === null || translatedResponse === void 0 ? void 0 : translatedResponse.data).on('data', chunk => {
+                            response += chunk;
+                        });
+                        (translatedResponse === null || translatedResponse === void 0 ? void 0 : translatedResponse.data).on('end', resolve);
+                    });
+                    translatedResponse.data = response;
+                }
                 throw new common_1.GaxiosError(`Request failed with status code ${translatedResponse.status}`, opts, translatedResponse);
             }
             return translatedResponse;
         }
         catch (e) {
-            const err = e;
-            err.config = opts;
+            const err = e instanceof common_1.GaxiosError
+                ? e
+                : new common_1.GaxiosError(e.message, opts, undefined, e);
             const { shouldRetry, config } = await (0, retry_1.getRetryConfig)(err);
             if (shouldRetry && config) {
                 err.config.retryConfig.currentRetryAttempt =
@@ -3515,8 +3594,10 @@ class Gaxios {
                 return res.arrayBuffer();
             case 'blob':
                 return res.blob();
-            default:
+            case 'text':
                 return res.text();
+            default:
+                return this.getResponseDataFromContentType(res);
         }
     }
     /**
@@ -3585,7 +3666,7 @@ class Gaxios {
             }
         }
         opts.validateStatus = opts.validateStatus || this.validateStatus;
-        opts.responseType = opts.responseType || 'json';
+        opts.responseType = opts.responseType || 'unknown';
         if (!opts.headers['Accept'] && opts.responseType === 'json') {
             opts.headers['Accept'] = 'application/json';
         }
@@ -3626,6 +3707,10 @@ class Gaxios {
                 this.agentCache.set(opts.key, opts.agent);
             }
         }
+        if (typeof opts.errorRedactor !== 'function' &&
+            opts.errorRedactor !== false) {
+            opts.errorRedactor = common_1.defaultErrorRedactor;
+        }
         return opts;
     }
     /**
@@ -3659,6 +3744,37 @@ class Gaxios {
                 responseURL: res.url,
             },
         };
+    }
+    /**
+     * Attempts to parse a response by looking at the Content-Type header.
+     * @param {FetchResponse} response the HTTP response.
+     * @returns {Promise<any>} a promise that resolves to the response data.
+     */
+    async getResponseDataFromContentType(response) {
+        let contentType = response.headers.get('Content-Type');
+        if (contentType === null) {
+            // Maintain existing functionality by calling text()
+            return response.text();
+        }
+        contentType = contentType.toLowerCase();
+        if (contentType.includes('application/json')) {
+            let data = await response.text();
+            try {
+                data = JSON.parse(data);
+            }
+            catch (_a) {
+                // continue
+            }
+            return data;
+        }
+        else if (contentType.includes('text/plain') ||
+            contentType.includes('text/html')) {
+            return response.text();
+        }
+        else {
+            // If the content type is something not easily handled, just return the raw data (blob)
+            return response.blob();
+        }
     }
 }
 exports.Gaxios = Gaxios;
@@ -3775,9 +3891,11 @@ async function getRetryConfig(err) {
     // We're going to retry!  Incremenent the counter.
     err.config.retryConfig.currentRetryAttempt += 1;
     // Create a promise that invokes the retry after the backOffDelay
-    const backoff = new Promise(resolve => {
-        setTimeout(resolve, delay);
-    });
+    const backoff = config.retryBackoff
+        ? config.retryBackoff(err, delay)
+        : new Promise(resolve => {
+            setTimeout(resolve, delay);
+        });
     // Notify the user if they added an `onRetryAttempt` handler
     if (config.onRetryAttempt) {
         config.onRetryAttempt(err);
@@ -3792,10 +3910,11 @@ exports.getRetryConfig = getRetryConfig;
  * @param err The GaxiosError passed to the interceptor.
  */
 function shouldRetryRequest(err) {
+    var _a;
     const config = getConfig(err);
     // node-fetch raises an AbortError if signaled:
     // https://github.com/bitinn/node-fetch#request-cancellation-with-abortsignal
-    if (err.name === 'AbortError') {
+    if (err.name === 'AbortError' || ((_a = err.error) === null || _a === void 0 ? void 0 : _a.name) === 'AbortError') {
         return false;
     }
     // If there's no config, or retries are disabled, return.
@@ -3863,31 +3982,45 @@ module.exports = (flag, argv = process.argv) => {
 
 /***/ }),
 
-/***/ 5098:
+/***/ 7219:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
 };
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const net_1 = __importDefault(__nccwpck_require__(1808));
-const tls_1 = __importDefault(__nccwpck_require__(4404));
-const url_1 = __importDefault(__nccwpck_require__(7310));
+exports.HttpsProxyAgent = void 0;
+const net = __importStar(__nccwpck_require__(1808));
+const tls = __importStar(__nccwpck_require__(4404));
 const assert_1 = __importDefault(__nccwpck_require__(9491));
 const debug_1 = __importDefault(__nccwpck_require__(8237));
-const agent_base_1 = __nccwpck_require__(9690);
-const parse_proxy_response_1 = __importDefault(__nccwpck_require__(595));
-const debug = debug_1.default('https-proxy-agent:agent');
+const agent_base_1 = __nccwpck_require__(694);
+const parse_proxy_response_1 = __nccwpck_require__(595);
+const debug = (0, debug_1.default)('https-proxy-agent');
 /**
  * The `HttpsProxyAgent` implements an HTTP Agent subclass that connects to
  * the specified "HTTP(s) proxy server" in order to proxy HTTPS requests.
@@ -3899,138 +4032,121 @@ const debug = debug_1.default('https-proxy-agent:agent');
  *
  * `https:` requests have their socket connection upgraded to TLS once
  * the connection to the proxy server has been established.
- *
- * @api public
  */
 class HttpsProxyAgent extends agent_base_1.Agent {
-    constructor(_opts) {
-        let opts;
-        if (typeof _opts === 'string') {
-            opts = url_1.default.parse(_opts);
-        }
-        else {
-            opts = _opts;
-        }
-        if (!opts) {
-            throw new Error('an HTTP(S) proxy server `host` and `port` must be specified!');
-        }
-        debug('creating new HttpsProxyAgent instance: %o', opts);
+    constructor(proxy, opts) {
         super(opts);
-        const proxy = Object.assign({}, opts);
-        // If `true`, then connect to the proxy server over TLS.
-        // Defaults to `false`.
-        this.secureProxy = opts.secureProxy || isHTTPS(proxy.protocol);
-        // Prefer `hostname` over `host`, and set the `port` if needed.
-        proxy.host = proxy.hostname || proxy.host;
-        if (typeof proxy.port === 'string') {
-            proxy.port = parseInt(proxy.port, 10);
-        }
-        if (!proxy.port && proxy.host) {
-            proxy.port = this.secureProxy ? 443 : 80;
-        }
-        // ALPN is supported by Node.js >= v5.
-        // attempt to negotiate http/1.1 for proxy servers that support http/2
-        if (this.secureProxy && !('ALPNProtocols' in proxy)) {
-            proxy.ALPNProtocols = ['http 1.1'];
-        }
-        if (proxy.host && proxy.path) {
-            // If both a `host` and `path` are specified then it's most likely
-            // the result of a `url.parse()` call... we need to remove the
-            // `path` portion so that `net.connect()` doesn't attempt to open
-            // that as a Unix socket file.
-            delete proxy.path;
-            delete proxy.pathname;
-        }
-        this.proxy = proxy;
+        this.options = { path: undefined };
+        this.proxy = typeof proxy === 'string' ? new URL(proxy) : proxy;
+        this.proxyHeaders = opts?.headers ?? {};
+        debug('Creating new HttpsProxyAgent instance: %o', this.proxy.href);
+        // Trim off the brackets from IPv6 addresses
+        const host = (this.proxy.hostname || this.proxy.host).replace(/^\[|\]$/g, '');
+        const port = this.proxy.port
+            ? parseInt(this.proxy.port, 10)
+            : this.proxy.protocol === 'https:'
+                ? 443
+                : 80;
+        this.connectOpts = {
+            // Attempt to negotiate http/1.1 for proxy servers that support http/2
+            ALPNProtocols: ['http/1.1'],
+            ...(opts ? omit(opts, 'headers') : null),
+            host,
+            port,
+        };
     }
     /**
      * Called when the node-core HTTP client library is creating a
      * new HTTP request.
-     *
-     * @api protected
      */
-    callback(req, opts) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const { proxy, secureProxy } = this;
-            // Create a socket connection to the proxy server.
-            let socket;
-            if (secureProxy) {
-                debug('Creating `tls.Socket`: %o', proxy);
-                socket = tls_1.default.connect(proxy);
-            }
-            else {
-                debug('Creating `net.Socket`: %o', proxy);
-                socket = net_1.default.connect(proxy);
-            }
-            const headers = Object.assign({}, proxy.headers);
-            const hostname = `${opts.host}:${opts.port}`;
-            let payload = `CONNECT ${hostname} HTTP/1.1\r\n`;
-            // Inject the `Proxy-Authorization` header if necessary.
-            if (proxy.auth) {
-                headers['Proxy-Authorization'] = `Basic ${Buffer.from(proxy.auth).toString('base64')}`;
-            }
-            // The `Host` header should only include the port
-            // number when it is not the default port.
-            let { host, port, secureEndpoint } = opts;
-            if (!isDefaultPort(port, secureEndpoint)) {
-                host += `:${port}`;
-            }
-            headers.Host = host;
-            headers.Connection = 'close';
-            for (const name of Object.keys(headers)) {
-                payload += `${name}: ${headers[name]}\r\n`;
-            }
-            const proxyResponsePromise = parse_proxy_response_1.default(socket);
-            socket.write(`${payload}\r\n`);
-            const { statusCode, buffered } = yield proxyResponsePromise;
-            if (statusCode === 200) {
-                req.once('socket', resume);
-                if (opts.secureEndpoint) {
-                    // The proxy is connecting to a TLS server, so upgrade
-                    // this socket connection to a TLS connection.
-                    debug('Upgrading socket connection to TLS');
-                    const servername = opts.servername || opts.host;
-                    return tls_1.default.connect(Object.assign(Object.assign({}, omit(opts, 'host', 'hostname', 'path', 'port')), { socket,
-                        servername }));
-                }
-                return socket;
-            }
-            // Some other status code that's not 200... need to re-play the HTTP
-            // header "data" events onto the socket once the HTTP machinery is
-            // attached so that the node core `http` can parse and handle the
-            // error status code.
-            // Close the original socket, and a new "fake" socket is returned
-            // instead, so that the proxy doesn't get the HTTP request
-            // written to it (which may contain `Authorization` headers or other
-            // sensitive data).
-            //
-            // See: https://hackerone.com/reports/541502
-            socket.destroy();
-            const fakeSocket = new net_1.default.Socket({ writable: false });
-            fakeSocket.readable = true;
-            // Need to wait for the "socket" event to re-play the "data" events.
-            req.once('socket', (s) => {
-                debug('replaying proxy buffer for failed request');
-                assert_1.default(s.listenerCount('data') > 0);
-                // Replay the "buffered" Buffer onto the fake `socket`, since at
-                // this point the HTTP module machinery has been hooked up for
-                // the user.
-                s.push(buffered);
-                s.push(null);
+    async connect(req, opts) {
+        const { proxy } = this;
+        if (!opts.host) {
+            throw new TypeError('No "host" provided');
+        }
+        // Create a socket connection to the proxy server.
+        let socket;
+        if (proxy.protocol === 'https:') {
+            debug('Creating `tls.Socket`: %o', this.connectOpts);
+            const servername = this.connectOpts.servername || this.connectOpts.host;
+            socket = tls.connect({
+                ...this.connectOpts,
+                servername: servername && net.isIP(servername) ? undefined : servername
             });
-            return fakeSocket;
+        }
+        else {
+            debug('Creating `net.Socket`: %o', this.connectOpts);
+            socket = net.connect(this.connectOpts);
+        }
+        const headers = typeof this.proxyHeaders === 'function'
+            ? this.proxyHeaders()
+            : { ...this.proxyHeaders };
+        const host = net.isIPv6(opts.host) ? `[${opts.host}]` : opts.host;
+        let payload = `CONNECT ${host}:${opts.port} HTTP/1.1\r\n`;
+        // Inject the `Proxy-Authorization` header if necessary.
+        if (proxy.username || proxy.password) {
+            const auth = `${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`;
+            headers['Proxy-Authorization'] = `Basic ${Buffer.from(auth).toString('base64')}`;
+        }
+        headers.Host = `${host}:${opts.port}`;
+        if (!headers['Proxy-Connection']) {
+            headers['Proxy-Connection'] = this.keepAlive
+                ? 'Keep-Alive'
+                : 'close';
+        }
+        for (const name of Object.keys(headers)) {
+            payload += `${name}: ${headers[name]}\r\n`;
+        }
+        const proxyResponsePromise = (0, parse_proxy_response_1.parseProxyResponse)(socket);
+        socket.write(`${payload}\r\n`);
+        const { connect, buffered } = await proxyResponsePromise;
+        req.emit('proxyConnect', connect);
+        this.emit('proxyConnect', connect, req);
+        if (connect.statusCode === 200) {
+            req.once('socket', resume);
+            if (opts.secureEndpoint) {
+                // The proxy is connecting to a TLS server, so upgrade
+                // this socket connection to a TLS connection.
+                debug('Upgrading socket connection to TLS');
+                const servername = opts.servername || opts.host;
+                return tls.connect({
+                    ...omit(opts, 'host', 'path', 'port'),
+                    socket,
+                    servername: net.isIP(servername) ? undefined : servername,
+                });
+            }
+            return socket;
+        }
+        // Some other status code that's not 200... need to re-play the HTTP
+        // header "data" events onto the socket once the HTTP machinery is
+        // attached so that the node core `http` can parse and handle the
+        // error status code.
+        // Close the original socket, and a new "fake" socket is returned
+        // instead, so that the proxy doesn't get the HTTP request
+        // written to it (which may contain `Authorization` headers or other
+        // sensitive data).
+        //
+        // See: https://hackerone.com/reports/541502
+        socket.destroy();
+        const fakeSocket = new net.Socket({ writable: false });
+        fakeSocket.readable = true;
+        // Need to wait for the "socket" event to re-play the "data" events.
+        req.once('socket', (s) => {
+            debug('Replaying proxy buffer for failed request');
+            (0, assert_1.default)(s.listenerCount('data') > 0);
+            // Replay the "buffered" Buffer onto the fake `socket`, since at
+            // this point the HTTP module machinery has been hooked up for
+            // the user.
+            s.push(buffered);
+            s.push(null);
         });
+        return fakeSocket;
     }
 }
-exports["default"] = HttpsProxyAgent;
+HttpsProxyAgent.protocols = ['http', 'https'];
+exports.HttpsProxyAgent = HttpsProxyAgent;
 function resume(socket) {
     socket.resume();
-}
-function isDefaultPort(port, secure) {
-    return Boolean((!secure && port === 80) || (secure && port === 443));
-}
-function isHTTPS(protocol) {
-    return typeof protocol === 'string' ? /^https:?$/i.test(protocol) : false;
 }
 function omit(obj, ...keys) {
     const ret = {};
@@ -4042,26 +4158,6 @@ function omit(obj, ...keys) {
     }
     return ret;
 }
-//# sourceMappingURL=agent.js.map
-
-/***/ }),
-
-/***/ 7219:
-/***/ (function(module, __unused_webpack_exports, __nccwpck_require__) {
-
-
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-const agent_1 = __importDefault(__nccwpck_require__(5098));
-function createHttpsProxyAgent(opts) {
-    return new agent_1.default(opts);
-}
-(function (createHttpsProxyAgent) {
-    createHttpsProxyAgent.HttpsProxyAgent = agent_1.default;
-    createHttpsProxyAgent.prototype = agent_1.default.prototype;
-})(createHttpsProxyAgent || (createHttpsProxyAgent = {}));
-module.exports = createHttpsProxyAgent;
 //# sourceMappingURL=index.js.map
 
 /***/ }),
@@ -4074,8 +4170,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.parseProxyResponse = void 0;
 const debug_1 = __importDefault(__nccwpck_require__(8237));
-const debug = debug_1.default('https-proxy-agent:parse-proxy-response');
+const debug = (0, debug_1.default)('https-proxy-agent:parse-proxy-response');
 function parseProxyResponse(socket) {
     return new Promise((resolve, reject) => {
         // we need to buffer any HTTP traffic that happens with the proxy before we get
@@ -4094,14 +4191,12 @@ function parseProxyResponse(socket) {
         function cleanup() {
             socket.removeListener('end', onend);
             socket.removeListener('error', onerror);
-            socket.removeListener('close', onclose);
             socket.removeListener('readable', read);
         }
-        function onclose(err) {
-            debug('onclose had error %o', err);
-        }
         function onend() {
+            cleanup();
             debug('onend');
+            reject(new Error('Proxy connection ended before receiving CONNECT response'));
         }
         function onerror(err) {
             cleanup();
@@ -4119,21 +4214,57 @@ function parseProxyResponse(socket) {
                 read();
                 return;
             }
-            const firstLine = buffered.toString('ascii', 0, buffered.indexOf('\r\n'));
-            const statusCode = +firstLine.split(' ')[1];
-            debug('got proxy server response: %o', firstLine);
+            const headerParts = buffered
+                .slice(0, endOfHeaders)
+                .toString('ascii')
+                .split('\r\n');
+            const firstLine = headerParts.shift();
+            if (!firstLine) {
+                socket.destroy();
+                return reject(new Error('No header received from proxy CONNECT response'));
+            }
+            const firstLineParts = firstLine.split(' ');
+            const statusCode = +firstLineParts[1];
+            const statusText = firstLineParts.slice(2).join(' ');
+            const headers = {};
+            for (const header of headerParts) {
+                if (!header)
+                    continue;
+                const firstColon = header.indexOf(':');
+                if (firstColon === -1) {
+                    socket.destroy();
+                    return reject(new Error(`Invalid header from proxy CONNECT response: "${header}"`));
+                }
+                const key = header.slice(0, firstColon).toLowerCase();
+                const value = header.slice(firstColon + 1).trimStart();
+                const current = headers[key];
+                if (typeof current === 'string') {
+                    headers[key] = [current, value];
+                }
+                else if (Array.isArray(current)) {
+                    current.push(value);
+                }
+                else {
+                    headers[key] = value;
+                }
+            }
+            debug('got proxy server response: %o %o', firstLine, headers);
+            cleanup();
             resolve({
-                statusCode,
-                buffered
+                connect: {
+                    statusCode,
+                    statusText,
+                    headers,
+                },
+                buffered,
             });
         }
         socket.on('error', onerror);
-        socket.on('close', onclose);
         socket.on('end', onend);
         read();
     });
 }
-exports["default"] = parseProxyResponse;
+exports.parseProxyResponse = parseProxyResponse;
 //# sourceMappingURL=parse-proxy-response.js.map
 
 /***/ }),
@@ -5841,10 +5972,6 @@ function getNodeRequestOptions(request) {
 		agent = agent(parsedURL);
 	}
 
-	if (!headers.has('Connection') && !agent) {
-		headers.set('Connection', 'close');
-	}
-
 	// HTTP-network fetch step 4.2
 	// chunked encoding is handled by Node.js
 
@@ -5894,6 +6021,20 @@ const isDomainOrSubdomain = function isDomainOrSubdomain(destination, original) 
 };
 
 /**
+ * isSameProtocol reports whether the two provided URLs use the same protocol.
+ *
+ * Both domains must already be in canonical form.
+ * @param {string|URL} original
+ * @param {string|URL} destination
+ */
+const isSameProtocol = function isSameProtocol(destination, original) {
+	const orig = new URL$1(original).protocol;
+	const dest = new URL$1(destination).protocol;
+
+	return orig === dest;
+};
+
+/**
  * Fetch function
  *
  * @param   Mixed    url   Absolute url or Request instance
@@ -5924,7 +6065,7 @@ function fetch(url, opts) {
 			let error = new AbortError('The user aborted a request.');
 			reject(error);
 			if (request.body && request.body instanceof Stream.Readable) {
-				request.body.destroy(error);
+				destroyStream(request.body, error);
 			}
 			if (!response || !response.body) return;
 			response.body.emit('error', error);
@@ -5965,8 +6106,42 @@ function fetch(url, opts) {
 
 		req.on('error', function (err) {
 			reject(new FetchError(`request to ${request.url} failed, reason: ${err.message}`, 'system', err));
+
+			if (response && response.body) {
+				destroyStream(response.body, err);
+			}
+
 			finalize();
 		});
+
+		fixResponseChunkedTransferBadEnding(req, function (err) {
+			if (signal && signal.aborted) {
+				return;
+			}
+
+			if (response && response.body) {
+				destroyStream(response.body, err);
+			}
+		});
+
+		/* c8 ignore next 18 */
+		if (parseInt(process.version.substring(1)) < 14) {
+			// Before Node.js 14, pipeline() does not fully support async iterators and does not always
+			// properly handle when the socket close/end events are out of order.
+			req.on('socket', function (s) {
+				s.addListener('close', function (hadError) {
+					// if a data listener is still present we didn't end cleanly
+					const hasDataListener = s.listenerCount('data') > 0;
+
+					// if end happened before close but the socket didn't emit an error, do it now
+					if (response && hasDataListener && !hadError && !(signal && signal.aborted)) {
+						const err = new Error('Premature close');
+						err.code = 'ERR_STREAM_PREMATURE_CLOSE';
+						response.body.emit('error', err);
+					}
+				});
+			});
+		}
 
 		req.on('response', function (res) {
 			clearTimeout(reqTimeout);
@@ -6039,7 +6214,7 @@ function fetch(url, opts) {
 							size: request.size
 						};
 
-						if (!isDomainOrSubdomain(request.url, locationURL)) {
+						if (!isDomainOrSubdomain(request.url, locationURL) || !isSameProtocol(request.url, locationURL)) {
 							for (const name of ['authorization', 'www-authenticate', 'cookie', 'cookie2']) {
 								requestOpts.headers.delete(name);
 							}
@@ -6132,6 +6307,13 @@ function fetch(url, opts) {
 					response = new Response(body, response_options);
 					resolve(response);
 				});
+				raw.on('end', function () {
+					// some old IIS servers return zero-length OK deflate responses, so 'data' is never emitted.
+					if (!response) {
+						response = new Response(body, response_options);
+						resolve(response);
+					}
+				});
 				return;
 			}
 
@@ -6151,6 +6333,44 @@ function fetch(url, opts) {
 		writeToStream(req, request);
 	});
 }
+function fixResponseChunkedTransferBadEnding(request, errorCallback) {
+	let socket;
+
+	request.on('socket', function (s) {
+		socket = s;
+	});
+
+	request.on('response', function (response) {
+		const headers = response.headers;
+
+		if (headers['transfer-encoding'] === 'chunked' && !headers['content-length']) {
+			response.once('close', function (hadError) {
+				// tests for socket presence, as in some situations the
+				// the 'socket' event is not triggered for the request
+				// (happens in deno), avoids `TypeError`
+				// if a data listener is still present we didn't end cleanly
+				const hasDataListener = socket && socket.listenerCount('data') > 0;
+
+				if (hasDataListener && !hadError) {
+					const err = new Error('Premature close');
+					err.code = 'ERR_STREAM_PREMATURE_CLOSE';
+					errorCallback(err);
+				}
+			});
+		}
+	});
+}
+
+function destroyStream(stream, err) {
+	if (stream.destroy) {
+		stream.destroy(err);
+	} else {
+		// node < 8
+		stream.emit('error', err);
+		stream.end();
+	}
+}
+
 /**
  * Redirect code matching
  *
@@ -6171,6 +6391,7 @@ exports.Headers = Headers;
 exports.Request = Request;
 exports.Response = Response;
 exports.FetchError = FetchError;
+exports.AbortError = AbortError;
 
 
 /***/ }),
@@ -9644,21 +9865,22 @@ var __webpack_exports__ = {};
 
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
 var core = __nccwpck_require__(2186);
-// EXTERNAL MODULE: external "events"
-var external_events_ = __nccwpck_require__(2361);
-// EXTERNAL MODULE: external "url"
-var external_url_ = __nccwpck_require__(7310);
-// EXTERNAL MODULE: external "path"
-var external_path_ = __nccwpck_require__(1017);
+;// CONCATENATED MODULE: external "node:events"
+const external_node_events_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:events");
+;// CONCATENATED MODULE: external "node:path"
+const external_node_path_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:path");
+;// CONCATENATED MODULE: external "node:process"
+const external_node_process_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:process");
 // EXTERNAL MODULE: ./node_modules/gaxios/build/src/index.js
 var src = __nccwpck_require__(9555);
 ;// CONCATENATED MODULE: ./node_modules/linkinator/build/src/queue.js
 
-class Queue extends external_events_.EventEmitter {
+class Queue extends external_node_events_namespaceObject.EventEmitter {
+    q = [];
+    activeFunctions = 0;
+    concurrency;
     constructor(options) {
         super();
-        this.q = [];
-        this.activeFunctions = 0;
         this.concurrency = options.concurrency;
         // It was noticed in test that setTimeout() could sometimes trigger an event
         // moments before it was scheduled. This leads to a delta between timeToRun
@@ -9669,14 +9891,26 @@ class Queue extends external_events_.EventEmitter {
                 this.tick();
         }, 2500).unref();
     }
+    on(event, listener) {
+        return super.on(event, listener);
+    }
     add(fn, options) {
-        const delay = (options === null || options === void 0 ? void 0 : options.delay) || 0;
+        const delay = options?.delay || 0;
         const timeToRun = Date.now() + delay;
         this.q.push({
             fn,
             timeToRun,
         });
-        setTimeout(() => this.tick(), delay);
+        setTimeout(() => {
+            this.tick();
+        }, delay);
+    }
+    async onIdle() {
+        return new Promise((resolve) => {
+            this.on('done', () => {
+                resolve();
+            });
+        });
     }
     tick() {
         // Check if we're complete
@@ -9684,17 +9918,19 @@ class Queue extends external_events_.EventEmitter {
             this.emit('done');
             return;
         }
+        // eslint-disable-next-line @typescript-eslint/prefer-for-of
         for (let i = 0; i < this.q.length; i++) {
             // Check if we have too many concurrent functions executing
             if (this.activeFunctions >= this.concurrency) {
                 return;
             }
-            // grab the element at the front of the array
+            // Grab the element at the front of the array
             const item = this.q.shift();
-            // make sure this element is ready to execute - if not, to the back of the stack
+            // Make sure this element is ready to execute - if not, to the back of the stack
             if (item.timeToRun <= Date.now()) {
-                // this function is ready to go!
+                // This function is ready to go!
                 this.activeFunctions++;
+                // eslint-disable-next-line @typescript-eslint/no-floating-promises
                 item.fn().finally(() => {
                     this.activeFunctions--;
                     this.tick();
@@ -9705,13 +9941,8 @@ class Queue extends external_events_.EventEmitter {
             }
         }
     }
-    async onIdle() {
-        return new Promise(resolve => {
-            this.on('done', () => resolve());
-        });
-    }
 }
-//# sourceMappingURL=queue.js.map
+
 ;// CONCATENATED MODULE: ./node_modules/entities/lib/esm/generated/decode-data-html.js
 // Generated using scripts/write-decode-map.ts
 /* harmony default export */ const decode_data_html = (new Uint16Array(
@@ -11772,7 +12003,7 @@ function stringifySrcset(array, {strict = false} = {}) {
 }
 
 ;// CONCATENATED MODULE: ./node_modules/linkinator/build/src/links.js
-
+// eslint-disable-next-line n/file-extension-in-import
 
 
 const linksAttr = {
@@ -11803,13 +12034,13 @@ const linksAttr = {
 };
 // Create lookup table for tag name to attribute that contains URL:
 const tagAttr = {};
-Object.keys(linksAttr).forEach(attr => {
+for (const attr of Object.keys(linksAttr)) {
     for (const tag of linksAttr[attr]) {
         if (!tagAttr[tag])
             tagAttr[tag] = [];
         tagAttr[tag].push(attr);
     }
-});
+}
 async function getLinks(source, baseUrl) {
     let realBaseUrl = baseUrl;
     let baseSet = false;
@@ -11830,17 +12061,18 @@ async function getLinks(source, baseUrl) {
             // the content actually looks like a url
             if (tag === 'meta' && attributes.content) {
                 try {
-                    new external_url_.URL(attributes.content);
+                    // eslint-disable-next-line no-new
+                    new URL(attributes.content);
                 }
-                catch (e) {
+                catch {
                     return;
                 }
             }
             if (tagAttr[tag]) {
                 for (const attr of tagAttr[tag]) {
-                    const linkStr = attributes[attr];
-                    if (linkStr) {
-                        for (const link of parseAttr(attr, linkStr)) {
+                    const linkString = attributes[attr];
+                    if (linkString) {
+                        for (const link of parseAttr(attr, linkString)) {
                             links.push(parseLink(link, realBaseUrl));
                         }
                     }
@@ -11857,7 +12089,7 @@ function getBaseUrl(htmlBaseUrl, oldBaseUrl) {
     if (isAbsoluteUrl(htmlBaseUrl)) {
         return htmlBaseUrl;
     }
-    const url = new external_url_.URL(htmlBaseUrl, oldBaseUrl);
+    const url = new URL(htmlBaseUrl, oldBaseUrl);
     url.hash = '';
     return url.href;
 }
@@ -11877,15 +12109,16 @@ function parseAttr(name, value) {
             // work around this bug:
             // https://github.com/sindresorhus/srcset/issues/14
             const strippedValue = value.replace(/\s+/, ' ');
-            return parseSrcset(strippedValue).map(p => p.url);
+            return parseSrcset(strippedValue).map((p) => p.url);
         }
-        default:
+        default: {
             return [value];
+        }
     }
 }
 function parseLink(link, baseUrl) {
     try {
-        const url = new external_url_.URL(link, baseUrl);
+        const url = new URL(link, baseUrl);
         url.hash = '';
         return { link, url };
     }
@@ -11893,15 +12126,16 @@ function parseLink(link, baseUrl) {
         return { link, error: error };
     }
 }
-//# sourceMappingURL=links.js.map
-// EXTERNAL MODULE: external "http"
-var external_http_ = __nccwpck_require__(3685);
-// EXTERNAL MODULE: external "fs"
-var external_fs_ = __nccwpck_require__(7147);
-var external_fs_namespaceObject = /*#__PURE__*/__nccwpck_require__.t(external_fs_, 2);
+
+;// CONCATENATED MODULE: external "node:http"
+const external_node_http_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:http");
+;// CONCATENATED MODULE: external "node:buffer"
+const external_node_buffer_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:buffer");
+;// CONCATENATED MODULE: external "node:fs"
+const external_node_fs_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:fs");
 ;// CONCATENATED MODULE: ./node_modules/marked/lib/marked.esm.js
 /**
- * marked v7.0.4 - a markdown parser
+ * marked v9.1.2 - a markdown parser
  * Copyright (c) 2011-2023, Christopher Jeffrey. (MIT Licensed)
  * https://github.com/markedjs/marked
  */
@@ -11917,25 +12151,15 @@ var external_fs_namespaceObject = /*#__PURE__*/__nccwpck_require__.t(external_fs
 function _getDefaults() {
     return {
         async: false,
-        baseUrl: null,
         breaks: false,
         extensions: null,
         gfm: true,
-        headerIds: false,
-        headerPrefix: '',
-        highlight: null,
         hooks: null,
-        langPrefix: 'language-',
-        mangle: false,
         pedantic: false,
         renderer: null,
-        sanitize: false,
-        sanitizer: null,
         silent: false,
-        smartypants: false,
         tokenizer: null,
-        walkTokens: null,
-        xhtml: false
+        walkTokens: null
     };
 }
 let _defaults = _getDefaults();
@@ -12003,26 +12227,7 @@ function edit(regex, opt) {
     };
     return obj;
 }
-const nonWordAndColonTest = /[^\w:]/g;
-const originIndependentUrl = /^$|^[a-z][a-z0-9+.-]*:|^[?#]/i;
-function cleanUrl(sanitize, base, href) {
-    if (sanitize) {
-        let prot;
-        try {
-            prot = decodeURIComponent(marked_esm_unescape(href))
-                .replace(nonWordAndColonTest, '')
-                .toLowerCase();
-        }
-        catch (e) {
-            return null;
-        }
-        if (prot.indexOf('javascript:') === 0 || prot.indexOf('vbscript:') === 0 || prot.indexOf('data:') === 0) {
-            return null;
-        }
-    }
-    if (base && !originIndependentUrl.test(href)) {
-        href = resolveUrl(base, href);
-    }
+function cleanUrl(href) {
     try {
         href = encodeURI(href).replace(/%25/g, '%');
     }
@@ -12030,40 +12235,6 @@ function cleanUrl(sanitize, base, href) {
         return null;
     }
     return href;
-}
-const baseUrls = {};
-const justDomain = /^[^:]+:\/*[^/]*$/;
-const protocol = /^([^:]+:)[\s\S]*$/;
-const domain = /^([^:]+:\/*[^/]*)[\s\S]*$/;
-function resolveUrl(base, href) {
-    if (!baseUrls[' ' + base]) {
-        // we can ignore everything in base after the last slash of its path component,
-        // but we might need to add _that_
-        // https://tools.ietf.org/html/rfc3986#section-3
-        if (justDomain.test(base)) {
-            baseUrls[' ' + base] = base + '/';
-        }
-        else {
-            baseUrls[' ' + base] = rtrim(base, '/', true);
-        }
-    }
-    base = baseUrls[' ' + base];
-    const relativeBase = base.indexOf(':') === -1;
-    if (href.substring(0, 2) === '//') {
-        if (relativeBase) {
-            return href;
-        }
-        return base.replace(protocol, '$1') + href;
-    }
-    else if (href.charAt(0) === '/') {
-        if (relativeBase) {
-            return href;
-        }
-        return base.replace(domain, '$1') + href;
-    }
-    else {
-        return base + href;
-    }
 }
 const noopTest = { exec: () => null };
 function splitCells(tableRow, count) {
@@ -12157,35 +12328,6 @@ function findClosingBracket(str, b) {
         }
     }
     return -1;
-}
-function checkDeprecations(opt, callback) {
-    if (!opt || opt.silent) {
-        return;
-    }
-    if (callback) {
-        console.warn('marked(): callback is deprecated since version 5.0.0, should not be used and will be removed in the future. Read more here: https://marked.js.org/using_pro#async');
-    }
-    if (opt.sanitize || opt.sanitizer) {
-        console.warn('marked(): sanitize and sanitizer parameters are deprecated since version 0.7.0, should not be used and will be removed in the future. Read more here: https://marked.js.org/#/USING_ADVANCED.md#options');
-    }
-    if (opt.highlight || opt.langPrefix !== 'language-') {
-        console.warn('marked(): highlight and langPrefix parameters are deprecated since version 5.0.0, should not be used and will be removed in the future. Instead use https://www.npmjs.com/package/marked-highlight.');
-    }
-    if (opt.mangle) {
-        console.warn('marked(): mangle parameter is enabled by default, but is deprecated since version 5.0.0, and will be removed in the future. To clear this warning, install https://www.npmjs.com/package/marked-mangle, or disable by setting `{mangle: false}`.');
-    }
-    if (opt.baseUrl) {
-        console.warn('marked(): baseUrl parameter is deprecated since version 5.0.0, should not be used and will be removed in the future. Instead use https://www.npmjs.com/package/marked-base-url.');
-    }
-    if (opt.smartypants) {
-        console.warn('marked(): smartypants parameter is deprecated since version 5.0.0, should not be used and will be removed in the future. Instead use https://www.npmjs.com/package/marked-smartypants.');
-    }
-    if (opt.xhtml) {
-        console.warn('marked(): xhtml parameter is deprecated since version 5.0.0, should not be used and will be removed in the future. Instead use https://www.npmjs.com/package/marked-xhtml.');
-    }
-    if (opt.headerIds || opt.headerPrefix) {
-        console.warn('marked(): headerIds and headerPrefix parameters enabled by default, but are deprecated since version 5.0.0, and will be removed in the future. To clear this warning, install  https://www.npmjs.com/package/marked-gfm-heading-id, or disable by setting `{headerIds: false}`.');
-    }
 }
 
 function outputLink(cap, link, raw, lexer) {
@@ -12317,7 +12459,7 @@ class _Tokenizer {
     blockquote(src) {
         const cap = this.rules.block.blockquote.exec(src);
         if (cap) {
-            const text = cap[0].replace(/^ *>[ \t]?/gm, '');
+            const text = rtrim(cap[0].replace(/^ *>[ \t]?/gm, ''), '\n');
             const top = this.lexer.state.top;
             this.lexer.state.top = true;
             const tokens = this.lexer.blockTokens(text);
@@ -12368,7 +12510,7 @@ class _Tokenizer {
                 let indent = 0;
                 if (this.options.pedantic) {
                     indent = 2;
-                    itemContents = line.trimLeft();
+                    itemContents = line.trimStart();
                 }
                 else {
                     indent = cap[2].search(/[^ ]/); // Find first non-space char
@@ -12473,9 +12615,9 @@ class _Tokenizer {
                 list.raw += raw;
             }
             // Do not consume newlines at end of final item. Alternatively, make itemRegex *start* with any newlines to simplify/speed up endsWithBlankLine logic
-            list.items[list.items.length - 1].raw = raw.trimRight();
-            list.items[list.items.length - 1].text = itemContents.trimRight();
-            list.raw = list.raw.trimRight();
+            list.items[list.items.length - 1].raw = raw.trimEnd();
+            list.items[list.items.length - 1].text = itemContents.trimEnd();
+            list.raw = list.raw.trimEnd();
             // Item child tokens handled here at end because we needed to have the final item to trim it first
             for (let i = 0; i < list.items.length; i++) {
                 this.lexer.state.top = false;
@@ -12503,17 +12645,9 @@ class _Tokenizer {
                 type: 'html',
                 block: true,
                 raw: cap[0],
-                pre: !this.options.sanitizer
-                    && (cap[1] === 'pre' || cap[1] === 'script' || cap[1] === 'style'),
+                pre: cap[1] === 'pre' || cap[1] === 'script' || cap[1] === 'style',
                 text: cap[0]
             };
-            if (this.options.sanitize) {
-                const text = this.options.sanitizer ? this.options.sanitizer(cap[0]) : marked_esm_escape(cap[0]);
-                const paragraph = token;
-                paragraph.type = 'paragraph';
-                paragraph.text = text;
-                paragraph.tokens = this.lexer.inline(text);
-            }
             return token;
         }
     }
@@ -12535,13 +12669,17 @@ class _Tokenizer {
     table(src) {
         const cap = this.rules.block.table.exec(src);
         if (cap) {
+            if (!/[:|]/.test(cap[2])) {
+                // delimiter row must have a pipe (|) or colon (:) otherwise it is a setext heading
+                return;
+            }
             const item = {
                 type: 'table',
                 raw: cap[0],
                 header: splitCells(cap[1]).map(c => {
                     return { text: c, tokens: [] };
                 }),
-                align: cap[2].replace(/^ *|\| *$/g, '').split(/ *\| */),
+                align: cap[2].replace(/^\||\| *$/g, '').split('|'),
                 rows: cap[3] && cap[3].trim() ? cap[3].replace(/\n[ \t]*$/, '').split('\n') : []
             };
             if (item.header.length === item.align.length) {
@@ -12651,18 +12789,12 @@ class _Tokenizer {
                 this.lexer.state.inRawBlock = false;
             }
             return {
-                type: this.options.sanitize
-                    ? 'text'
-                    : 'html',
+                type: 'html',
                 raw: cap[0],
                 inLink: this.lexer.state.inLink,
                 inRawBlock: this.lexer.state.inRawBlock,
                 block: false,
-                text: this.options.sanitize
-                    ? (this.options.sanitizer
-                        ? this.options.sanitizer(cap[0])
-                        : marked_esm_escape(cap[0]))
-                    : cap[0]
+                text: cap[0]
             };
         }
     }
@@ -12753,7 +12885,7 @@ class _Tokenizer {
             const endReg = match[0][0] === '*' ? this.rules.inline.emStrong.rDelimAst : this.rules.inline.emStrong.rDelimUnd;
             endReg.lastIndex = 0;
             // Clip maskedSrc to same section of string as src (move to lexer?)
-            maskedSrc = maskedSrc.slice(-1 * src.length + lLength);
+            maskedSrc = maskedSrc.slice(-1 * src.length + match[0].length - 1);
             while ((match = endReg.exec(maskedSrc)) != null) {
                 rDelim = match[1] || match[2] || match[3] || match[4] || match[5] || match[6];
                 if (!rDelim)
@@ -12833,12 +12965,12 @@ class _Tokenizer {
             };
         }
     }
-    autolink(src, mangle) {
+    autolink(src) {
         const cap = this.rules.inline.autolink.exec(src);
         if (cap) {
             let text, href;
             if (cap[2] === '@') {
-                text = marked_esm_escape(this.options.mangle ? mangle(cap[1]) : cap[1]);
+                text = marked_esm_escape(cap[1]);
                 href = 'mailto:' + text;
             }
             else {
@@ -12860,12 +12992,12 @@ class _Tokenizer {
             };
         }
     }
-    url(src, mangle) {
+    url(src) {
         let cap;
         if (cap = this.rules.inline.url.exec(src)) {
             let text, href;
             if (cap[2] === '@') {
-                text = marked_esm_escape(this.options.mangle ? mangle(cap[0]) : cap[0]);
+                text = marked_esm_escape(cap[0]);
                 href = 'mailto:' + text;
             }
             else {
@@ -12898,15 +13030,15 @@ class _Tokenizer {
             };
         }
     }
-    inlineText(src, smartypants) {
+    inlineText(src) {
         const cap = this.rules.inline.text.exec(src);
         if (cap) {
             let text;
             if (this.lexer.state.inRawBlock) {
-                text = this.options.sanitize ? (this.options.sanitizer ? this.options.sanitizer(cap[0]) : marked_esm_escape(cap[0])) : cap[0];
+                text = cap[0];
             }
             else {
-                text = marked_esm_escape(this.options.smartypants ? smartypants(cap[0]) : cap[0]);
+                text = marked_esm_escape(cap[0]);
             }
             return {
                 type: 'text',
@@ -12942,7 +13074,7 @@ const block = {
         + ')',
     def: /^ {0,3}\[(label)\]: *(?:\n *)?([^<\s][^\s]*|<.*?>)(?:(?: +(?:\n *)?| *\n *)(title))? *(?:\n+|$)/,
     table: noopTest,
-    lheading: /^((?:(?!^bull ).|\n(?!\n|bull ))+?)\n {0,3}(=+|-+) *(?:\n+|$)/,
+    lheading: /^(?!bull )((?:.|\n(?!\s*?\n|bull ))+?)\n {0,3}(=+|-+) *(?:\n+|$)/,
     // regex template, placeholders will be replaced according to different paragraph
     // interruption rules of commonmark and the original markdown spec:
     _paragraph: /^([^\n]+(?:\n(?!hr|heading|lheading|blockquote|fences|list|html|table| +\n)[^\n]+)*)/,
@@ -13001,8 +13133,8 @@ block.normal = { ...block };
  */
 block.gfm = {
     ...block.normal,
-    table: '^ *([^\\n ].*\\|.*)\\n' // Header
-        + ' {0,3}(?:\\| *)?(:?-+:? *(?:\\| *:?-+:? *)*)(?:\\| *)?' // Align
+    table: '^ *([^\\n ].*)\\n' // Header
+        + ' {0,3}((?:\\| *)?:?-+:? *(?:\\| *:?-+:? *)*(?:\\| *)?)' // Align
         + '(?:\\n((?:(?! *\\n|hr|heading|blockquote|code|fences|list|html).*(?:\\n|$))*)\\n*|$)' // Cells
 };
 block.gfm.table = edit(block.gfm.table)
@@ -13194,39 +13326,6 @@ inline.breaks = {
         .getRegex()
 };
 
-/**
- * smartypants text replacement
- */
-function smartypants(text) {
-    return text
-        // em-dashes
-        .replace(/---/g, '\u2014')
-        // en-dashes
-        .replace(/--/g, '\u2013')
-        // opening singles
-        .replace(/(^|[-\u2014/(\[{"\s])'/g, '$1\u2018')
-        // closing singles & apostrophes
-        .replace(/'/g, '\u2019')
-        // opening doubles
-        .replace(/(^|[-\u2014/(\[{\u2018\s])"/g, '$1\u201c')
-        // closing doubles
-        .replace(/"/g, '\u201d')
-        // ellipses
-        .replace(/\.{3}/g, '\u2026');
-}
-/**
- * mangle email addresses
- */
-function mangle(text) {
-    let out = '';
-    for (let i = 0; i < text.length; i++) {
-        const ch = Math.random() > 0.5
-            ? 'x' + text.charCodeAt(i).toString(16)
-            : text.charCodeAt(i).toString();
-        out += '&#' + ch + ';';
-    }
-    return out;
-}
 /**
  * Block Lexer
  */
@@ -13600,13 +13699,13 @@ class _Lexer {
                 continue;
             }
             // autolink
-            if (token = this.tokenizer.autolink(src, mangle)) {
+            if (token = this.tokenizer.autolink(src)) {
                 src = src.substring(token.raw.length);
                 tokens.push(token);
                 continue;
             }
             // url (gfm)
-            if (!this.state.inLink && (token = this.tokenizer.url(src, mangle))) {
+            if (!this.state.inLink && (token = this.tokenizer.url(src))) {
                 src = src.substring(token.raw.length);
                 tokens.push(token);
                 continue;
@@ -13628,7 +13727,7 @@ class _Lexer {
                     cutSrc = src.substring(0, startIndex + 1);
                 }
             }
-            if (token = this.tokenizer.inlineText(cutSrc, smartypants)) {
+            if (token = this.tokenizer.inlineText(cutSrc)) {
                 src = src.substring(token.raw.length);
                 if (token.raw.slice(-1) !== '_') { // Track prevChar before string of ____ started
                     prevChar = token.raw.slice(-1);
@@ -13669,21 +13768,13 @@ class _Renderer {
     }
     code(code, infostring, escaped) {
         const lang = (infostring || '').match(/^\S*/)?.[0];
-        if (this.options.highlight) {
-            const out = this.options.highlight(code, lang);
-            if (out != null && out !== code) {
-                escaped = true;
-                code = out;
-            }
-        }
         code = code.replace(/\n$/, '') + '\n';
         if (!lang) {
             return '<pre><code>'
                 + (escaped ? code : marked_esm_escape(code, true))
                 + '</code></pre>\n';
         }
-        return '<pre><code class="'
-            + this.options.langPrefix
+        return '<pre><code class="language-'
             + marked_esm_escape(lang)
             + '">'
             + (escaped ? code : marked_esm_escape(code, true))
@@ -13695,16 +13786,12 @@ class _Renderer {
     html(html, block) {
         return html;
     }
-    heading(text, level, raw, slugger) {
-        if (this.options.headerIds) {
-            const id = this.options.headerPrefix + slugger.slug(raw);
-            return `<h${level} id="${id}">${text}</h${level}>\n`;
-        }
+    heading(text, level, raw) {
         // ignore IDs
         return `<h${level}>${text}</h${level}>\n`;
     }
     hr() {
-        return this.options.xhtml ? '<hr/>\n' : '<hr>\n';
+        return '<hr>\n';
     }
     list(body, ordered, start) {
         const type = ordered ? 'ol' : 'ul';
@@ -13717,9 +13804,7 @@ class _Renderer {
     checkbox(checked) {
         return '<input '
             + (checked ? 'checked="" ' : '')
-            + 'disabled="" type="checkbox"'
-            + (this.options.xhtml ? ' /' : '')
-            + '> ';
+            + 'disabled="" type="checkbox">';
     }
     paragraph(text) {
         return `<p>${text}</p>\n`;
@@ -13757,13 +13842,13 @@ class _Renderer {
         return `<code>${text}</code>`;
     }
     br() {
-        return this.options.xhtml ? '<br/>' : '<br>';
+        return '<br>';
     }
     del(text) {
         return `<del>${text}</del>`;
     }
     link(href, title, text) {
-        const cleanHref = cleanUrl(this.options.sanitize, this.options.baseUrl, href);
+        const cleanHref = cleanUrl(href);
         if (cleanHref === null) {
             return text;
         }
@@ -13776,7 +13861,7 @@ class _Renderer {
         return out;
     }
     image(href, title, text) {
-        const cleanHref = cleanUrl(this.options.sanitize, this.options.baseUrl, href);
+        const cleanHref = cleanUrl(href);
         if (cleanHref === null) {
             return text;
         }
@@ -13785,7 +13870,7 @@ class _Renderer {
         if (title) {
             out += ` title="${title}"`;
         }
-        out += this.options.xhtml ? '/>' : '>';
+        out += '>';
         return out;
     }
     text(text) {
@@ -13829,66 +13914,18 @@ class _TextRenderer {
 }
 
 /**
- * Slugger generates header id
- */
-class _Slugger {
-    seen;
-    constructor() {
-        this.seen = {};
-    }
-    serialize(value) {
-        return value
-            .toLowerCase()
-            .trim()
-            // remove html tags
-            .replace(/<[!\/a-z].*?>/ig, '')
-            // remove unwanted chars
-            .replace(/[\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&()*+,./:;<=>?@[\]^`{|}~]/g, '')
-            .replace(/\s/g, '-');
-    }
-    /**
-     * Finds the next safe (unique) slug to use
-     */
-    getNextSafeSlug(originalSlug, isDryRun) {
-        let slug = originalSlug;
-        let occurenceAccumulator = 0;
-        if (this.seen.hasOwnProperty(slug)) {
-            occurenceAccumulator = this.seen[originalSlug];
-            do {
-                occurenceAccumulator++;
-                slug = originalSlug + '-' + occurenceAccumulator;
-            } while (this.seen.hasOwnProperty(slug));
-        }
-        if (!isDryRun) {
-            this.seen[originalSlug] = occurenceAccumulator;
-            this.seen[slug] = 0;
-        }
-        return slug;
-    }
-    /**
-     * Convert string to unique id
-     */
-    slug(value, options = {}) {
-        const slug = this.serialize(value);
-        return this.getNextSafeSlug(slug, options.dryrun);
-    }
-}
-
-/**
  * Parsing & Compiling
  */
 class _Parser {
     options;
     renderer;
     textRenderer;
-    slugger;
     constructor(options) {
         this.options = options || _defaults;
         this.options.renderer = this.options.renderer || new _Renderer();
         this.renderer = this.options.renderer;
         this.renderer.options = this.options;
         this.textRenderer = new _TextRenderer();
-        this.slugger = new _Slugger();
     }
     /**
      * Static Parse Method
@@ -13930,7 +13967,7 @@ class _Parser {
                 }
                 case 'heading': {
                     const headingToken = token;
-                    out += this.renderer.heading(this.parseInline(headingToken.tokens), headingToken.depth, marked_esm_unescape(this.parseInline(headingToken.tokens, this.textRenderer)), this.slugger);
+                    out += this.renderer.heading(this.parseInline(headingToken.tokens), headingToken.depth, marked_esm_unescape(this.parseInline(headingToken.tokens, this.textRenderer)));
                     continue;
                 }
                 case 'code': {
@@ -13988,12 +14025,12 @@ class _Parser {
                                 else {
                                     item.tokens.unshift({
                                         type: 'text',
-                                        text: checkbox
+                                        text: checkbox + ' '
                                     });
                                 }
                             }
                             else {
-                                itemBody += checkbox;
+                                itemBody += checkbox + ' ';
                             }
                         }
                         itemBody += this.parse(item.tokens, loose);
@@ -14153,7 +14190,6 @@ class Marked {
     Lexer = _Lexer;
     lexer = _Lexer.lex;
     Tokenizer = _Tokenizer;
-    Slugger = _Slugger;
     Hooks = _Hooks;
     constructor(...args) {
         this.use(...args);
@@ -14350,12 +14386,8 @@ class Marked {
         return this;
     }
     #parseMarkdown(lexer, parser) {
-        return (src, optOrCallback, callback) => {
-            if (typeof optOrCallback === 'function') {
-                callback = optOrCallback;
-                optOrCallback = null;
-            }
-            const origOpt = { ...optOrCallback };
+        return (src, options) => {
+            const origOpt = { ...options };
             const opt = { ...this.defaults, ...origOpt };
             // Show warning if an extension set async to true but the parse was called with async: false
             if (this.defaults.async === true && origOpt.async === false) {
@@ -14364,7 +14396,7 @@ class Marked {
                 }
                 opt.async = true;
             }
-            const throwError = this.#onError(!!opt.silent, !!opt.async, callback);
+            const throwError = this.#onError(!!opt.silent, !!opt.async);
             // throw error in case of non string input
             if (typeof src === 'undefined' || src === null) {
                 return throwError(new Error('marked(): input parameter is undefined or null'));
@@ -14373,75 +14405,8 @@ class Marked {
                 return throwError(new Error('marked(): input parameter is of type '
                     + Object.prototype.toString.call(src) + ', string expected'));
             }
-            checkDeprecations(opt, callback);
             if (opt.hooks) {
                 opt.hooks.options = opt;
-            }
-            if (callback) {
-                const resultCallback = callback;
-                const highlight = opt.highlight;
-                let tokens;
-                try {
-                    if (opt.hooks) {
-                        src = opt.hooks.preprocess(src);
-                    }
-                    tokens = lexer(src, opt);
-                }
-                catch (e) {
-                    return throwError(e);
-                }
-                const done = (err) => {
-                    let out;
-                    if (!err) {
-                        try {
-                            if (opt.walkTokens) {
-                                this.walkTokens(tokens, opt.walkTokens);
-                            }
-                            out = parser(tokens, opt);
-                            if (opt.hooks) {
-                                out = opt.hooks.postprocess(out);
-                            }
-                        }
-                        catch (e) {
-                            err = e;
-                        }
-                    }
-                    opt.highlight = highlight;
-                    return err
-                        ? throwError(err)
-                        : resultCallback(null, out);
-                };
-                if (!highlight || highlight.length < 3) {
-                    return done();
-                }
-                delete opt.highlight;
-                if (!tokens.length)
-                    return done();
-                let pending = 0;
-                this.walkTokens(tokens, (token) => {
-                    if (token.type === 'code') {
-                        pending++;
-                        setTimeout(() => {
-                            highlight(token.text, token.lang, (err, code) => {
-                                if (err) {
-                                    return done(err);
-                                }
-                                if (code != null && code !== token.text) {
-                                    token.text = code;
-                                    token.escaped = true;
-                                }
-                                pending--;
-                                if (pending === 0) {
-                                    done();
-                                }
-                            });
-                        }, 0);
-                    }
-                });
-                if (pending === 0) {
-                    done();
-                }
-                return;
             }
             if (opt.async) {
                 return Promise.resolve(opt.hooks ? opt.hooks.preprocess(src) : src)
@@ -14470,7 +14435,7 @@ class Marked {
             }
         };
     }
-    #onError(silent, async, callback) {
+    #onError(silent, async) {
         return (e) => {
             e.message += '\nPlease report this to https://github.com/markedjs/marked.';
             if (silent) {
@@ -14480,18 +14445,10 @@ class Marked {
                 if (async) {
                     return Promise.resolve(msg);
                 }
-                if (callback) {
-                    callback(null, msg);
-                    return;
-                }
                 return msg;
             }
             if (async) {
                 return Promise.reject(e);
-            }
-            if (callback) {
-                callback(e);
-                return;
             }
             throw e;
         };
@@ -14499,8 +14456,8 @@ class Marked {
 }
 
 const markedInstance = new Marked();
-function marked(src, opt, callback) {
-    return markedInstance.parse(src, opt, callback);
+function marked(src, opt) {
+    return markedInstance.parse(src, opt);
 }
 /**
  * Sets the default options.
@@ -14552,7 +14509,6 @@ marked.TextRenderer = _TextRenderer;
 marked.Lexer = _Lexer;
 marked.lexer = _Lexer.lex;
 marked.Tokenizer = _Tokenizer;
-marked.Slugger = _Slugger;
 marked.Hooks = _Hooks;
 marked.parse = marked;
 const options = marked.options;
@@ -14588,10 +14544,12 @@ var server_destroy = __nccwpck_require__(9247);
  * @returns Promise that resolves with the instance of the HTTP server
  */
 async function startWebServer(options) {
-    const root = external_path_.resolve(options.root);
+    const root = external_node_path_namespaceObject.resolve(options.root);
     return new Promise((resolve, reject) => {
-        const server = external_http_.createServer((req, res) => handleRequest(req, res, root, options))
-            .listen(options.port || 0, () => resolve(server))
+        const server = external_node_http_namespaceObject.createServer(async (request, response) => handleRequest(request, response, root, options))
+            .listen(options.port || 0, () => {
+            resolve(server);
+        })
             .on('error', reject);
         if (!options.port) {
             const addr = server.address();
@@ -14600,86 +14558,87 @@ async function startWebServer(options) {
         server_destroy(server);
     });
 }
-async function handleRequest(req, res, root, options) {
-    var _a;
-    const url = new external_url_.URL(req.url || '/', `http://localhost:${options.port}`);
+async function handleRequest(request, response, root, options) {
+    const url = new URL(request.url || '/', `http://localhost:${options.port}`);
     const pathParts = url.pathname
         .split('/')
-        .filter(x => !!x)
+        .filter(Boolean)
+        // eslint-disable-next-line unicorn/no-array-callback-reference
         .map(decodeURIComponent);
-    const originalPath = external_path_.join(root, ...pathParts);
+    const originalPath = external_node_path_namespaceObject.join(root, ...pathParts);
     if (url.pathname.endsWith('/')) {
         pathParts.push('index.html');
     }
-    const localPath = external_path_.join(root, ...pathParts);
+    const localPath = external_node_path_namespaceObject.join(root, ...pathParts);
     if (!localPath.startsWith(root)) {
-        res.writeHead(500);
-        res.end();
+        response.writeHead(500);
+        response.end();
         return;
     }
-    const maybeListing = options.directoryListing && localPath.endsWith(`${external_path_.sep}index.html`);
+    const maybeListing = options.directoryListing && localPath.endsWith(`${external_node_path_namespaceObject.sep}index.html`);
     try {
-        const stats = await external_fs_.promises.stat(localPath);
+        const stats = await external_node_fs_namespaceObject.promises.stat(localPath);
         const isDirectory = stats.isDirectory();
         if (isDirectory) {
-            // this means we got a path with no / at the end!
+            // This means we got a path with no / at the end!
             const doc = "<html><body>Redirectin'</body></html>";
-            res.statusCode = 301;
-            res.setHeader('Content-Type', 'text/html; charset=UTF-8');
-            res.setHeader('Content-Length', Buffer.byteLength(doc));
-            res.setHeader('Location', req.url + '/');
-            res.end(doc);
+            response.statusCode = 301;
+            response.setHeader('Content-Type', 'text/html; charset=UTF-8');
+            response.setHeader('Content-Length', external_node_buffer_namespaceObject.Buffer.byteLength(doc));
+            response.setHeader('Location', request.url + '/');
+            response.end(doc);
             return;
         }
     }
-    catch (e) {
-        const err = e;
+    catch (error) {
+        const error_ = error;
         if (!maybeListing) {
-            return return404(res, err);
+            return404(response, error_);
+            return;
         }
     }
     try {
-        let data = await external_fs_.promises.readFile(localPath, { encoding: 'utf8' });
+        let data = await external_node_fs_namespaceObject.promises.readFile(localPath, { encoding: 'utf8' });
         let mimeType = mime.getType(localPath);
-        const isMarkdown = (_a = req.url) === null || _a === void 0 ? void 0 : _a.toLocaleLowerCase().endsWith('.md');
+        const isMarkdown = request.url?.toLocaleLowerCase().endsWith('.md');
         if (isMarkdown && options.markdown) {
             data = marked(data, { gfm: true });
             mimeType = 'text/html; charset=UTF-8';
         }
-        res.setHeader('Content-Type', mimeType);
-        res.setHeader('Content-Length', Buffer.byteLength(data));
-        res.writeHead(200);
-        res.end(data);
+        response.setHeader('Content-Type', mimeType);
+        response.setHeader('Content-Length', external_node_buffer_namespaceObject.Buffer.byteLength(data));
+        response.writeHead(200);
+        response.end(data);
     }
-    catch (e) {
+    catch (error) {
         if (maybeListing) {
             try {
-                const files = await external_fs_.promises.readdir(originalPath);
+                const files = await external_node_fs_namespaceObject.promises.readdir(originalPath);
                 const fileList = files
-                    .filter(f => escape_html(f))
-                    .map(f => `<li><a href="${f}">${f}</a></li>`)
+                    .filter((f) => escape_html(f))
+                    .map((f) => `<li><a href="${f}">${f}</a></li>`)
                     .join('\r\n');
                 const data = `<html><body><ul>${fileList}</ul></body></html>`;
-                res.writeHead(200);
-                res.end(data);
-                return;
+                response.writeHead(200);
+                response.end(data);
             }
-            catch (e) {
-                const err = e;
-                return return404(res, err);
+            catch (error_) {
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                const error__ = error_;
+                return404(response, error__);
             }
         }
         else {
-            const err = e;
-            return return404(res, err);
+            const error_ = error;
+            return404(response, error_);
         }
     }
 }
-function return404(res, err) {
-    res.writeHead(404);
-    res.end(JSON.stringify(err));
+function return404(response, error) {
+    response.writeHead(404);
+    response.end(JSON.stringify(error));
 }
-//# sourceMappingURL=server.js.map
+
 // EXTERNAL MODULE: ./node_modules/brace-expansion/index.js
 var brace_expansion = __nccwpck_require__(3717);
 ;// CONCATENATED MODULE: ./node_modules/minimatch/dist/mjs/assert-valid-pattern.js
@@ -14873,7 +14832,7 @@ const isExtglobType = (c) => types.has(c);
 // entire string, or just a single path portion, to prevent dots
 // and/or traversal patterns, when needed.
 // Exts don't need the ^ or / bit, because the root binds that already.
-const startNoTraversal = '(?!\\.\\.?(?:$|/))';
+const startNoTraversal = '(?!(?:^|/)\\.\\.?(?:$|/))';
 const startNoDot = '(?!\\.)';
 // characters that indicate a start of pattern needs the "no dots" bit,
 // because a dot *might* be matched. ( is not in the list, because in
@@ -15270,7 +15229,8 @@ class AST {
     // - Since the start for a join is eg /(?!\.) and the start for a part
     // is ^(?!\.), we can just prepend (?!\.) to the pattern (either root
     // or start or whatever) and prepend ^ or / at the Regexp construction.
-    toRegExpSource() {
+    toRegExpSource(allowDot) {
+        const dot = allowDot ?? !!this.#options.dot;
         if (this.#root === this)
             this.#fillNegs();
         if (!this.type) {
@@ -15279,7 +15239,7 @@ class AST {
                 .map(p => {
                 const [re, _, hasMagic, uflag] = typeof p === 'string'
                     ? AST.#parseGlob(p, this.#hasMagic, noEmpty)
-                    : p.toRegExpSource();
+                    : p.toRegExpSource(allowDot);
                 this.#hasMagic = this.#hasMagic || hasMagic;
                 this.#uflag = this.#uflag || uflag;
                 return re;
@@ -15299,14 +15259,14 @@ class AST {
                         // and prevent that.
                         const needNoTrav = 
                         // dots are allowed, and the pattern starts with [ or .
-                        (this.#options.dot && aps.has(src.charAt(0))) ||
+                        (dot && aps.has(src.charAt(0))) ||
                             // the pattern starts with \., and then [ or .
                             (src.startsWith('\\.') && aps.has(src.charAt(2))) ||
                             // the pattern starts with \.\., and then [ or .
                             (src.startsWith('\\.\\.') && aps.has(src.charAt(4)));
                         // no need to prevent dots if it can't match a dot, or if a
                         // sub-pattern will be preventing it anyway.
-                        const needNoDot = !this.#options.dot && aps.has(src.charAt(0));
+                        const needNoDot = !dot && !allowDot && aps.has(src.charAt(0));
                         start = needNoTrav ? startNoTraversal : needNoDot ? startNoDot : '';
                     }
                 }
@@ -15326,23 +15286,13 @@ class AST {
                 this.#uflag,
             ];
         }
+        // We need to calculate the body *twice* if it's a repeat pattern
+        // at the start, once in nodot mode, then again in dot mode, so a
+        // pattern like *(?) can match 'x.y'
+        const repeated = this.type === '*' || this.type === '+';
         // some kind of extglob
         const start = this.type === '!' ? '(?:(?!(?:' : '(?:';
-        const body = this.#parts
-            .map(p => {
-            // extglob ASTs should only contain parent ASTs
-            /* c8 ignore start */
-            if (typeof p === 'string') {
-                throw new Error('string type in extglob ast??');
-            }
-            /* c8 ignore stop */
-            // can ignore hasMagic, because extglobs are already always magic
-            const [re, _, _hasMagic, uflag] = p.toRegExpSource();
-            this.#uflag = this.#uflag || uflag;
-            return re;
-        })
-            .filter(p => !(this.isStart() && this.isEnd()) || !!p)
-            .join('|');
+        let body = this.#partsToRegExp(dot);
         if (this.isStart() && this.isEnd() && !body && this.type !== '!') {
             // invalid extglob, has to at least be *something* present, if it's
             // the entire path portion.
@@ -15352,22 +15302,37 @@ class AST {
             this.#hasMagic = undefined;
             return [s, unescape_unescape(this.toString()), false, false];
         }
+        // XXX abstract out this map method
+        let bodyDotAllowed = !repeated || allowDot || dot || !startNoDot
+            ? ''
+            : this.#partsToRegExp(true);
+        if (bodyDotAllowed === body) {
+            bodyDotAllowed = '';
+        }
+        if (bodyDotAllowed) {
+            body = `(?:${body})(?:${bodyDotAllowed})*?`;
+        }
         // an empty !() is exactly equivalent to a starNoEmpty
         let final = '';
         if (this.type === '!' && this.#emptyExt) {
-            final =
-                (this.isStart() && !this.#options.dot ? startNoDot : '') + starNoEmpty;
+            final = (this.isStart() && !dot ? startNoDot : '') + starNoEmpty;
         }
         else {
             const close = this.type === '!'
                 ? // !() must match something,but !(x) can match ''
                     '))' +
-                        (this.isStart() && !this.#options.dot ? startNoDot : '') +
+                        (this.isStart() && !dot && !allowDot ? startNoDot : '') +
                         star +
                         ')'
                 : this.type === '@'
                     ? ')'
-                    : `)${this.type}`;
+                    : this.type === '?'
+                        ? ')?'
+                        : this.type === '+' && bodyDotAllowed
+                            ? ')'
+                            : this.type === '*' && bodyDotAllowed
+                                ? `)?`
+                                : `)${this.type}`;
             final = start + body + close;
         }
         return [
@@ -15376,6 +15341,23 @@ class AST {
             (this.#hasMagic = !!this.#hasMagic),
             this.#uflag,
         ];
+    }
+    #partsToRegExp(dot) {
+        return this.#parts
+            .map(p => {
+            // extglob ASTs should only contain parent ASTs
+            /* c8 ignore start */
+            if (typeof p === 'string') {
+                throw new Error('string type in extglob ast??');
+            }
+            /* c8 ignore stop */
+            // can ignore hasMagic, because extglobs are already always magic
+            const [re, _, _hasMagic, uflag] = p.toRegExpSource(dot);
+            this.#uflag = this.#uflag || uflag;
+            return re;
+        })
+            .filter(p => !(this.isStart() && this.isEnd()) || !!p)
+            .join('|');
     }
     static #parseGlob(glob, hasMagic, noEmpty = false) {
         let escaping = false;
@@ -15459,7 +15441,6 @@ const minimatch = (p, pattern, options = {}) => {
     }
     return new Minimatch(pattern, options).match(p);
 };
-/* harmony default export */ const mjs = ((/* unused pure expression or super */ null && (minimatch)));
 // Optimized checking for the most common glob patterns.
 const starDotExtRE = /^\*+([^+@!?\*\[\(]*)$/;
 const starDotExtTest = (ext) => (f) => !f.startsWith('.') && f.endsWith(ext);
@@ -16045,39 +16026,35 @@ class Minimatch {
     // the parts match.
     matchOne(file, pattern, partial = false) {
         const options = this.options;
-        // a UNC pattern like //?/c:/* can match a path like c:/x
-        // and vice versa
+        // UNC paths like //?/X:/... can match X:/... and vice versa
+        // Drive letters in absolute drive or unc paths are always compared
+        // case-insensitively.
         if (this.isWindows) {
-            const fileUNC = file[0] === '' &&
+            const fileDrive = typeof file[0] === 'string' && /^[a-z]:$/i.test(file[0]);
+            const fileUNC = !fileDrive &&
+                file[0] === '' &&
                 file[1] === '' &&
                 file[2] === '?' &&
-                typeof file[3] === 'string' &&
                 /^[a-z]:$/i.test(file[3]);
-            const patternUNC = pattern[0] === '' &&
+            const patternDrive = typeof pattern[0] === 'string' && /^[a-z]:$/i.test(pattern[0]);
+            const patternUNC = !patternDrive &&
+                pattern[0] === '' &&
                 pattern[1] === '' &&
                 pattern[2] === '?' &&
                 typeof pattern[3] === 'string' &&
                 /^[a-z]:$/i.test(pattern[3]);
-            if (fileUNC && patternUNC) {
-                const fd = file[3];
-                const pd = pattern[3];
+            const fdi = fileUNC ? 3 : fileDrive ? 0 : undefined;
+            const pdi = patternUNC ? 3 : patternDrive ? 0 : undefined;
+            if (typeof fdi === 'number' && typeof pdi === 'number') {
+                const [fd, pd] = [file[fdi], pattern[pdi]];
                 if (fd.toLowerCase() === pd.toLowerCase()) {
-                    file[3] = pd;
-                }
-            }
-            else if (patternUNC && typeof file[0] === 'string') {
-                const pd = pattern[3];
-                const fd = file[0];
-                if (pd.toLowerCase() === fd.toLowerCase()) {
-                    pattern[3] = fd;
-                    pattern = pattern.slice(3);
-                }
-            }
-            else if (fileUNC && typeof pattern[0] === 'string') {
-                const fd = file[3];
-                if (fd.toLowerCase() === pattern[0].toLowerCase()) {
-                    pattern[0] = fd;
-                    file = file.slice(3);
+                    pattern[pdi] = fd;
+                    if (pdi > fdi) {
+                        pattern = pattern.slice(pdi);
+                    }
+                    else if (fdi > pdi) {
+                        file = file.slice(fdi);
+                    }
                 }
             }
         }
@@ -17283,6 +17260,15 @@ class LRUCache {
             if (v !== oldVal) {
                 if (this.#hasFetchMethod && this.#isBackgroundFetch(oldVal)) {
                     oldVal.__abortController.abort(new Error('replaced'));
+                    const { __staleWhileFetching: s } = oldVal;
+                    if (s !== undefined && !noDisposeOnSet) {
+                        if (this.#hasDispose) {
+                            this.#dispose?.(s, k, 'set');
+                        }
+                        if (this.#hasDisposeAfter) {
+                            this.#disposed?.push([s, k, 'set']);
+                        }
+                    }
                 }
                 else if (!noDisposeOnSet) {
                     if (this.#hasDispose) {
@@ -17536,7 +17522,7 @@ class LRUCache {
         const pcall = (res, rej) => {
             const fmp = this.#fetchMethod?.(k, v, fetchOpts);
             if (fmp && fmp instanceof Promise) {
-                fmp.then(v => res(v), rej);
+                fmp.then(v => res(v === undefined ? undefined : v), rej);
             }
             // ignored, we go until we finish, regardless.
             // defer check until we are actually aborting,
@@ -17544,7 +17530,7 @@ class LRUCache {
             ac.signal.addEventListener('abort', () => {
                 if (!options.ignoreFetchAbort ||
                     options.allowStaleOnFetchAbort) {
-                    res();
+                    res(undefined);
                     // when it eventually resolves, update the cache.
                     if (options.allowStaleOnFetchAbort) {
                         res = v => cb(v, true);
@@ -17838,716 +17824,1040 @@ class LRUCache {
     }
 }
 //# sourceMappingURL=index.js.map
+// EXTERNAL MODULE: external "path"
+var external_path_ = __nccwpck_require__(1017);
+// EXTERNAL MODULE: external "url"
+var external_url_ = __nccwpck_require__(7310);
+// EXTERNAL MODULE: external "fs"
+var external_fs_ = __nccwpck_require__(7147);
+var external_fs_namespaceObject = /*#__PURE__*/__nccwpck_require__.t(external_fs_, 2);
 ;// CONCATENATED MODULE: external "fs/promises"
 const promises_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("fs/promises");
+// EXTERNAL MODULE: external "events"
+var external_events_ = __nccwpck_require__(2361);
 // EXTERNAL MODULE: external "stream"
 var external_stream_ = __nccwpck_require__(2781);
 ;// CONCATENATED MODULE: external "string_decoder"
 const external_string_decoder_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("string_decoder");
-;// CONCATENATED MODULE: ./node_modules/path-scurry/node_modules/minipass/index.mjs
-
-const proc =
-  typeof process === 'object' && process
+;// CONCATENATED MODULE: ./node_modules/minipass/dist/esm/index.js
+const proc = typeof process === 'object' && process
     ? process
     : {
         stdout: null,
         stderr: null,
-      }
-;
+    };
 
 
-const SD = external_string_decoder_namespaceObject.StringDecoder
 
-const EOF = Symbol('EOF')
-const MAYBE_EMIT_END = Symbol('maybeEmitEnd')
-const EMITTED_END = Symbol('emittedEnd')
-const EMITTING_END = Symbol('emittingEnd')
-const EMITTED_ERROR = Symbol('emittedError')
-const CLOSED = Symbol('closed')
-const READ = Symbol('read')
-const FLUSH = Symbol('flush')
-const FLUSHCHUNK = Symbol('flushChunk')
-const ENCODING = Symbol('encoding')
-const DECODER = Symbol('decoder')
-const FLOWING = Symbol('flowing')
-const PAUSED = Symbol('paused')
-const RESUME = Symbol('resume')
-const BUFFER = Symbol('buffer')
-const PIPES = Symbol('pipes')
-const BUFFERLENGTH = Symbol('bufferLength')
-const BUFFERPUSH = Symbol('bufferPush')
-const BUFFERSHIFT = Symbol('bufferShift')
-const OBJECTMODE = Symbol('objectMode')
-// internal event when stream is destroyed
-const DESTROYED = Symbol('destroyed')
-// internal event when stream has an error
-const ERROR = Symbol('error')
-const EMITDATA = Symbol('emitData')
-const EMITEND = Symbol('emitEnd')
-const EMITEND2 = Symbol('emitEnd2')
-const ASYNC = Symbol('async')
-const ABORT = Symbol('abort')
-const ABORTED = Symbol('aborted')
-const SIGNAL = Symbol('signal')
-
-const defer = fn => Promise.resolve().then(fn)
-
-// TODO remove when Node v8 support drops
-const doIter = global._MP_NO_ITERATOR_SYMBOLS_ !== '1'
-const ASYNCITERATOR =
-  (doIter && Symbol.asyncIterator) || Symbol('asyncIterator not implemented')
-const ITERATOR =
-  (doIter && Symbol.iterator) || Symbol('iterator not implemented')
-
-// events that mean 'the stream is over'
-// these are treated specially, and re-emitted
-// if they are listened for after emitting.
-const isEndish = ev => ev === 'end' || ev === 'finish' || ev === 'prefinish'
-
-const isArrayBuffer = b =>
-  b instanceof ArrayBuffer ||
-  (typeof b === 'object' &&
-    b.constructor &&
-    b.constructor.name === 'ArrayBuffer' &&
-    b.byteLength >= 0)
-
-const isArrayBufferView = b => !Buffer.isBuffer(b) && ArrayBuffer.isView(b)
-
-class Pipe {
-  constructor(src, dest, opts) {
-    this.src = src
-    this.dest = dest
-    this.opts = opts
-    this.ondrain = () => src[RESUME]()
-    dest.on('drain', this.ondrain)
-  }
-  unpipe() {
-    this.dest.removeListener('drain', this.ondrain)
-  }
-  // istanbul ignore next - only here for the prototype
-  proxyErrors() {}
-  end() {
-    this.unpipe()
-    if (this.opts.end) this.dest.end()
-  }
-}
-
-class PipeProxyErrors extends Pipe {
-  unpipe() {
-    this.src.removeListener('error', this.proxyErrors)
-    super.unpipe()
-  }
-  constructor(src, dest, opts) {
-    super(src, dest, opts)
-    this.proxyErrors = er => dest.emit('error', er)
-    src.on('error', this.proxyErrors)
-  }
-}
-
-class Minipass extends external_stream_ {
-  constructor(options) {
-    super()
-    this[FLOWING] = false
-    // whether we're explicitly paused
-    this[PAUSED] = false
-    this[PIPES] = []
-    this[BUFFER] = []
-    this[OBJECTMODE] = (options && options.objectMode) || false
-    if (this[OBJECTMODE]) this[ENCODING] = null
-    else this[ENCODING] = (options && options.encoding) || null
-    if (this[ENCODING] === 'buffer') this[ENCODING] = null
-    this[ASYNC] = (options && !!options.async) || false
-    this[DECODER] = this[ENCODING] ? new SD(this[ENCODING]) : null
-    this[EOF] = false
-    this[EMITTED_END] = false
-    this[EMITTING_END] = false
-    this[CLOSED] = false
-    this[EMITTED_ERROR] = null
-    this.writable = true
-    this.readable = true
-    this[BUFFERLENGTH] = 0
-    this[DESTROYED] = false
-    if (options && options.debugExposeBuffer === true) {
-      Object.defineProperty(this, 'buffer', { get: () => this[BUFFER] })
-    }
-    if (options && options.debugExposePipes === true) {
-      Object.defineProperty(this, 'pipes', { get: () => this[PIPES] })
-    }
-    this[SIGNAL] = options && options.signal
-    this[ABORTED] = false
-    if (this[SIGNAL]) {
-      this[SIGNAL].addEventListener('abort', () => this[ABORT]())
-      if (this[SIGNAL].aborted) {
-        this[ABORT]()
-      }
-    }
-  }
-
-  get bufferLength() {
-    return this[BUFFERLENGTH]
-  }
-
-  get encoding() {
-    return this[ENCODING]
-  }
-  set encoding(enc) {
-    if (this[OBJECTMODE]) throw new Error('cannot set encoding in objectMode')
-
-    if (
-      this[ENCODING] &&
-      enc !== this[ENCODING] &&
-      ((this[DECODER] && this[DECODER].lastNeed) || this[BUFFERLENGTH])
-    )
-      throw new Error('cannot change encoding')
-
-    if (this[ENCODING] !== enc) {
-      this[DECODER] = enc ? new SD(enc) : null
-      if (this[BUFFER].length)
-        this[BUFFER] = this[BUFFER].map(chunk => this[DECODER].write(chunk))
-    }
-
-    this[ENCODING] = enc
-  }
-
-  setEncoding(enc) {
-    this.encoding = enc
-  }
-
-  get objectMode() {
-    return this[OBJECTMODE]
-  }
-  set objectMode(om) {
-    this[OBJECTMODE] = this[OBJECTMODE] || !!om
-  }
-
-  get ['async']() {
-    return this[ASYNC]
-  }
-  set ['async'](a) {
-    this[ASYNC] = this[ASYNC] || !!a
-  }
-
-  // drop everything and get out of the flow completely
-  [ABORT]() {
-    this[ABORTED] = true
-    this.emit('abort', this[SIGNAL].reason)
-    this.destroy(this[SIGNAL].reason)
-  }
-
-  get aborted() {
-    return this[ABORTED]
-  }
-  set aborted(_) {}
-
-  write(chunk, encoding, cb) {
-    if (this[ABORTED]) return false
-    if (this[EOF]) throw new Error('write after end')
-
-    if (this[DESTROYED]) {
-      this.emit(
-        'error',
-        Object.assign(
-          new Error('Cannot call write after a stream was destroyed'),
-          { code: 'ERR_STREAM_DESTROYED' }
-        )
-      )
-      return true
-    }
-
-    if (typeof encoding === 'function') (cb = encoding), (encoding = 'utf8')
-
-    if (!encoding) encoding = 'utf8'
-
-    const fn = this[ASYNC] ? defer : f => f()
-
-    // convert array buffers and typed array views into buffers
-    // at some point in the future, we may want to do the opposite!
-    // leave strings and buffers as-is
-    // anything else switches us into object mode
-    if (!this[OBJECTMODE] && !Buffer.isBuffer(chunk)) {
-      if (isArrayBufferView(chunk))
-        chunk = Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)
-      else if (isArrayBuffer(chunk)) chunk = Buffer.from(chunk)
-      else if (typeof chunk !== 'string')
-        // use the setter so we throw if we have encoding set
-        this.objectMode = true
-    }
-
-    // handle object mode up front, since it's simpler
-    // this yields better performance, fewer checks later.
-    if (this[OBJECTMODE]) {
-      /* istanbul ignore if - maybe impossible? */
-      if (this.flowing && this[BUFFERLENGTH] !== 0) this[FLUSH](true)
-
-      if (this.flowing) this.emit('data', chunk)
-      else this[BUFFERPUSH](chunk)
-
-      if (this[BUFFERLENGTH] !== 0) this.emit('readable')
-
-      if (cb) fn(cb)
-
-      return this.flowing
-    }
-
-    // at this point the chunk is a buffer or string
-    // don't buffer it up or send it to the decoder
-    if (!chunk.length) {
-      if (this[BUFFERLENGTH] !== 0) this.emit('readable')
-      if (cb) fn(cb)
-      return this.flowing
-    }
-
-    // fast-path writing strings of same encoding to a stream with
-    // an empty buffer, skipping the buffer/decoder dance
-    if (
-      typeof chunk === 'string' &&
-      // unless it is a string already ready for us to use
-      !(encoding === this[ENCODING] && !this[DECODER].lastNeed)
-    ) {
-      chunk = Buffer.from(chunk, encoding)
-    }
-
-    if (Buffer.isBuffer(chunk) && this[ENCODING])
-      chunk = this[DECODER].write(chunk)
-
-    // Note: flushing CAN potentially switch us into not-flowing mode
-    if (this.flowing && this[BUFFERLENGTH] !== 0) this[FLUSH](true)
-
-    if (this.flowing) this.emit('data', chunk)
-    else this[BUFFERPUSH](chunk)
-
-    if (this[BUFFERLENGTH] !== 0) this.emit('readable')
-
-    if (cb) fn(cb)
-
-    return this.flowing
-  }
-
-  read(n) {
-    if (this[DESTROYED]) return null
-
-    if (this[BUFFERLENGTH] === 0 || n === 0 || n > this[BUFFERLENGTH]) {
-      this[MAYBE_EMIT_END]()
-      return null
-    }
-
-    if (this[OBJECTMODE]) n = null
-
-    if (this[BUFFER].length > 1 && !this[OBJECTMODE]) {
-      if (this.encoding) this[BUFFER] = [this[BUFFER].join('')]
-      else this[BUFFER] = [Buffer.concat(this[BUFFER], this[BUFFERLENGTH])]
-    }
-
-    const ret = this[READ](n || null, this[BUFFER][0])
-    this[MAYBE_EMIT_END]()
-    return ret
-  }
-
-  [READ](n, chunk) {
-    if (n === chunk.length || n === null) this[BUFFERSHIFT]()
-    else {
-      this[BUFFER][0] = chunk.slice(n)
-      chunk = chunk.slice(0, n)
-      this[BUFFERLENGTH] -= n
-    }
-
-    this.emit('data', chunk)
-
-    if (!this[BUFFER].length && !this[EOF]) this.emit('drain')
-
-    return chunk
-  }
-
-  end(chunk, encoding, cb) {
-    if (typeof chunk === 'function') (cb = chunk), (chunk = null)
-    if (typeof encoding === 'function') (cb = encoding), (encoding = 'utf8')
-    if (chunk) this.write(chunk, encoding)
-    if (cb) this.once('end', cb)
-    this[EOF] = true
-    this.writable = false
-
-    // if we haven't written anything, then go ahead and emit,
-    // even if we're not reading.
-    // we'll re-emit if a new 'end' listener is added anyway.
-    // This makes MP more suitable to write-only use cases.
-    if (this.flowing || !this[PAUSED]) this[MAYBE_EMIT_END]()
-    return this
-  }
-
-  // don't let the internal resume be overwritten
-  [RESUME]() {
-    if (this[DESTROYED]) return
-
-    this[PAUSED] = false
-    this[FLOWING] = true
-    this.emit('resume')
-    if (this[BUFFER].length) this[FLUSH]()
-    else if (this[EOF]) this[MAYBE_EMIT_END]()
-    else this.emit('drain')
-  }
-
-  resume() {
-    return this[RESUME]()
-  }
-
-  pause() {
-    this[FLOWING] = false
-    this[PAUSED] = true
-  }
-
-  get destroyed() {
-    return this[DESTROYED]
-  }
-
-  get flowing() {
-    return this[FLOWING]
-  }
-
-  get paused() {
-    return this[PAUSED]
-  }
-
-  [BUFFERPUSH](chunk) {
-    if (this[OBJECTMODE]) this[BUFFERLENGTH] += 1
-    else this[BUFFERLENGTH] += chunk.length
-    this[BUFFER].push(chunk)
-  }
-
-  [BUFFERSHIFT]() {
-    if (this[OBJECTMODE]) this[BUFFERLENGTH] -= 1
-    else this[BUFFERLENGTH] -= this[BUFFER][0].length
-    return this[BUFFER].shift()
-  }
-
-  [FLUSH](noDrain) {
-    do {} while (this[FLUSHCHUNK](this[BUFFERSHIFT]()) && this[BUFFER].length)
-
-    if (!noDrain && !this[BUFFER].length && !this[EOF]) this.emit('drain')
-  }
-
-  [FLUSHCHUNK](chunk) {
-    this.emit('data', chunk)
-    return this.flowing
-  }
-
-  pipe(dest, opts) {
-    if (this[DESTROYED]) return
-
-    const ended = this[EMITTED_END]
-    opts = opts || {}
-    if (dest === proc.stdout || dest === proc.stderr) opts.end = false
-    else opts.end = opts.end !== false
-    opts.proxyErrors = !!opts.proxyErrors
-
-    // piping an ended stream ends immediately
-    if (ended) {
-      if (opts.end) dest.end()
-    } else {
-      this[PIPES].push(
-        !opts.proxyErrors
-          ? new Pipe(this, dest, opts)
-          : new PipeProxyErrors(this, dest, opts)
-      )
-      if (this[ASYNC]) defer(() => this[RESUME]())
-      else this[RESUME]()
-    }
-
-    return dest
-  }
-
-  unpipe(dest) {
-    const p = this[PIPES].find(p => p.dest === dest)
-    if (p) {
-      this[PIPES].splice(this[PIPES].indexOf(p), 1)
-      p.unpipe()
-    }
-  }
-
-  addListener(ev, fn) {
-    return this.on(ev, fn)
-  }
-
-  on(ev, fn) {
-    const ret = super.on(ev, fn)
-    if (ev === 'data' && !this[PIPES].length && !this.flowing) this[RESUME]()
-    else if (ev === 'readable' && this[BUFFERLENGTH] !== 0)
-      super.emit('readable')
-    else if (isEndish(ev) && this[EMITTED_END]) {
-      super.emit(ev)
-      this.removeAllListeners(ev)
-    } else if (ev === 'error' && this[EMITTED_ERROR]) {
-      if (this[ASYNC]) defer(() => fn.call(this, this[EMITTED_ERROR]))
-      else fn.call(this, this[EMITTED_ERROR])
-    }
-    return ret
-  }
-
-  get emittedEnd() {
-    return this[EMITTED_END]
-  }
-
-  [MAYBE_EMIT_END]() {
-    if (
-      !this[EMITTING_END] &&
-      !this[EMITTED_END] &&
-      !this[DESTROYED] &&
-      this[BUFFER].length === 0 &&
-      this[EOF]
-    ) {
-      this[EMITTING_END] = true
-      this.emit('end')
-      this.emit('prefinish')
-      this.emit('finish')
-      if (this[CLOSED]) this.emit('close')
-      this[EMITTING_END] = false
-    }
-  }
-
-  emit(ev, data, ...extra) {
-    // error and close are only events allowed after calling destroy()
-    if (ev !== 'error' && ev !== 'close' && ev !== DESTROYED && this[DESTROYED])
-      return
-    else if (ev === 'data') {
-      return !this[OBJECTMODE] && !data
-        ? false
-        : this[ASYNC]
-        ? defer(() => this[EMITDATA](data))
-        : this[EMITDATA](data)
-    } else if (ev === 'end') {
-      return this[EMITEND]()
-    } else if (ev === 'close') {
-      this[CLOSED] = true
-      // don't emit close before 'end' and 'finish'
-      if (!this[EMITTED_END] && !this[DESTROYED]) return
-      const ret = super.emit('close')
-      this.removeAllListeners('close')
-      return ret
-    } else if (ev === 'error') {
-      this[EMITTED_ERROR] = data
-      super.emit(ERROR, data)
-      const ret =
-        !this[SIGNAL] || this.listeners('error').length
-          ? super.emit('error', data)
-          : false
-      this[MAYBE_EMIT_END]()
-      return ret
-    } else if (ev === 'resume') {
-      const ret = super.emit('resume')
-      this[MAYBE_EMIT_END]()
-      return ret
-    } else if (ev === 'finish' || ev === 'prefinish') {
-      const ret = super.emit(ev)
-      this.removeAllListeners(ev)
-      return ret
-    }
-
-    // Some other unknown event
-    const ret = super.emit(ev, data, ...extra)
-    this[MAYBE_EMIT_END]()
-    return ret
-  }
-
-  [EMITDATA](data) {
-    for (const p of this[PIPES]) {
-      if (p.dest.write(data) === false) this.pause()
-    }
-    const ret = super.emit('data', data)
-    this[MAYBE_EMIT_END]()
-    return ret
-  }
-
-  [EMITEND]() {
-    if (this[EMITTED_END]) return
-
-    this[EMITTED_END] = true
-    this.readable = false
-    if (this[ASYNC]) defer(() => this[EMITEND2]())
-    else this[EMITEND2]()
-  }
-
-  [EMITEND2]() {
-    if (this[DECODER]) {
-      const data = this[DECODER].end()
-      if (data) {
-        for (const p of this[PIPES]) {
-          p.dest.write(data)
-        }
-        super.emit('data', data)
-      }
-    }
-
-    for (const p of this[PIPES]) {
-      p.end()
-    }
-    const ret = super.emit('end')
-    this.removeAllListeners('end')
-    return ret
-  }
-
-  // const all = await stream.collect()
-  collect() {
-    const buf = []
-    if (!this[OBJECTMODE]) buf.dataLength = 0
-    // set the promise first, in case an error is raised
-    // by triggering the flow here.
-    const p = this.promise()
-    this.on('data', c => {
-      buf.push(c)
-      if (!this[OBJECTMODE]) buf.dataLength += c.length
-    })
-    return p.then(() => buf)
-  }
-
-  // const data = await stream.concat()
-  concat() {
-    return this[OBJECTMODE]
-      ? Promise.reject(new Error('cannot concat in objectMode'))
-      : this.collect().then(buf =>
-          this[OBJECTMODE]
-            ? Promise.reject(new Error('cannot concat in objectMode'))
-            : this[ENCODING]
-            ? buf.join('')
-            : Buffer.concat(buf, buf.dataLength)
-        )
-  }
-
-  // stream.promise().then(() => done, er => emitted error)
-  promise() {
-    return new Promise((resolve, reject) => {
-      this.on(DESTROYED, () => reject(new Error('stream destroyed')))
-      this.on('error', er => reject(er))
-      this.on('end', () => resolve())
-    })
-  }
-
-  // for await (let chunk of stream)
-  [ASYNCITERATOR]() {
-    let stopped = false
-    const stop = () => {
-      this.pause()
-      stopped = true
-      return Promise.resolve({ done: true })
-    }
-    const next = () => {
-      if (stopped) return stop()
-      const res = this.read()
-      if (res !== null) return Promise.resolve({ done: false, value: res })
-
-      if (this[EOF]) return stop()
-
-      let resolve = null
-      let reject = null
-      const onerr = er => {
-        this.removeListener('data', ondata)
-        this.removeListener('end', onend)
-        this.removeListener(DESTROYED, ondestroy)
-        stop()
-        reject(er)
-      }
-      const ondata = value => {
-        this.removeListener('error', onerr)
-        this.removeListener('end', onend)
-        this.removeListener(DESTROYED, ondestroy)
-        this.pause()
-        resolve({ value: value, done: !!this[EOF] })
-      }
-      const onend = () => {
-        this.removeListener('error', onerr)
-        this.removeListener('data', ondata)
-        this.removeListener(DESTROYED, ondestroy)
-        stop()
-        resolve({ done: true })
-      }
-      const ondestroy = () => onerr(new Error('stream destroyed'))
-      return new Promise((res, rej) => {
-        reject = rej
-        resolve = res
-        this.once(DESTROYED, ondestroy)
-        this.once('error', onerr)
-        this.once('end', onend)
-        this.once('data', ondata)
-      })
-    }
-
-    return {
-      next,
-      throw: stop,
-      return: stop,
-      [ASYNCITERATOR]() {
-        return this
-      },
-    }
-  }
-
-  // for (let chunk of stream)
-  [ITERATOR]() {
-    let stopped = false
-    const stop = () => {
-      this.pause()
-      this.removeListener(ERROR, stop)
-      this.removeListener(DESTROYED, stop)
-      this.removeListener('end', stop)
-      stopped = true
-      return { done: true }
-    }
-
-    const next = () => {
-      if (stopped) return stop()
-      const value = this.read()
-      return value === null ? stop() : { value }
-    }
-    this.once('end', stop)
-    this.once(ERROR, stop)
-    this.once(DESTROYED, stop)
-
-    return {
-      next,
-      throw: stop,
-      return: stop,
-      [ITERATOR]() {
-        return this
-      },
-    }
-  }
-
-  destroy(er) {
-    if (this[DESTROYED]) {
-      if (er) this.emit('error', er)
-      else this.emit(DESTROYED)
-      return this
-    }
-
-    this[DESTROYED] = true
-
-    // throw away all buffered data, it's never coming out
-    this[BUFFER].length = 0
-    this[BUFFERLENGTH] = 0
-
-    if (typeof this.close === 'function' && !this[CLOSED]) this.close()
-
-    if (er) this.emit('error', er)
-    // if no error to emit, still reject pending promises
-    else this.emit(DESTROYED)
-
-    return this
-  }
-
-  static isStream(s) {
-    return (
-      !!s &&
-      (s instanceof Minipass ||
+/**
+ * Return true if the argument is a Minipass stream, Node stream, or something
+ * else that Minipass can interact with.
+ */
+const isStream = (s) => !!s &&
+    typeof s === 'object' &&
+    (s instanceof Minipass ||
         s instanceof external_stream_ ||
-        (s instanceof external_events_ &&
-          // readable
-          (typeof s.pipe === 'function' ||
-            // writable
-            (typeof s.write === 'function' && typeof s.end === 'function'))))
-    )
-  }
+        isReadable(s) ||
+        isWritable(s));
+/**
+ * Return true if the argument is a valid {@link Minipass.Readable}
+ */
+const isReadable = (s) => !!s &&
+    typeof s === 'object' &&
+    s instanceof external_events_.EventEmitter &&
+    typeof s.pipe === 'function' &&
+    // node core Writable streams have a pipe() method, but it throws
+    s.pipe !== external_stream_.Writable.prototype.pipe;
+/**
+ * Return true if the argument is a valid {@link Minipass.Writable}
+ */
+const isWritable = (s) => !!s &&
+    typeof s === 'object' &&
+    s instanceof external_events_.EventEmitter &&
+    typeof s.write === 'function' &&
+    typeof s.end === 'function';
+const EOF = Symbol('EOF');
+const MAYBE_EMIT_END = Symbol('maybeEmitEnd');
+const EMITTED_END = Symbol('emittedEnd');
+const EMITTING_END = Symbol('emittingEnd');
+const EMITTED_ERROR = Symbol('emittedError');
+const CLOSED = Symbol('closed');
+const READ = Symbol('read');
+const FLUSH = Symbol('flush');
+const FLUSHCHUNK = Symbol('flushChunk');
+const ENCODING = Symbol('encoding');
+const DECODER = Symbol('decoder');
+const FLOWING = Symbol('flowing');
+const PAUSED = Symbol('paused');
+const RESUME = Symbol('resume');
+const BUFFER = Symbol('buffer');
+const PIPES = Symbol('pipes');
+const BUFFERLENGTH = Symbol('bufferLength');
+const BUFFERPUSH = Symbol('bufferPush');
+const BUFFERSHIFT = Symbol('bufferShift');
+const OBJECTMODE = Symbol('objectMode');
+// internal event when stream is destroyed
+const DESTROYED = Symbol('destroyed');
+// internal event when stream has an error
+const ERROR = Symbol('error');
+const EMITDATA = Symbol('emitData');
+const EMITEND = Symbol('emitEnd');
+const EMITEND2 = Symbol('emitEnd2');
+const ASYNC = Symbol('async');
+const ABORT = Symbol('abort');
+const ABORTED = Symbol('aborted');
+const SIGNAL = Symbol('signal');
+const DATALISTENERS = Symbol('dataListeners');
+const DISCARDED = Symbol('discarded');
+const defer = (fn) => Promise.resolve().then(fn);
+const nodefer = (fn) => fn();
+const isEndish = (ev) => ev === 'end' || ev === 'finish' || ev === 'prefinish';
+const isArrayBufferLike = (b) => b instanceof ArrayBuffer ||
+    (!!b &&
+        typeof b === 'object' &&
+        b.constructor &&
+        b.constructor.name === 'ArrayBuffer' &&
+        b.byteLength >= 0);
+const isArrayBufferView = (b) => !Buffer.isBuffer(b) && ArrayBuffer.isView(b);
+/**
+ * Internal class representing a pipe to a destination stream.
+ *
+ * @internal
+ */
+class Pipe {
+    src;
+    dest;
+    opts;
+    ondrain;
+    constructor(src, dest, opts) {
+        this.src = src;
+        this.dest = dest;
+        this.opts = opts;
+        this.ondrain = () => src[RESUME]();
+        this.dest.on('drain', this.ondrain);
+    }
+    unpipe() {
+        this.dest.removeListener('drain', this.ondrain);
+    }
+    // only here for the prototype
+    /* c8 ignore start */
+    proxyErrors(_er) { }
+    /* c8 ignore stop */
+    end() {
+        this.unpipe();
+        if (this.opts.end)
+            this.dest.end();
+    }
 }
-
-
-
+/**
+ * Internal class representing a pipe to a destination stream where
+ * errors are proxied.
+ *
+ * @internal
+ */
+class PipeProxyErrors extends Pipe {
+    unpipe() {
+        this.src.removeListener('error', this.proxyErrors);
+        super.unpipe();
+    }
+    constructor(src, dest, opts) {
+        super(src, dest, opts);
+        this.proxyErrors = er => dest.emit('error', er);
+        src.on('error', this.proxyErrors);
+    }
+}
+const isObjectModeOptions = (o) => !!o.objectMode;
+const isEncodingOptions = (o) => !o.objectMode && !!o.encoding && o.encoding !== 'buffer';
+/**
+ * Main export, the Minipass class
+ *
+ * `RType` is the type of data emitted, defaults to Buffer
+ *
+ * `WType` is the type of data to be written, if RType is buffer or string,
+ * then any {@link Minipass.ContiguousData} is allowed.
+ *
+ * `Events` is the set of event handler signatures that this object
+ * will emit, see {@link Minipass.Events}
+ */
+class Minipass extends external_events_.EventEmitter {
+    [FLOWING] = false;
+    [PAUSED] = false;
+    [PIPES] = [];
+    [BUFFER] = [];
+    [OBJECTMODE];
+    [ENCODING];
+    [ASYNC];
+    [DECODER];
+    [EOF] = false;
+    [EMITTED_END] = false;
+    [EMITTING_END] = false;
+    [CLOSED] = false;
+    [EMITTED_ERROR] = null;
+    [BUFFERLENGTH] = 0;
+    [DESTROYED] = false;
+    [SIGNAL];
+    [ABORTED] = false;
+    [DATALISTENERS] = 0;
+    [DISCARDED] = false;
+    /**
+     * true if the stream can be written
+     */
+    writable = true;
+    /**
+     * true if the stream can be read
+     */
+    readable = true;
+    /**
+     * If `RType` is Buffer, then options do not need to be provided.
+     * Otherwise, an options object must be provided to specify either
+     * {@link Minipass.SharedOptions.objectMode} or
+     * {@link Minipass.SharedOptions.encoding}, as appropriate.
+     */
+    constructor(...args) {
+        const options = (args[0] ||
+            {});
+        super();
+        if (options.objectMode && typeof options.encoding === 'string') {
+            throw new TypeError('Encoding and objectMode may not be used together');
+        }
+        if (isObjectModeOptions(options)) {
+            this[OBJECTMODE] = true;
+            this[ENCODING] = null;
+        }
+        else if (isEncodingOptions(options)) {
+            this[ENCODING] = options.encoding;
+            this[OBJECTMODE] = false;
+        }
+        else {
+            this[OBJECTMODE] = false;
+            this[ENCODING] = null;
+        }
+        this[ASYNC] = !!options.async;
+        this[DECODER] = this[ENCODING]
+            ? new external_string_decoder_namespaceObject.StringDecoder(this[ENCODING])
+            : null;
+        //@ts-ignore - private option for debugging and testing
+        if (options && options.debugExposeBuffer === true) {
+            Object.defineProperty(this, 'buffer', { get: () => this[BUFFER] });
+        }
+        //@ts-ignore - private option for debugging and testing
+        if (options && options.debugExposePipes === true) {
+            Object.defineProperty(this, 'pipes', { get: () => this[PIPES] });
+        }
+        const { signal } = options;
+        if (signal) {
+            this[SIGNAL] = signal;
+            if (signal.aborted) {
+                this[ABORT]();
+            }
+            else {
+                signal.addEventListener('abort', () => this[ABORT]());
+            }
+        }
+    }
+    /**
+     * The amount of data stored in the buffer waiting to be read.
+     *
+     * For Buffer strings, this will be the total byte length.
+     * For string encoding streams, this will be the string character length,
+     * according to JavaScript's `string.length` logic.
+     * For objectMode streams, this is a count of the items waiting to be
+     * emitted.
+     */
+    get bufferLength() {
+        return this[BUFFERLENGTH];
+    }
+    /**
+     * The `BufferEncoding` currently in use, or `null`
+     */
+    get encoding() {
+        return this[ENCODING];
+    }
+    /**
+     * @deprecated - This is a read only property
+     */
+    set encoding(_enc) {
+        throw new Error('Encoding must be set at instantiation time');
+    }
+    /**
+     * @deprecated - Encoding may only be set at instantiation time
+     */
+    setEncoding(_enc) {
+        throw new Error('Encoding must be set at instantiation time');
+    }
+    /**
+     * True if this is an objectMode stream
+     */
+    get objectMode() {
+        return this[OBJECTMODE];
+    }
+    /**
+     * @deprecated - This is a read-only property
+     */
+    set objectMode(_om) {
+        throw new Error('objectMode must be set at instantiation time');
+    }
+    /**
+     * true if this is an async stream
+     */
+    get ['async']() {
+        return this[ASYNC];
+    }
+    /**
+     * Set to true to make this stream async.
+     *
+     * Once set, it cannot be unset, as this would potentially cause incorrect
+     * behavior.  Ie, a sync stream can be made async, but an async stream
+     * cannot be safely made sync.
+     */
+    set ['async'](a) {
+        this[ASYNC] = this[ASYNC] || !!a;
+    }
+    // drop everything and get out of the flow completely
+    [ABORT]() {
+        this[ABORTED] = true;
+        this.emit('abort', this[SIGNAL]?.reason);
+        this.destroy(this[SIGNAL]?.reason);
+    }
+    /**
+     * True if the stream has been aborted.
+     */
+    get aborted() {
+        return this[ABORTED];
+    }
+    /**
+     * No-op setter. Stream aborted status is set via the AbortSignal provided
+     * in the constructor options.
+     */
+    set aborted(_) { }
+    write(chunk, encoding, cb) {
+        if (this[ABORTED])
+            return false;
+        if (this[EOF])
+            throw new Error('write after end');
+        if (this[DESTROYED]) {
+            this.emit('error', Object.assign(new Error('Cannot call write after a stream was destroyed'), { code: 'ERR_STREAM_DESTROYED' }));
+            return true;
+        }
+        if (typeof encoding === 'function') {
+            cb = encoding;
+            encoding = 'utf8';
+        }
+        if (!encoding)
+            encoding = 'utf8';
+        const fn = this[ASYNC] ? defer : nodefer;
+        // convert array buffers and typed array views into buffers
+        // at some point in the future, we may want to do the opposite!
+        // leave strings and buffers as-is
+        // anything is only allowed if in object mode, so throw
+        if (!this[OBJECTMODE] && !Buffer.isBuffer(chunk)) {
+            if (isArrayBufferView(chunk)) {
+                //@ts-ignore - sinful unsafe type changing
+                chunk = Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+            }
+            else if (isArrayBufferLike(chunk)) {
+                //@ts-ignore - sinful unsafe type changing
+                chunk = Buffer.from(chunk);
+            }
+            else if (typeof chunk !== 'string') {
+                throw new Error('Non-contiguous data written to non-objectMode stream');
+            }
+        }
+        // handle object mode up front, since it's simpler
+        // this yields better performance, fewer checks later.
+        if (this[OBJECTMODE]) {
+            // maybe impossible?
+            /* c8 ignore start */
+            if (this[FLOWING] && this[BUFFERLENGTH] !== 0)
+                this[FLUSH](true);
+            /* c8 ignore stop */
+            if (this[FLOWING])
+                this.emit('data', chunk);
+            else
+                this[BUFFERPUSH](chunk);
+            if (this[BUFFERLENGTH] !== 0)
+                this.emit('readable');
+            if (cb)
+                fn(cb);
+            return this[FLOWING];
+        }
+        // at this point the chunk is a buffer or string
+        // don't buffer it up or send it to the decoder
+        if (!chunk.length) {
+            if (this[BUFFERLENGTH] !== 0)
+                this.emit('readable');
+            if (cb)
+                fn(cb);
+            return this[FLOWING];
+        }
+        // fast-path writing strings of same encoding to a stream with
+        // an empty buffer, skipping the buffer/decoder dance
+        if (typeof chunk === 'string' &&
+            // unless it is a string already ready for us to use
+            !(encoding === this[ENCODING] && !this[DECODER]?.lastNeed)) {
+            //@ts-ignore - sinful unsafe type change
+            chunk = Buffer.from(chunk, encoding);
+        }
+        if (Buffer.isBuffer(chunk) && this[ENCODING]) {
+            //@ts-ignore - sinful unsafe type change
+            chunk = this[DECODER].write(chunk);
+        }
+        // Note: flushing CAN potentially switch us into not-flowing mode
+        if (this[FLOWING] && this[BUFFERLENGTH] !== 0)
+            this[FLUSH](true);
+        if (this[FLOWING])
+            this.emit('data', chunk);
+        else
+            this[BUFFERPUSH](chunk);
+        if (this[BUFFERLENGTH] !== 0)
+            this.emit('readable');
+        if (cb)
+            fn(cb);
+        return this[FLOWING];
+    }
+    /**
+     * Low-level explicit read method.
+     *
+     * In objectMode, the argument is ignored, and one item is returned if
+     * available.
+     *
+     * `n` is the number of bytes (or in the case of encoding streams,
+     * characters) to consume. If `n` is not provided, then the entire buffer
+     * is returned, or `null` is returned if no data is available.
+     *
+     * If `n` is greater that the amount of data in the internal buffer,
+     * then `null` is returned.
+     */
+    read(n) {
+        if (this[DESTROYED])
+            return null;
+        this[DISCARDED] = false;
+        if (this[BUFFERLENGTH] === 0 ||
+            n === 0 ||
+            (n && n > this[BUFFERLENGTH])) {
+            this[MAYBE_EMIT_END]();
+            return null;
+        }
+        if (this[OBJECTMODE])
+            n = null;
+        if (this[BUFFER].length > 1 && !this[OBJECTMODE]) {
+            // not object mode, so if we have an encoding, then RType is string
+            // otherwise, must be Buffer
+            this[BUFFER] = [
+                (this[ENCODING]
+                    ? this[BUFFER].join('')
+                    : Buffer.concat(this[BUFFER], this[BUFFERLENGTH])),
+            ];
+        }
+        const ret = this[READ](n || null, this[BUFFER][0]);
+        this[MAYBE_EMIT_END]();
+        return ret;
+    }
+    [READ](n, chunk) {
+        if (this[OBJECTMODE])
+            this[BUFFERSHIFT]();
+        else {
+            const c = chunk;
+            if (n === c.length || n === null)
+                this[BUFFERSHIFT]();
+            else if (typeof c === 'string') {
+                this[BUFFER][0] = c.slice(n);
+                chunk = c.slice(0, n);
+                this[BUFFERLENGTH] -= n;
+            }
+            else {
+                this[BUFFER][0] = c.subarray(n);
+                chunk = c.subarray(0, n);
+                this[BUFFERLENGTH] -= n;
+            }
+        }
+        this.emit('data', chunk);
+        if (!this[BUFFER].length && !this[EOF])
+            this.emit('drain');
+        return chunk;
+    }
+    end(chunk, encoding, cb) {
+        if (typeof chunk === 'function') {
+            cb = chunk;
+            chunk = undefined;
+        }
+        if (typeof encoding === 'function') {
+            cb = encoding;
+            encoding = 'utf8';
+        }
+        if (chunk !== undefined)
+            this.write(chunk, encoding);
+        if (cb)
+            this.once('end', cb);
+        this[EOF] = true;
+        this.writable = false;
+        // if we haven't written anything, then go ahead and emit,
+        // even if we're not reading.
+        // we'll re-emit if a new 'end' listener is added anyway.
+        // This makes MP more suitable to write-only use cases.
+        if (this[FLOWING] || !this[PAUSED])
+            this[MAYBE_EMIT_END]();
+        return this;
+    }
+    // don't let the internal resume be overwritten
+    [RESUME]() {
+        if (this[DESTROYED])
+            return;
+        if (!this[DATALISTENERS] && !this[PIPES].length) {
+            this[DISCARDED] = true;
+        }
+        this[PAUSED] = false;
+        this[FLOWING] = true;
+        this.emit('resume');
+        if (this[BUFFER].length)
+            this[FLUSH]();
+        else if (this[EOF])
+            this[MAYBE_EMIT_END]();
+        else
+            this.emit('drain');
+    }
+    /**
+     * Resume the stream if it is currently in a paused state
+     *
+     * If called when there are no pipe destinations or `data` event listeners,
+     * this will place the stream in a "discarded" state, where all data will
+     * be thrown away. The discarded state is removed if a pipe destination or
+     * data handler is added, if pause() is called, or if any synchronous or
+     * asynchronous iteration is started.
+     */
+    resume() {
+        return this[RESUME]();
+    }
+    /**
+     * Pause the stream
+     */
+    pause() {
+        this[FLOWING] = false;
+        this[PAUSED] = true;
+        this[DISCARDED] = false;
+    }
+    /**
+     * true if the stream has been forcibly destroyed
+     */
+    get destroyed() {
+        return this[DESTROYED];
+    }
+    /**
+     * true if the stream is currently in a flowing state, meaning that
+     * any writes will be immediately emitted.
+     */
+    get flowing() {
+        return this[FLOWING];
+    }
+    /**
+     * true if the stream is currently in a paused state
+     */
+    get paused() {
+        return this[PAUSED];
+    }
+    [BUFFERPUSH](chunk) {
+        if (this[OBJECTMODE])
+            this[BUFFERLENGTH] += 1;
+        else
+            this[BUFFERLENGTH] += chunk.length;
+        this[BUFFER].push(chunk);
+    }
+    [BUFFERSHIFT]() {
+        if (this[OBJECTMODE])
+            this[BUFFERLENGTH] -= 1;
+        else
+            this[BUFFERLENGTH] -= this[BUFFER][0].length;
+        return this[BUFFER].shift();
+    }
+    [FLUSH](noDrain = false) {
+        do { } while (this[FLUSHCHUNK](this[BUFFERSHIFT]()) &&
+            this[BUFFER].length);
+        if (!noDrain && !this[BUFFER].length && !this[EOF])
+            this.emit('drain');
+    }
+    [FLUSHCHUNK](chunk) {
+        this.emit('data', chunk);
+        return this[FLOWING];
+    }
+    /**
+     * Pipe all data emitted by this stream into the destination provided.
+     *
+     * Triggers the flow of data.
+     */
+    pipe(dest, opts) {
+        if (this[DESTROYED])
+            return dest;
+        this[DISCARDED] = false;
+        const ended = this[EMITTED_END];
+        opts = opts || {};
+        if (dest === proc.stdout || dest === proc.stderr)
+            opts.end = false;
+        else
+            opts.end = opts.end !== false;
+        opts.proxyErrors = !!opts.proxyErrors;
+        // piping an ended stream ends immediately
+        if (ended) {
+            if (opts.end)
+                dest.end();
+        }
+        else {
+            // "as" here just ignores the WType, which pipes don't care about,
+            // since they're only consuming from us, and writing to the dest
+            this[PIPES].push(!opts.proxyErrors
+                ? new Pipe(this, dest, opts)
+                : new PipeProxyErrors(this, dest, opts));
+            if (this[ASYNC])
+                defer(() => this[RESUME]());
+            else
+                this[RESUME]();
+        }
+        return dest;
+    }
+    /**
+     * Fully unhook a piped destination stream.
+     *
+     * If the destination stream was the only consumer of this stream (ie,
+     * there are no other piped destinations or `'data'` event listeners)
+     * then the flow of data will stop until there is another consumer or
+     * {@link Minipass#resume} is explicitly called.
+     */
+    unpipe(dest) {
+        const p = this[PIPES].find(p => p.dest === dest);
+        if (p) {
+            if (this[PIPES].length === 1) {
+                if (this[FLOWING] && this[DATALISTENERS] === 0) {
+                    this[FLOWING] = false;
+                }
+                this[PIPES] = [];
+            }
+            else
+                this[PIPES].splice(this[PIPES].indexOf(p), 1);
+            p.unpipe();
+        }
+    }
+    /**
+     * Alias for {@link Minipass#on}
+     */
+    addListener(ev, handler) {
+        return this.on(ev, handler);
+    }
+    /**
+     * Mostly identical to `EventEmitter.on`, with the following
+     * behavior differences to prevent data loss and unnecessary hangs:
+     *
+     * - Adding a 'data' event handler will trigger the flow of data
+     *
+     * - Adding a 'readable' event handler when there is data waiting to be read
+     *   will cause 'readable' to be emitted immediately.
+     *
+     * - Adding an 'endish' event handler ('end', 'finish', etc.) which has
+     *   already passed will cause the event to be emitted immediately and all
+     *   handlers removed.
+     *
+     * - Adding an 'error' event handler after an error has been emitted will
+     *   cause the event to be re-emitted immediately with the error previously
+     *   raised.
+     */
+    on(ev, handler) {
+        const ret = super.on(ev, handler);
+        if (ev === 'data') {
+            this[DISCARDED] = false;
+            this[DATALISTENERS]++;
+            if (!this[PIPES].length && !this[FLOWING]) {
+                this[RESUME]();
+            }
+        }
+        else if (ev === 'readable' && this[BUFFERLENGTH] !== 0) {
+            super.emit('readable');
+        }
+        else if (isEndish(ev) && this[EMITTED_END]) {
+            super.emit(ev);
+            this.removeAllListeners(ev);
+        }
+        else if (ev === 'error' && this[EMITTED_ERROR]) {
+            const h = handler;
+            if (this[ASYNC])
+                defer(() => h.call(this, this[EMITTED_ERROR]));
+            else
+                h.call(this, this[EMITTED_ERROR]);
+        }
+        return ret;
+    }
+    /**
+     * Alias for {@link Minipass#off}
+     */
+    removeListener(ev, handler) {
+        return this.off(ev, handler);
+    }
+    /**
+     * Mostly identical to `EventEmitter.off`
+     *
+     * If a 'data' event handler is removed, and it was the last consumer
+     * (ie, there are no pipe destinations or other 'data' event listeners),
+     * then the flow of data will stop until there is another consumer or
+     * {@link Minipass#resume} is explicitly called.
+     */
+    off(ev, handler) {
+        const ret = super.off(ev, handler);
+        // if we previously had listeners, and now we don't, and we don't
+        // have any pipes, then stop the flow, unless it's been explicitly
+        // put in a discarded flowing state via stream.resume().
+        if (ev === 'data') {
+            this[DATALISTENERS] = this.listeners('data').length;
+            if (this[DATALISTENERS] === 0 &&
+                !this[DISCARDED] &&
+                !this[PIPES].length) {
+                this[FLOWING] = false;
+            }
+        }
+        return ret;
+    }
+    /**
+     * Mostly identical to `EventEmitter.removeAllListeners`
+     *
+     * If all 'data' event handlers are removed, and they were the last consumer
+     * (ie, there are no pipe destinations), then the flow of data will stop
+     * until there is another consumer or {@link Minipass#resume} is explicitly
+     * called.
+     */
+    removeAllListeners(ev) {
+        const ret = super.removeAllListeners(ev);
+        if (ev === 'data' || ev === undefined) {
+            this[DATALISTENERS] = 0;
+            if (!this[DISCARDED] && !this[PIPES].length) {
+                this[FLOWING] = false;
+            }
+        }
+        return ret;
+    }
+    /**
+     * true if the 'end' event has been emitted
+     */
+    get emittedEnd() {
+        return this[EMITTED_END];
+    }
+    [MAYBE_EMIT_END]() {
+        if (!this[EMITTING_END] &&
+            !this[EMITTED_END] &&
+            !this[DESTROYED] &&
+            this[BUFFER].length === 0 &&
+            this[EOF]) {
+            this[EMITTING_END] = true;
+            this.emit('end');
+            this.emit('prefinish');
+            this.emit('finish');
+            if (this[CLOSED])
+                this.emit('close');
+            this[EMITTING_END] = false;
+        }
+    }
+    /**
+     * Mostly identical to `EventEmitter.emit`, with the following
+     * behavior differences to prevent data loss and unnecessary hangs:
+     *
+     * If the stream has been destroyed, and the event is something other
+     * than 'close' or 'error', then `false` is returned and no handlers
+     * are called.
+     *
+     * If the event is 'end', and has already been emitted, then the event
+     * is ignored. If the stream is in a paused or non-flowing state, then
+     * the event will be deferred until data flow resumes. If the stream is
+     * async, then handlers will be called on the next tick rather than
+     * immediately.
+     *
+     * If the event is 'close', and 'end' has not yet been emitted, then
+     * the event will be deferred until after 'end' is emitted.
+     *
+     * If the event is 'error', and an AbortSignal was provided for the stream,
+     * and there are no listeners, then the event is ignored, matching the
+     * behavior of node core streams in the presense of an AbortSignal.
+     *
+     * If the event is 'finish' or 'prefinish', then all listeners will be
+     * removed after emitting the event, to prevent double-firing.
+     */
+    emit(ev, ...args) {
+        const data = args[0];
+        // error and close are only events allowed after calling destroy()
+        if (ev !== 'error' &&
+            ev !== 'close' &&
+            ev !== DESTROYED &&
+            this[DESTROYED]) {
+            return false;
+        }
+        else if (ev === 'data') {
+            return !this[OBJECTMODE] && !data
+                ? false
+                : this[ASYNC]
+                    ? (defer(() => this[EMITDATA](data)), true)
+                    : this[EMITDATA](data);
+        }
+        else if (ev === 'end') {
+            return this[EMITEND]();
+        }
+        else if (ev === 'close') {
+            this[CLOSED] = true;
+            // don't emit close before 'end' and 'finish'
+            if (!this[EMITTED_END] && !this[DESTROYED])
+                return false;
+            const ret = super.emit('close');
+            this.removeAllListeners('close');
+            return ret;
+        }
+        else if (ev === 'error') {
+            this[EMITTED_ERROR] = data;
+            super.emit(ERROR, data);
+            const ret = !this[SIGNAL] || this.listeners('error').length
+                ? super.emit('error', data)
+                : false;
+            this[MAYBE_EMIT_END]();
+            return ret;
+        }
+        else if (ev === 'resume') {
+            const ret = super.emit('resume');
+            this[MAYBE_EMIT_END]();
+            return ret;
+        }
+        else if (ev === 'finish' || ev === 'prefinish') {
+            const ret = super.emit(ev);
+            this.removeAllListeners(ev);
+            return ret;
+        }
+        // Some other unknown event
+        const ret = super.emit(ev, ...args);
+        this[MAYBE_EMIT_END]();
+        return ret;
+    }
+    [EMITDATA](data) {
+        for (const p of this[PIPES]) {
+            if (p.dest.write(data) === false)
+                this.pause();
+        }
+        const ret = this[DISCARDED] ? false : super.emit('data', data);
+        this[MAYBE_EMIT_END]();
+        return ret;
+    }
+    [EMITEND]() {
+        if (this[EMITTED_END])
+            return false;
+        this[EMITTED_END] = true;
+        this.readable = false;
+        return this[ASYNC]
+            ? (defer(() => this[EMITEND2]()), true)
+            : this[EMITEND2]();
+    }
+    [EMITEND2]() {
+        if (this[DECODER]) {
+            const data = this[DECODER].end();
+            if (data) {
+                for (const p of this[PIPES]) {
+                    p.dest.write(data);
+                }
+                if (!this[DISCARDED])
+                    super.emit('data', data);
+            }
+        }
+        for (const p of this[PIPES]) {
+            p.end();
+        }
+        const ret = super.emit('end');
+        this.removeAllListeners('end');
+        return ret;
+    }
+    /**
+     * Return a Promise that resolves to an array of all emitted data once
+     * the stream ends.
+     */
+    async collect() {
+        const buf = Object.assign([], {
+            dataLength: 0,
+        });
+        if (!this[OBJECTMODE])
+            buf.dataLength = 0;
+        // set the promise first, in case an error is raised
+        // by triggering the flow here.
+        const p = this.promise();
+        this.on('data', c => {
+            buf.push(c);
+            if (!this[OBJECTMODE])
+                buf.dataLength += c.length;
+        });
+        await p;
+        return buf;
+    }
+    /**
+     * Return a Promise that resolves to the concatenation of all emitted data
+     * once the stream ends.
+     *
+     * Not allowed on objectMode streams.
+     */
+    async concat() {
+        if (this[OBJECTMODE]) {
+            throw new Error('cannot concat in objectMode');
+        }
+        const buf = await this.collect();
+        return (this[ENCODING]
+            ? buf.join('')
+            : Buffer.concat(buf, buf.dataLength));
+    }
+    /**
+     * Return a void Promise that resolves once the stream ends.
+     */
+    async promise() {
+        return new Promise((resolve, reject) => {
+            this.on(DESTROYED, () => reject(new Error('stream destroyed')));
+            this.on('error', er => reject(er));
+            this.on('end', () => resolve());
+        });
+    }
+    /**
+     * Asynchronous `for await of` iteration.
+     *
+     * This will continue emitting all chunks until the stream terminates.
+     */
+    [Symbol.asyncIterator]() {
+        // set this up front, in case the consumer doesn't call next()
+        // right away.
+        this[DISCARDED] = false;
+        let stopped = false;
+        const stop = async () => {
+            this.pause();
+            stopped = true;
+            return { value: undefined, done: true };
+        };
+        const next = () => {
+            if (stopped)
+                return stop();
+            const res = this.read();
+            if (res !== null)
+                return Promise.resolve({ done: false, value: res });
+            if (this[EOF])
+                return stop();
+            let resolve;
+            let reject;
+            const onerr = (er) => {
+                this.off('data', ondata);
+                this.off('end', onend);
+                this.off(DESTROYED, ondestroy);
+                stop();
+                reject(er);
+            };
+            const ondata = (value) => {
+                this.off('error', onerr);
+                this.off('end', onend);
+                this.off(DESTROYED, ondestroy);
+                this.pause();
+                resolve({ value, done: !!this[EOF] });
+            };
+            const onend = () => {
+                this.off('error', onerr);
+                this.off('data', ondata);
+                this.off(DESTROYED, ondestroy);
+                stop();
+                resolve({ done: true, value: undefined });
+            };
+            const ondestroy = () => onerr(new Error('stream destroyed'));
+            return new Promise((res, rej) => {
+                reject = rej;
+                resolve = res;
+                this.once(DESTROYED, ondestroy);
+                this.once('error', onerr);
+                this.once('end', onend);
+                this.once('data', ondata);
+            });
+        };
+        return {
+            next,
+            throw: stop,
+            return: stop,
+            [Symbol.asyncIterator]() {
+                return this;
+            },
+        };
+    }
+    /**
+     * Synchronous `for of` iteration.
+     *
+     * The iteration will terminate when the internal buffer runs out, even
+     * if the stream has not yet terminated.
+     */
+    [Symbol.iterator]() {
+        // set this up front, in case the consumer doesn't call next()
+        // right away.
+        this[DISCARDED] = false;
+        let stopped = false;
+        const stop = () => {
+            this.pause();
+            this.off(ERROR, stop);
+            this.off(DESTROYED, stop);
+            this.off('end', stop);
+            stopped = true;
+            return { done: true, value: undefined };
+        };
+        const next = () => {
+            if (stopped)
+                return stop();
+            const value = this.read();
+            return value === null ? stop() : { done: false, value };
+        };
+        this.once('end', stop);
+        this.once(ERROR, stop);
+        this.once(DESTROYED, stop);
+        return {
+            next,
+            throw: stop,
+            return: stop,
+            [Symbol.iterator]() {
+                return this;
+            },
+        };
+    }
+    /**
+     * Destroy a stream, preventing it from being used for any further purpose.
+     *
+     * If the stream has a `close()` method, then it will be called on
+     * destruction.
+     *
+     * After destruction, any attempt to write data, read data, or emit most
+     * events will be ignored.
+     *
+     * If an error argument is provided, then it will be emitted in an
+     * 'error' event.
+     */
+    destroy(er) {
+        if (this[DESTROYED]) {
+            if (er)
+                this.emit('error', er);
+            else
+                this.emit(DESTROYED);
+            return this;
+        }
+        this[DESTROYED] = true;
+        this[DISCARDED] = true;
+        // throw away all buffered data, it's never coming out
+        this[BUFFER].length = 0;
+        this[BUFFERLENGTH] = 0;
+        const wc = this;
+        if (typeof wc.close === 'function' && !this[CLOSED])
+            wc.close();
+        if (er)
+            this.emit('error', er);
+        // if no error to emit, still reject pending promises
+        else
+            this.emit(DESTROYED);
+        return this;
+    }
+    /**
+     * Alias for {@link isStream}
+     *
+     * Former export location, maintained for backwards compatibility.
+     *
+     * @deprecated
+     */
+    static get isStream() {
+        return isStream;
+    }
+}
+//# sourceMappingURL=index.js.map
 ;// CONCATENATED MODULE: ./node_modules/path-scurry/dist/mjs/index.js
 
 
@@ -19043,6 +19353,29 @@ class PathBase {
      */
     isUnknown() {
         return (this.#type & IFMT) === UNKNOWN;
+    }
+    isType(type) {
+        return this[`is${type}`]();
+    }
+    getType() {
+        return this.isUnknown()
+            ? 'Unknown'
+            : this.isDirectory()
+                ? 'Directory'
+                : this.isFile()
+                    ? 'File'
+                    : this.isSymbolicLink()
+                        ? 'SymbolicLink'
+                        : this.isFIFO()
+                            ? 'FIFO'
+                            : this.isCharacterDevice()
+                                ? 'CharacterDevice'
+                                : this.isBlockDevice()
+                                    ? 'BlockDevice'
+                                    : /* c8 ignore start */ this.isSocket()
+                                        ? 'Socket'
+                                        : 'Unknown';
+        /* c8 ignore stop */
     }
     /**
      * Is the Path a regular file?
@@ -20509,7 +20842,7 @@ const PathScurry = process.platform === 'win32'
         ? PathScurryDarwin
         : PathScurryPosix;
 //# sourceMappingURL=index.js.map
-;// CONCATENATED MODULE: ./node_modules/glob/dist/mjs/pattern.js
+;// CONCATENATED MODULE: ./node_modules/glob/dist/esm/pattern.js
 // this is just a very light wrapper around 2 arrays with an offset index
 
 const isPatternList = (pl) => pl.length >= 1;
@@ -20725,711 +21058,7 @@ class Pattern {
     }
 }
 //# sourceMappingURL=pattern.js.map
-;// CONCATENATED MODULE: ./node_modules/minipass/index.mjs
-
-const minipass_proc =
-  typeof process === 'object' && process
-    ? process
-    : {
-        stdout: null,
-        stderr: null,
-      }
-;
-
-
-const minipass_SD = external_string_decoder_namespaceObject.StringDecoder
-
-const minipass_EOF = Symbol('EOF')
-const minipass_MAYBE_EMIT_END = Symbol('maybeEmitEnd')
-const minipass_EMITTED_END = Symbol('emittedEnd')
-const minipass_EMITTING_END = Symbol('emittingEnd')
-const minipass_EMITTED_ERROR = Symbol('emittedError')
-const minipass_CLOSED = Symbol('closed')
-const minipass_READ = Symbol('read')
-const minipass_FLUSH = Symbol('flush')
-const minipass_FLUSHCHUNK = Symbol('flushChunk')
-const minipass_ENCODING = Symbol('encoding')
-const minipass_DECODER = Symbol('decoder')
-const minipass_FLOWING = Symbol('flowing')
-const minipass_PAUSED = Symbol('paused')
-const minipass_RESUME = Symbol('resume')
-const minipass_BUFFER = Symbol('buffer')
-const minipass_PIPES = Symbol('pipes')
-const minipass_BUFFERLENGTH = Symbol('bufferLength')
-const minipass_BUFFERPUSH = Symbol('bufferPush')
-const minipass_BUFFERSHIFT = Symbol('bufferShift')
-const minipass_OBJECTMODE = Symbol('objectMode')
-// internal event when stream is destroyed
-const minipass_DESTROYED = Symbol('destroyed')
-// internal event when stream has an error
-const minipass_ERROR = Symbol('error')
-const minipass_EMITDATA = Symbol('emitData')
-const minipass_EMITEND = Symbol('emitEnd')
-const minipass_EMITEND2 = Symbol('emitEnd2')
-const minipass_ASYNC = Symbol('async')
-const minipass_ABORT = Symbol('abort')
-const minipass_ABORTED = Symbol('aborted')
-const minipass_SIGNAL = Symbol('signal')
-
-const minipass_defer = fn => Promise.resolve().then(fn)
-
-// TODO remove when Node v8 support drops
-const minipass_doIter = global._MP_NO_ITERATOR_SYMBOLS_ !== '1'
-const minipass_ASYNCITERATOR =
-  (minipass_doIter && Symbol.asyncIterator) || Symbol('asyncIterator not implemented')
-const minipass_ITERATOR =
-  (minipass_doIter && Symbol.iterator) || Symbol('iterator not implemented')
-
-// events that mean 'the stream is over'
-// these are treated specially, and re-emitted
-// if they are listened for after emitting.
-const minipass_isEndish = ev => ev === 'end' || ev === 'finish' || ev === 'prefinish'
-
-const minipass_isArrayBuffer = b =>
-  b instanceof ArrayBuffer ||
-  (typeof b === 'object' &&
-    b.constructor &&
-    b.constructor.name === 'ArrayBuffer' &&
-    b.byteLength >= 0)
-
-const minipass_isArrayBufferView = b => !Buffer.isBuffer(b) && ArrayBuffer.isView(b)
-
-class minipass_Pipe {
-  constructor(src, dest, opts) {
-    this.src = src
-    this.dest = dest
-    this.opts = opts
-    this.ondrain = () => src[minipass_RESUME]()
-    dest.on('drain', this.ondrain)
-  }
-  unpipe() {
-    this.dest.removeListener('drain', this.ondrain)
-  }
-  // istanbul ignore next - only here for the prototype
-  proxyErrors() {}
-  end() {
-    this.unpipe()
-    if (this.opts.end) this.dest.end()
-  }
-}
-
-class minipass_PipeProxyErrors extends minipass_Pipe {
-  unpipe() {
-    this.src.removeListener('error', this.proxyErrors)
-    super.unpipe()
-  }
-  constructor(src, dest, opts) {
-    super(src, dest, opts)
-    this.proxyErrors = er => dest.emit('error', er)
-    src.on('error', this.proxyErrors)
-  }
-}
-
-class minipass_Minipass extends external_stream_ {
-  constructor(options) {
-    super()
-    this[minipass_FLOWING] = false
-    // whether we're explicitly paused
-    this[minipass_PAUSED] = false
-    this[minipass_PIPES] = []
-    this[minipass_BUFFER] = []
-    this[minipass_OBJECTMODE] = (options && options.objectMode) || false
-    if (this[minipass_OBJECTMODE]) this[minipass_ENCODING] = null
-    else this[minipass_ENCODING] = (options && options.encoding) || null
-    if (this[minipass_ENCODING] === 'buffer') this[minipass_ENCODING] = null
-    this[minipass_ASYNC] = (options && !!options.async) || false
-    this[minipass_DECODER] = this[minipass_ENCODING] ? new minipass_SD(this[minipass_ENCODING]) : null
-    this[minipass_EOF] = false
-    this[minipass_EMITTED_END] = false
-    this[minipass_EMITTING_END] = false
-    this[minipass_CLOSED] = false
-    this[minipass_EMITTED_ERROR] = null
-    this.writable = true
-    this.readable = true
-    this[minipass_BUFFERLENGTH] = 0
-    this[minipass_DESTROYED] = false
-    if (options && options.debugExposeBuffer === true) {
-      Object.defineProperty(this, 'buffer', { get: () => this[minipass_BUFFER] })
-    }
-    if (options && options.debugExposePipes === true) {
-      Object.defineProperty(this, 'pipes', { get: () => this[minipass_PIPES] })
-    }
-    this[minipass_SIGNAL] = options && options.signal
-    this[minipass_ABORTED] = false
-    if (this[minipass_SIGNAL]) {
-      this[minipass_SIGNAL].addEventListener('abort', () => this[minipass_ABORT]())
-      if (this[minipass_SIGNAL].aborted) {
-        this[minipass_ABORT]()
-      }
-    }
-  }
-
-  get bufferLength() {
-    return this[minipass_BUFFERLENGTH]
-  }
-
-  get encoding() {
-    return this[minipass_ENCODING]
-  }
-  set encoding(enc) {
-    if (this[minipass_OBJECTMODE]) throw new Error('cannot set encoding in objectMode')
-
-    if (
-      this[minipass_ENCODING] &&
-      enc !== this[minipass_ENCODING] &&
-      ((this[minipass_DECODER] && this[minipass_DECODER].lastNeed) || this[minipass_BUFFERLENGTH])
-    )
-      throw new Error('cannot change encoding')
-
-    if (this[minipass_ENCODING] !== enc) {
-      this[minipass_DECODER] = enc ? new minipass_SD(enc) : null
-      if (this[minipass_BUFFER].length)
-        this[minipass_BUFFER] = this[minipass_BUFFER].map(chunk => this[minipass_DECODER].write(chunk))
-    }
-
-    this[minipass_ENCODING] = enc
-  }
-
-  setEncoding(enc) {
-    this.encoding = enc
-  }
-
-  get objectMode() {
-    return this[minipass_OBJECTMODE]
-  }
-  set objectMode(om) {
-    this[minipass_OBJECTMODE] = this[minipass_OBJECTMODE] || !!om
-  }
-
-  get ['async']() {
-    return this[minipass_ASYNC]
-  }
-  set ['async'](a) {
-    this[minipass_ASYNC] = this[minipass_ASYNC] || !!a
-  }
-
-  // drop everything and get out of the flow completely
-  [minipass_ABORT]() {
-    this[minipass_ABORTED] = true
-    this.emit('abort', this[minipass_SIGNAL].reason)
-    this.destroy(this[minipass_SIGNAL].reason)
-  }
-
-  get aborted() {
-    return this[minipass_ABORTED]
-  }
-  set aborted(_) {}
-
-  write(chunk, encoding, cb) {
-    if (this[minipass_ABORTED]) return false
-    if (this[minipass_EOF]) throw new Error('write after end')
-
-    if (this[minipass_DESTROYED]) {
-      this.emit(
-        'error',
-        Object.assign(
-          new Error('Cannot call write after a stream was destroyed'),
-          { code: 'ERR_STREAM_DESTROYED' }
-        )
-      )
-      return true
-    }
-
-    if (typeof encoding === 'function') (cb = encoding), (encoding = 'utf8')
-
-    if (!encoding) encoding = 'utf8'
-
-    const fn = this[minipass_ASYNC] ? minipass_defer : f => f()
-
-    // convert array buffers and typed array views into buffers
-    // at some point in the future, we may want to do the opposite!
-    // leave strings and buffers as-is
-    // anything else switches us into object mode
-    if (!this[minipass_OBJECTMODE] && !Buffer.isBuffer(chunk)) {
-      if (minipass_isArrayBufferView(chunk))
-        chunk = Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)
-      else if (minipass_isArrayBuffer(chunk)) chunk = Buffer.from(chunk)
-      else if (typeof chunk !== 'string')
-        // use the setter so we throw if we have encoding set
-        this.objectMode = true
-    }
-
-    // handle object mode up front, since it's simpler
-    // this yields better performance, fewer checks later.
-    if (this[minipass_OBJECTMODE]) {
-      /* istanbul ignore if - maybe impossible? */
-      if (this.flowing && this[minipass_BUFFERLENGTH] !== 0) this[minipass_FLUSH](true)
-
-      if (this.flowing) this.emit('data', chunk)
-      else this[minipass_BUFFERPUSH](chunk)
-
-      if (this[minipass_BUFFERLENGTH] !== 0) this.emit('readable')
-
-      if (cb) fn(cb)
-
-      return this.flowing
-    }
-
-    // at this point the chunk is a buffer or string
-    // don't buffer it up or send it to the decoder
-    if (!chunk.length) {
-      if (this[minipass_BUFFERLENGTH] !== 0) this.emit('readable')
-      if (cb) fn(cb)
-      return this.flowing
-    }
-
-    // fast-path writing strings of same encoding to a stream with
-    // an empty buffer, skipping the buffer/decoder dance
-    if (
-      typeof chunk === 'string' &&
-      // unless it is a string already ready for us to use
-      !(encoding === this[minipass_ENCODING] && !this[minipass_DECODER].lastNeed)
-    ) {
-      chunk = Buffer.from(chunk, encoding)
-    }
-
-    if (Buffer.isBuffer(chunk) && this[minipass_ENCODING])
-      chunk = this[minipass_DECODER].write(chunk)
-
-    // Note: flushing CAN potentially switch us into not-flowing mode
-    if (this.flowing && this[minipass_BUFFERLENGTH] !== 0) this[minipass_FLUSH](true)
-
-    if (this.flowing) this.emit('data', chunk)
-    else this[minipass_BUFFERPUSH](chunk)
-
-    if (this[minipass_BUFFERLENGTH] !== 0) this.emit('readable')
-
-    if (cb) fn(cb)
-
-    return this.flowing
-  }
-
-  read(n) {
-    if (this[minipass_DESTROYED]) return null
-
-    if (this[minipass_BUFFERLENGTH] === 0 || n === 0 || n > this[minipass_BUFFERLENGTH]) {
-      this[minipass_MAYBE_EMIT_END]()
-      return null
-    }
-
-    if (this[minipass_OBJECTMODE]) n = null
-
-    if (this[minipass_BUFFER].length > 1 && !this[minipass_OBJECTMODE]) {
-      if (this.encoding) this[minipass_BUFFER] = [this[minipass_BUFFER].join('')]
-      else this[minipass_BUFFER] = [Buffer.concat(this[minipass_BUFFER], this[minipass_BUFFERLENGTH])]
-    }
-
-    const ret = this[minipass_READ](n || null, this[minipass_BUFFER][0])
-    this[minipass_MAYBE_EMIT_END]()
-    return ret
-  }
-
-  [minipass_READ](n, chunk) {
-    if (n === chunk.length || n === null) this[minipass_BUFFERSHIFT]()
-    else {
-      this[minipass_BUFFER][0] = chunk.slice(n)
-      chunk = chunk.slice(0, n)
-      this[minipass_BUFFERLENGTH] -= n
-    }
-
-    this.emit('data', chunk)
-
-    if (!this[minipass_BUFFER].length && !this[minipass_EOF]) this.emit('drain')
-
-    return chunk
-  }
-
-  end(chunk, encoding, cb) {
-    if (typeof chunk === 'function') (cb = chunk), (chunk = null)
-    if (typeof encoding === 'function') (cb = encoding), (encoding = 'utf8')
-    if (chunk) this.write(chunk, encoding)
-    if (cb) this.once('end', cb)
-    this[minipass_EOF] = true
-    this.writable = false
-
-    // if we haven't written anything, then go ahead and emit,
-    // even if we're not reading.
-    // we'll re-emit if a new 'end' listener is added anyway.
-    // This makes MP more suitable to write-only use cases.
-    if (this.flowing || !this[minipass_PAUSED]) this[minipass_MAYBE_EMIT_END]()
-    return this
-  }
-
-  // don't let the internal resume be overwritten
-  [minipass_RESUME]() {
-    if (this[minipass_DESTROYED]) return
-
-    this[minipass_PAUSED] = false
-    this[minipass_FLOWING] = true
-    this.emit('resume')
-    if (this[minipass_BUFFER].length) this[minipass_FLUSH]()
-    else if (this[minipass_EOF]) this[minipass_MAYBE_EMIT_END]()
-    else this.emit('drain')
-  }
-
-  resume() {
-    return this[minipass_RESUME]()
-  }
-
-  pause() {
-    this[minipass_FLOWING] = false
-    this[minipass_PAUSED] = true
-  }
-
-  get destroyed() {
-    return this[minipass_DESTROYED]
-  }
-
-  get flowing() {
-    return this[minipass_FLOWING]
-  }
-
-  get paused() {
-    return this[minipass_PAUSED]
-  }
-
-  [minipass_BUFFERPUSH](chunk) {
-    if (this[minipass_OBJECTMODE]) this[minipass_BUFFERLENGTH] += 1
-    else this[minipass_BUFFERLENGTH] += chunk.length
-    this[minipass_BUFFER].push(chunk)
-  }
-
-  [minipass_BUFFERSHIFT]() {
-    if (this[minipass_OBJECTMODE]) this[minipass_BUFFERLENGTH] -= 1
-    else this[minipass_BUFFERLENGTH] -= this[minipass_BUFFER][0].length
-    return this[minipass_BUFFER].shift()
-  }
-
-  [minipass_FLUSH](noDrain) {
-    do {} while (this[minipass_FLUSHCHUNK](this[minipass_BUFFERSHIFT]()) && this[minipass_BUFFER].length)
-
-    if (!noDrain && !this[minipass_BUFFER].length && !this[minipass_EOF]) this.emit('drain')
-  }
-
-  [minipass_FLUSHCHUNK](chunk) {
-    this.emit('data', chunk)
-    return this.flowing
-  }
-
-  pipe(dest, opts) {
-    if (this[minipass_DESTROYED]) return
-
-    const ended = this[minipass_EMITTED_END]
-    opts = opts || {}
-    if (dest === minipass_proc.stdout || dest === minipass_proc.stderr) opts.end = false
-    else opts.end = opts.end !== false
-    opts.proxyErrors = !!opts.proxyErrors
-
-    // piping an ended stream ends immediately
-    if (ended) {
-      if (opts.end) dest.end()
-    } else {
-      this[minipass_PIPES].push(
-        !opts.proxyErrors
-          ? new minipass_Pipe(this, dest, opts)
-          : new minipass_PipeProxyErrors(this, dest, opts)
-      )
-      if (this[minipass_ASYNC]) minipass_defer(() => this[minipass_RESUME]())
-      else this[minipass_RESUME]()
-    }
-
-    return dest
-  }
-
-  unpipe(dest) {
-    const p = this[minipass_PIPES].find(p => p.dest === dest)
-    if (p) {
-      this[minipass_PIPES].splice(this[minipass_PIPES].indexOf(p), 1)
-      p.unpipe()
-    }
-  }
-
-  addListener(ev, fn) {
-    return this.on(ev, fn)
-  }
-
-  on(ev, fn) {
-    const ret = super.on(ev, fn)
-    if (ev === 'data' && !this[minipass_PIPES].length && !this.flowing) this[minipass_RESUME]()
-    else if (ev === 'readable' && this[minipass_BUFFERLENGTH] !== 0)
-      super.emit('readable')
-    else if (minipass_isEndish(ev) && this[minipass_EMITTED_END]) {
-      super.emit(ev)
-      this.removeAllListeners(ev)
-    } else if (ev === 'error' && this[minipass_EMITTED_ERROR]) {
-      if (this[minipass_ASYNC]) minipass_defer(() => fn.call(this, this[minipass_EMITTED_ERROR]))
-      else fn.call(this, this[minipass_EMITTED_ERROR])
-    }
-    return ret
-  }
-
-  get emittedEnd() {
-    return this[minipass_EMITTED_END]
-  }
-
-  [minipass_MAYBE_EMIT_END]() {
-    if (
-      !this[minipass_EMITTING_END] &&
-      !this[minipass_EMITTED_END] &&
-      !this[minipass_DESTROYED] &&
-      this[minipass_BUFFER].length === 0 &&
-      this[minipass_EOF]
-    ) {
-      this[minipass_EMITTING_END] = true
-      this.emit('end')
-      this.emit('prefinish')
-      this.emit('finish')
-      if (this[minipass_CLOSED]) this.emit('close')
-      this[minipass_EMITTING_END] = false
-    }
-  }
-
-  emit(ev, data, ...extra) {
-    // error and close are only events allowed after calling destroy()
-    if (ev !== 'error' && ev !== 'close' && ev !== minipass_DESTROYED && this[minipass_DESTROYED])
-      return
-    else if (ev === 'data') {
-      return !this[minipass_OBJECTMODE] && !data
-        ? false
-        : this[minipass_ASYNC]
-        ? minipass_defer(() => this[minipass_EMITDATA](data))
-        : this[minipass_EMITDATA](data)
-    } else if (ev === 'end') {
-      return this[minipass_EMITEND]()
-    } else if (ev === 'close') {
-      this[minipass_CLOSED] = true
-      // don't emit close before 'end' and 'finish'
-      if (!this[minipass_EMITTED_END] && !this[minipass_DESTROYED]) return
-      const ret = super.emit('close')
-      this.removeAllListeners('close')
-      return ret
-    } else if (ev === 'error') {
-      this[minipass_EMITTED_ERROR] = data
-      super.emit(minipass_ERROR, data)
-      const ret =
-        !this[minipass_SIGNAL] || this.listeners('error').length
-          ? super.emit('error', data)
-          : false
-      this[minipass_MAYBE_EMIT_END]()
-      return ret
-    } else if (ev === 'resume') {
-      const ret = super.emit('resume')
-      this[minipass_MAYBE_EMIT_END]()
-      return ret
-    } else if (ev === 'finish' || ev === 'prefinish') {
-      const ret = super.emit(ev)
-      this.removeAllListeners(ev)
-      return ret
-    }
-
-    // Some other unknown event
-    const ret = super.emit(ev, data, ...extra)
-    this[minipass_MAYBE_EMIT_END]()
-    return ret
-  }
-
-  [minipass_EMITDATA](data) {
-    for (const p of this[minipass_PIPES]) {
-      if (p.dest.write(data) === false) this.pause()
-    }
-    const ret = super.emit('data', data)
-    this[minipass_MAYBE_EMIT_END]()
-    return ret
-  }
-
-  [minipass_EMITEND]() {
-    if (this[minipass_EMITTED_END]) return
-
-    this[minipass_EMITTED_END] = true
-    this.readable = false
-    if (this[minipass_ASYNC]) minipass_defer(() => this[minipass_EMITEND2]())
-    else this[minipass_EMITEND2]()
-  }
-
-  [minipass_EMITEND2]() {
-    if (this[minipass_DECODER]) {
-      const data = this[minipass_DECODER].end()
-      if (data) {
-        for (const p of this[minipass_PIPES]) {
-          p.dest.write(data)
-        }
-        super.emit('data', data)
-      }
-    }
-
-    for (const p of this[minipass_PIPES]) {
-      p.end()
-    }
-    const ret = super.emit('end')
-    this.removeAllListeners('end')
-    return ret
-  }
-
-  // const all = await stream.collect()
-  collect() {
-    const buf = []
-    if (!this[minipass_OBJECTMODE]) buf.dataLength = 0
-    // set the promise first, in case an error is raised
-    // by triggering the flow here.
-    const p = this.promise()
-    this.on('data', c => {
-      buf.push(c)
-      if (!this[minipass_OBJECTMODE]) buf.dataLength += c.length
-    })
-    return p.then(() => buf)
-  }
-
-  // const data = await stream.concat()
-  concat() {
-    return this[minipass_OBJECTMODE]
-      ? Promise.reject(new Error('cannot concat in objectMode'))
-      : this.collect().then(buf =>
-          this[minipass_OBJECTMODE]
-            ? Promise.reject(new Error('cannot concat in objectMode'))
-            : this[minipass_ENCODING]
-            ? buf.join('')
-            : Buffer.concat(buf, buf.dataLength)
-        )
-  }
-
-  // stream.promise().then(() => done, er => emitted error)
-  promise() {
-    return new Promise((resolve, reject) => {
-      this.on(minipass_DESTROYED, () => reject(new Error('stream destroyed')))
-      this.on('error', er => reject(er))
-      this.on('end', () => resolve())
-    })
-  }
-
-  // for await (let chunk of stream)
-  [minipass_ASYNCITERATOR]() {
-    let stopped = false
-    const stop = () => {
-      this.pause()
-      stopped = true
-      return Promise.resolve({ done: true })
-    }
-    const next = () => {
-      if (stopped) return stop()
-      const res = this.read()
-      if (res !== null) return Promise.resolve({ done: false, value: res })
-
-      if (this[minipass_EOF]) return stop()
-
-      let resolve = null
-      let reject = null
-      const onerr = er => {
-        this.removeListener('data', ondata)
-        this.removeListener('end', onend)
-        this.removeListener(minipass_DESTROYED, ondestroy)
-        stop()
-        reject(er)
-      }
-      const ondata = value => {
-        this.removeListener('error', onerr)
-        this.removeListener('end', onend)
-        this.removeListener(minipass_DESTROYED, ondestroy)
-        this.pause()
-        resolve({ value: value, done: !!this[minipass_EOF] })
-      }
-      const onend = () => {
-        this.removeListener('error', onerr)
-        this.removeListener('data', ondata)
-        this.removeListener(minipass_DESTROYED, ondestroy)
-        stop()
-        resolve({ done: true })
-      }
-      const ondestroy = () => onerr(new Error('stream destroyed'))
-      return new Promise((res, rej) => {
-        reject = rej
-        resolve = res
-        this.once(minipass_DESTROYED, ondestroy)
-        this.once('error', onerr)
-        this.once('end', onend)
-        this.once('data', ondata)
-      })
-    }
-
-    return {
-      next,
-      throw: stop,
-      return: stop,
-      [minipass_ASYNCITERATOR]() {
-        return this
-      },
-    }
-  }
-
-  // for (let chunk of stream)
-  [minipass_ITERATOR]() {
-    let stopped = false
-    const stop = () => {
-      this.pause()
-      this.removeListener(minipass_ERROR, stop)
-      this.removeListener(minipass_DESTROYED, stop)
-      this.removeListener('end', stop)
-      stopped = true
-      return { done: true }
-    }
-
-    const next = () => {
-      if (stopped) return stop()
-      const value = this.read()
-      return value === null ? stop() : { value }
-    }
-    this.once('end', stop)
-    this.once(minipass_ERROR, stop)
-    this.once(minipass_DESTROYED, stop)
-
-    return {
-      next,
-      throw: stop,
-      return: stop,
-      [minipass_ITERATOR]() {
-        return this
-      },
-    }
-  }
-
-  destroy(er) {
-    if (this[minipass_DESTROYED]) {
-      if (er) this.emit('error', er)
-      else this.emit(minipass_DESTROYED)
-      return this
-    }
-
-    this[minipass_DESTROYED] = true
-
-    // throw away all buffered data, it's never coming out
-    this[minipass_BUFFER].length = 0
-    this[minipass_BUFFERLENGTH] = 0
-
-    if (typeof this.close === 'function' && !this[minipass_CLOSED]) this.close()
-
-    if (er) this.emit('error', er)
-    // if no error to emit, still reject pending promises
-    else this.emit(minipass_DESTROYED)
-
-    return this
-  }
-
-  static isStream(s) {
-    return (
-      !!s &&
-      (s instanceof minipass_Minipass ||
-        s instanceof external_stream_ ||
-        (s instanceof external_events_ &&
-          // readable
-          (typeof s.pipe === 'function' ||
-            // writable
-            (typeof s.write === 'function' && typeof s.end === 'function'))))
-    )
-  }
-}
-
-/* harmony default export */ const minipass = (minipass_Minipass);
-
-;// CONCATENATED MODULE: ./node_modules/glob/dist/mjs/ignore.js
+;// CONCATENATED MODULE: ./node_modules/glob/dist/esm/ignore.js
 // give it a pattern, and it'll be able to tell you if
 // a given path should be ignored.
 // Ignoring a path ignores its children if the pattern ends in /**
@@ -21482,6 +21111,11 @@ class Ignore {
             for (let i = 0; i < mm.set.length; i++) {
                 const parsed = mm.set[i];
                 const globParts = mm.globParts[i];
+                /* c8 ignore start */
+                if (!parsed || !globParts) {
+                    throw new Error('invalid pattern object');
+                }
+                /* c8 ignore stop */
                 const p = new Pattern(parsed, globParts, 0, platform);
                 const m = new Minimatch(p.globString(), mmopts);
                 const children = globParts[globParts.length - 1] === '**';
@@ -21523,13 +21157,13 @@ class Ignore {
         }
         for (const m of this.absoluteChildren) {
             if (m.match(fullpath))
-                true;
+                return true;
         }
         return false;
     }
 }
 //# sourceMappingURL=ignore.js.map
-;// CONCATENATED MODULE: ./node_modules/glob/dist/mjs/processor.js
+;// CONCATENATED MODULE: ./node_modules/glob/dist/esm/processor.js
 // synchronous utility for filtering entries and calculating subwalks
 
 /**
@@ -21664,9 +21298,6 @@ class Processor {
             while (typeof (p = pattern.pattern()) === 'string' &&
                 (rest = pattern.rest())) {
                 const c = t.resolve(p);
-                // we can be reasonably sure that .. is a readable dir
-                if (c.isUnknown() && p !== '..')
-                    break;
                 t = c;
                 pattern = rest;
                 changed = true;
@@ -21682,14 +21313,10 @@ class Processor {
             // more strings for an unknown entry,
             // or a pattern starting with magic, mounted on t.
             if (typeof p === 'string') {
-                // must be final entry
-                if (!rest) {
-                    const ifDir = p === '..' || p === '' || p === '.';
-                    this.matches.add(t.resolve(p), absolute, ifDir);
-                }
-                else {
-                    this.subwalks.add(t, pattern);
-                }
+                // must not be final entry, otherwise we would have
+                // concatenated it earlier.
+                const ifDir = p === '..' || p === '' || p === '.';
+                this.matches.add(t.resolve(p), absolute, ifDir);
                 continue;
             }
             else if (p === GLOBSTAR) {
@@ -21832,7 +21459,7 @@ class Processor {
     }
 }
 //# sourceMappingURL=processor.js.map
-;// CONCATENATED MODULE: ./node_modules/glob/dist/mjs/walker.js
+;// CONCATENATED MODULE: ./node_modules/glob/dist/esm/walker.js
 /**
  * Single-use utility classes to provide functionality to the {@link Glob}
  * methods.
@@ -21866,7 +21493,7 @@ class GlobUtil {
         this.patterns = patterns;
         this.path = path;
         this.opts = opts;
-        this.#sep = opts.platform === 'win32' ? '\\' : '/';
+        this.#sep = !opts.posix && opts.platform === 'win32' ? '\\' : '/';
         if (opts.ignore) {
             this.#ignore = makeIgnore(opts.ignore, opts);
         }
@@ -21963,14 +21590,15 @@ class GlobUtil {
             this.matchEmit(e);
         }
         else if (abs) {
-            this.matchEmit(e.fullpath() + mark);
+            const abs = this.opts.posix ? e.fullpathPosix() : e.fullpath();
+            this.matchEmit(abs + mark);
         }
         else {
-            const rel = e.relative();
+            const rel = this.opts.posix ? e.relativePosix() : e.relative();
             const pre = this.opts.dotRelative && !rel.startsWith('..' + this.#sep)
                 ? '.' + this.#sep
                 : '';
-            this.matchEmit(!rel && mark ? '.' + mark : pre + rel + mark);
+            this.matchEmit(!rel ? '.' + mark : pre + rel + mark);
         }
     }
     async match(e, absolute, ifDir) {
@@ -22151,7 +21779,7 @@ class GlobStream extends GlobUtil {
     results;
     constructor(patterns, path, opts) {
         super(patterns, path, opts);
-        this.results = new minipass({
+        this.results = new Minipass({
             signal: this.signal,
             objectMode: true,
         });
@@ -22184,7 +21812,7 @@ class GlobStream extends GlobUtil {
     }
 }
 //# sourceMappingURL=walker.js.map
-;// CONCATENATED MODULE: ./node_modules/glob/dist/mjs/glob.js
+;// CONCATENATED MODULE: ./node_modules/glob/dist/esm/glob.js
 
 
 
@@ -22246,6 +21874,10 @@ class Glob {
      * again.
      */
     constructor(pattern, opts) {
+        /* c8 ignore start */
+        if (!opts)
+            throw new TypeError('glob options required');
+        /* c8 ignore stop */
         this.withFileTypes = !!opts.withFileTypes;
         this.signal = opts.signal;
         this.follow = !!opts.follow;
@@ -22314,6 +21946,11 @@ class Glob {
             });
         }
         this.nocase = this.scurry.nocase;
+        // If you do nocase:true on a case-sensitive file system, then
+        // we need to use regexps instead of strings for non-magic
+        // path portions, because statting `aBc` won't return results
+        // for the file `AbC` for example.
+        const nocaseMagicOnly = this.platform === 'darwin' || this.platform === 'win32';
         const mmo = {
             // default nocase based on platform
             ...opts,
@@ -22321,7 +21958,7 @@ class Glob {
             matchBase: this.matchBase,
             nobrace: this.nobrace,
             nocase: this.nocase,
-            nocaseMagicOnly: true,
+            nocaseMagicOnly,
             nocomment: true,
             noext: this.noext,
             nonegate: true,
@@ -22337,7 +21974,12 @@ class Glob {
             return set;
         }, [[], []]);
         this.patterns = matchSet.map((set, i) => {
-            return new Pattern(set, globParts[i], 0, this.platform);
+            const g = globParts[i];
+            /* c8 ignore start */
+            if (!g)
+                throw new Error('invalid pattern object');
+            /* c8 ignore stop */
+            return new Pattern(set, g, 0, this.platform);
         });
     }
     async walk() {
@@ -22410,7 +22052,7 @@ class Glob {
     }
 }
 //# sourceMappingURL=glob.js.map
-;// CONCATENATED MODULE: ./node_modules/glob/dist/mjs/has-magic.js
+;// CONCATENATED MODULE: ./node_modules/glob/dist/esm/has-magic.js
 
 /**
  * Return true if the patterns provided contain any magic glob characters,
@@ -22434,7 +22076,7 @@ const hasMagic = (pattern, options = {}) => {
     return false;
 };
 //# sourceMappingURL=has-magic.js.map
-;// CONCATENATED MODULE: ./node_modules/glob/dist/mjs/index.js
+;// CONCATENATED MODULE: ./node_modules/glob/dist/esm/index.js
 
 
 
@@ -22447,7 +22089,7 @@ function globStream(pattern, options = {}) {
 function globSync(pattern, options = {}) {
     return new Glob(pattern, options).walkSync();
 }
-async function glob(pattern, options = {}) {
+async function glob_(pattern, options = {}) {
     return new Glob(pattern, options).walk();
 }
 function globIterateSync(pattern, options = {}) {
@@ -22472,8 +22114,8 @@ const sync = Object.assign(globSync, {
 
 
 /* c8 ignore stop */
-/* harmony default export */ const dist_mjs = (Object.assign(glob, {
-    glob,
+const glob = Object.assign(glob_, {
+    glob: glob_,
     globSync,
     sync,
     globStream,
@@ -22488,9 +22130,11 @@ const sync = Object.assign(globSync, {
     hasMagic: hasMagic,
     escape: escape_escape,
     unescape: unescape_unescape,
-}));
+});
+glob.glob = glob;
 //# sourceMappingURL=index.js.map
 ;// CONCATENATED MODULE: ./node_modules/linkinator/build/src/options.js
+
 
 
 
@@ -22498,23 +22142,23 @@ const sync = Object.assign(globSync, {
  * Validate the provided flags all work with each other.
  * @param options CheckOptions passed in from the CLI (or API)
  */
-async function processOptions(opts) {
-    const options = Object.assign({}, opts);
-    // ensure at least one path is provided
+async function processOptions(options_) {
+    const options = { ...options_ };
+    // Ensure at least one path is provided
     if (options.path.length === 0) {
         throw new Error('At least one path must be provided');
     }
-    // normalize options.path to an array of strings
+    // Normalize options.path to an array of strings
     if (!Array.isArray(options.path)) {
         options.path = [options.path];
     }
-    // disable directory listings by default
+    // Disable directory listings by default
     if (options.directoryListing === undefined) {
         options.directoryListing = false;
     }
     // Ensure we do not mix http:// and file system paths.  The paths passed in
     // must all be filesystem paths, or HTTP paths.
-    let isUrlType = undefined;
+    let isUrlType;
     for (const path of options.path) {
         const innerIsUrlType = path.startsWith('http');
         if (isUrlType === undefined) {
@@ -22524,14 +22168,14 @@ async function processOptions(opts) {
             throw new Error('Paths cannot be mixed between HTTP and local filesystem paths.');
         }
     }
-    // if there is a server root, make sure there are no HTTP paths
+    // If there is a server root, make sure there are no HTTP paths
     if (options.serverRoot && isUrlType) {
         throw new Error("'serverRoot' cannot be defined when the 'path' points to an HTTP endpoint.");
     }
     if (options.serverRoot) {
-        options.serverRoot = external_path_.normalize(options.serverRoot);
+        options.serverRoot = external_node_path_namespaceObject.normalize(options.serverRoot);
     }
-    // expand globs into paths
+    // Expand globs into paths
     if (!isUrlType) {
         const paths = [];
         for (const filePath of options.path) {
@@ -22539,24 +22183,25 @@ async function processOptions(opts) {
             // if the serverRoot is test/fixtures/nested, and the glob is "*/*.html",
             // The glob needs to be calculated from the serverRoot directory.
             let fullPath = options.serverRoot
-                ? external_path_.join(options.serverRoot, filePath)
+                ? external_node_path_namespaceObject.join(options.serverRoot, filePath)
                 : filePath;
-            // node-glob only accepts unix style path separators as of 8.x
-            fullPath = fullPath.split(external_path_.sep).join('/');
-            const expandedPaths = await dist_mjs(fullPath);
+            // Node-glob only accepts unix style path separators as of 8.x
+            fullPath = fullPath.split(external_node_path_namespaceObject.sep).join('/');
+            // eslint-disable-next-line no-await-in-loop
+            const expandedPaths = await glob(fullPath);
             if (expandedPaths.length === 0) {
-                throw new Error(`The provided glob "${filePath}" returned 0 results. The current working directory is "${process.cwd()}".`);
+                throw new Error(`The provided glob "${filePath}" returned 0 results. The current working directory is "${external_node_process_namespaceObject.cwd()}".`);
             }
             // After resolving the globs, the paths need to be returned to their
             // original form, without the serverRoot included in the path.
             for (let p of expandedPaths) {
-                p = external_path_.normalize(p);
+                p = external_node_path_namespaceObject.normalize(p);
                 if (options.serverRoot) {
                     const contractedPath = p
-                        .split(external_path_.sep)
-                        .filter(x => !!x)
-                        .slice(options.serverRoot.split(external_path_.sep).filter(x => !!x).length)
-                        .join(external_path_.sep);
+                        .split(external_node_path_namespaceObject.sep)
+                        .filter(Boolean)
+                        .slice(options.serverRoot.split(external_node_path_namespaceObject.sep).filter(Boolean).length)
+                        .join(external_node_path_namespaceObject.sep);
                     paths.push(contractedPath);
                 }
                 else {
@@ -22566,10 +22211,10 @@ async function processOptions(opts) {
         }
         options.path = paths;
     }
-    // enable markdown if someone passes a flag/glob right at it
+    // Enable markdown if someone passes a flag/glob right at it
     if (options.markdown === undefined) {
         for (const p of options.path) {
-            if (external_path_.extname(p).toLowerCase() === '.md') {
+            if (external_node_path_namespaceObject.extname(p).toLowerCase() === '.md') {
                 options.markdown = true;
             }
         }
@@ -22577,20 +22222,19 @@ async function processOptions(opts) {
     // Figure out which directory should be used as the root for the web server,
     // and how that impacts the path to the file for the first request.
     if (!options.serverRoot && !isUrlType) {
-        // if the serverRoot wasn't defined, and there are multiple paths, just
+        // If the serverRoot wasn't defined, and there are multiple paths, just
         // use process.cwd().
         if (options.path.length > 1) {
-            options.serverRoot = process.cwd();
+            options.serverRoot = external_node_process_namespaceObject.cwd();
         }
         else {
-            // if there's a single path, try to be smart and figure it out
-            const s = await external_fs_.promises.stat(options.path[0]);
+            // If there's a single path, try to be smart and figure it out
+            const s = await external_node_fs_namespaceObject.promises.stat(options.path[0]);
             options.serverRoot = options.path[0];
             if (s.isFile()) {
-                const pathParts = options.path[0].split(external_path_.sep);
-                options.path = [external_path_.join('.', pathParts[pathParts.length - 1])];
-                options.serverRoot =
-                    pathParts.slice(0, pathParts.length - 1).join(external_path_.sep) || '.';
+                const pathParts = options.path[0].split(external_node_path_namespaceObject.sep);
+                options.path = [external_node_path_namespaceObject.join('.', pathParts.at(-1))];
+                options.serverRoot = pathParts.slice(0, -1).join(external_node_path_namespaceObject.sep) || '.';
             }
             else {
                 options.serverRoot = options.path[0];
@@ -22601,12 +22245,13 @@ async function processOptions(opts) {
     }
     return options;
 }
-//# sourceMappingURL=options.js.map
+
 ;// CONCATENATED MODULE: ./node_modules/linkinator/build/src/config.js
 
 
+
 async function getConfig(flags) {
-    // check to see if a config file path was passed
+    // Check to see if a config file path was passed
     const configPath = flags.config || 'linkinator.config.json';
     let config = {};
     if (flags.config) {
@@ -22615,34 +22260,38 @@ async function getConfig(flags) {
     // `meow` is set up to pass boolean flags as `undefined` if not passed.
     // copy the struct, and delete properties that are `undefined` so the merge
     // doesn't blast away config level settings.
-    const strippedFlags = Object.assign({}, flags);
-    Object.entries(strippedFlags).forEach(([key, value]) => {
-        if (typeof value === 'undefined' ||
-            (Array.isArray(value) && value.length === 0)) {
+    const strippedFlags = { ...flags };
+    for (const [key, value] of Object.entries(strippedFlags)) {
+        if (value === undefined || (Array.isArray(value) && value.length === 0)) {
+            // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
             delete strippedFlags[key];
         }
-    });
-    // combine the flags passed on the CLI with the flags in the config file,
+    }
+    // Combine the flags passed on the CLI with the flags in the config file,
     // with CLI flags getting precedence
-    config = Object.assign({}, config, strippedFlags);
+    config = { ...config, ...strippedFlags };
     return config;
 }
 const validConfigExtensions = ['.js', '.mjs', '.cjs', '.json'];
 async function parseConfigFile(configPath) {
     const typeOfConfig = getTypeOfConfig(configPath);
     switch (typeOfConfig) {
-        case '.json':
+        case '.json': {
             return readJsonConfigFile(configPath);
+        }
         case '.js':
         case '.mjs':
-        case '.cjs':
+        case '.cjs': {
             return importConfigFile(configPath);
+        }
+        default: {
+            throw new Error(`Config file ${configPath} is invalid`);
+        }
     }
-    throw new Error(`Config file ${configPath} is invalid`);
 }
 function getTypeOfConfig(configPath) {
     // Returning json in case file doesn't have an extension for backward compatibility
-    const configExtension = external_path_.extname(configPath) || '.json';
+    const configExtension = external_node_path_namespaceObject.extname(configPath) || '.json';
     if (validConfigExtensions.includes(configExtension)) {
         return configExtension;
     }
@@ -22652,17 +22301,18 @@ async function importConfigFile(configPath) {
     // Use a filthy hack to prevent ncc / webpack from trying to process
     // the runtime dynamic import.  This hurt me more than it disgusts
     // whoever is reading the code.
+    // eslint-disable-next-line no-new-func
     const _import = new Function('p', 'return import(p)');
-    const config = (await _import(`file://${external_path_.resolve(process.cwd(), configPath)}`)).default;
-    return config;
+    const config = (await _import(`file://${external_node_path_namespaceObject.resolve(external_node_process_namespaceObject.cwd(), configPath)}`));
+    return config.default;
 }
 async function readJsonConfigFile(configPath) {
-    const configFileContents = await external_fs_.promises.readFile(configPath, {
-        encoding: 'utf-8',
+    const configFileContents = await external_node_fs_namespaceObject.promises.readFile(configPath, {
+        encoding: 'utf8',
     });
     return JSON.parse(configFileContents);
 }
-//# sourceMappingURL=config.js.map
+
 ;// CONCATENATED MODULE: ./node_modules/linkinator/build/src/index.js
 
 
@@ -22686,22 +22336,25 @@ const headers = {
 /**
  * Instance class used to perform a crawl job.
  */
-class LinkChecker extends external_events_.EventEmitter {
+class LinkChecker extends external_node_events_namespaceObject.EventEmitter {
+    on(event, listener) {
+        return super.on(event, listener);
+    }
     /**
      * Crawl a given url or path, and return a list of visited links along with
      * status codes.
      * @param options Options to use while checking for 404s
      */
-    async check(opts) {
-        const options = await processOptions(opts);
+    async check(options_) {
+        const options = await processOptions(options_);
         if (!Array.isArray(options.path)) {
             options.path = [options.path];
         }
         options.linksToSkip = options.linksToSkip || [];
         let server;
-        const hasHttpPaths = options.path.find(x => x.startsWith('http'));
+        const hasHttpPaths = options.path.find((x) => x.startsWith('http'));
         if (!hasHttpPaths) {
-            let port = options.port;
+            let { port } = options;
             server = await startWebServer({
                 root: options.serverRoot,
                 port,
@@ -22720,7 +22373,7 @@ class LinkChecker extends external_events_.EventEmitter {
             }
             options.staticHttpServerHost = `http://localhost:${port}/`;
         }
-        if (process.env.LINKINATOR_DEBUG) {
+        if (external_node_process_namespaceObject.env.LINKINATOR_DEBUG) {
             console.log(options);
         }
         const queue = new Queue({
@@ -22731,10 +22384,9 @@ class LinkChecker extends external_events_.EventEmitter {
         const delayCache = new Map();
         const retryErrorsCache = new Map();
         for (const path of options.path) {
-            const url = new external_url_.URL(path);
+            const url = new URL(path);
             initCache.add(url.href);
             queue.add(async () => {
-                var _a, _b;
                 await this.crawl({
                     url,
                     crawl: true,
@@ -22745,17 +22397,17 @@ class LinkChecker extends external_events_.EventEmitter {
                     retryErrorsCache,
                     queue,
                     rootPath: path,
-                    retry: !!opts.retry,
-                    retryErrors: !!opts.retryErrors,
-                    retryErrorsCount: (_a = opts.retryErrorsCount) !== null && _a !== void 0 ? _a : 5,
-                    retryErrorsJitter: (_b = opts.retryErrorsJitter) !== null && _b !== void 0 ? _b : 3000,
+                    retry: Boolean(options_.retry),
+                    retryErrors: Boolean(options_.retryErrors),
+                    retryErrorsCount: options_.retryErrorsCount ?? 5,
+                    retryErrorsJitter: options_.retryErrorsJitter ?? 3000,
                 });
             });
         }
         await queue.onIdle();
         const result = {
             links: results,
-            passed: results.filter(x => x.state === LinkState.BROKEN).length === 0,
+            passed: results.filter((x) => x.state === LinkState.BROKEN).length === 0,
         };
         if (server) {
             server.destroy();
@@ -22768,66 +22420,65 @@ class LinkChecker extends external_events_.EventEmitter {
      * @private
      * @returns A list of crawl results consisting of urls and status codes
      */
-    async crawl(opts) {
-        var _a;
-        // apply any regex url replacements
-        if (opts.checkOptions.urlRewriteExpressions) {
-            for (const exp of opts.checkOptions.urlRewriteExpressions) {
-                const newUrl = opts.url.href.replace(exp.pattern, exp.replacement);
-                if (opts.url.href !== newUrl) {
-                    opts.url.href = newUrl;
+    async crawl(options) {
+        // Apply any regex url replacements
+        if (options.checkOptions.urlRewriteExpressions) {
+            for (const exp of options.checkOptions.urlRewriteExpressions) {
+                const newUrl = options.url.href.replace(exp.pattern, exp.replacement);
+                if (options.url.href !== newUrl) {
+                    options.url.href = newUrl;
                 }
             }
         }
-        // explicitly skip non-http[s] links before making the request
-        const proto = opts.url.protocol;
+        // Explicitly skip non-http[s] links before making the request
+        const proto = options.url.protocol;
         if (proto !== 'http:' && proto !== 'https:') {
             const r = {
-                url: mapUrl(opts.url.href, opts.checkOptions),
+                url: mapUrl(options.url.href, options.checkOptions),
                 status: 0,
                 state: LinkState.SKIPPED,
-                parent: mapUrl(opts.parent, opts.checkOptions),
+                parent: mapUrl(options.parent, options.checkOptions),
             };
-            opts.results.push(r);
+            options.results.push(r);
             this.emit('link', r);
             return;
         }
         // Check for a user-configured function to filter out links
-        if (typeof opts.checkOptions.linksToSkip === 'function' &&
-            (await opts.checkOptions.linksToSkip(opts.url.href))) {
+        if (typeof options.checkOptions.linksToSkip === 'function' &&
+            (await options.checkOptions.linksToSkip(options.url.href))) {
             const result = {
-                url: mapUrl(opts.url.href, opts.checkOptions),
+                url: mapUrl(options.url.href, options.checkOptions),
                 state: LinkState.SKIPPED,
-                parent: opts.parent,
+                parent: options.parent,
             };
-            opts.results.push(result);
+            options.results.push(result);
             this.emit('link', result);
             return;
         }
         // Check for a user-configured array of link regular expressions that should be skipped
-        if (Array.isArray(opts.checkOptions.linksToSkip)) {
-            const skips = opts.checkOptions.linksToSkip
-                .map(linkToSkip => {
-                return new RegExp(linkToSkip).test(opts.url.href);
+        if (Array.isArray(options.checkOptions.linksToSkip)) {
+            const skips = options.checkOptions.linksToSkip
+                .map((linkToSkip) => {
+                return new RegExp(linkToSkip).test(options.url.href);
             })
-                .filter(match => !!match);
+                .filter(Boolean);
             if (skips.length > 0) {
                 const result = {
-                    url: mapUrl(opts.url.href, opts.checkOptions),
+                    url: mapUrl(options.url.href, options.checkOptions),
                     state: LinkState.SKIPPED,
-                    parent: mapUrl(opts.parent, opts.checkOptions),
+                    parent: mapUrl(options.parent, options.checkOptions),
                 };
-                opts.results.push(result);
+                options.results.push(result);
                 this.emit('link', result);
                 return;
             }
         }
         // Check if this host has been marked for delay due to 429
-        if (opts.delayCache.has(opts.url.host)) {
-            const timeout = opts.delayCache.get(opts.url.host);
+        if (options.delayCache.has(options.url.host)) {
+            const timeout = options.delayCache.get(options.url.host);
             if (timeout > Date.now()) {
-                opts.queue.add(async () => {
-                    await this.crawl(opts);
+                options.queue.add(async () => {
+                    await this.crawl(options);
                 }, {
                     delay: timeout - Date.now(),
                 });
@@ -22838,69 +22489,71 @@ class LinkChecker extends external_events_.EventEmitter {
         let status = 0;
         let state = LinkState.BROKEN;
         let shouldRecurse = false;
-        let res = undefined;
+        let response;
         const failures = [];
         try {
-            res = await (0,src/* request */.WY)({
-                method: opts.crawl ? 'GET' : 'HEAD',
-                url: opts.url.href,
+            response = await (0,src/* request */.WY)({
+                method: options.crawl ? 'GET' : 'HEAD',
+                url: options.url.href,
                 headers,
                 responseType: 'stream',
                 validateStatus: () => true,
-                timeout: opts.checkOptions.timeout,
+                timeout: options.checkOptions.timeout,
             });
-            if (this.shouldRetryAfter(res, opts)) {
+            if (this.shouldRetryAfter(response, options)) {
                 return;
             }
             // If we got an HTTP 405, the server may not like HEAD. GET instead!
-            if (res.status === 405) {
-                res = await (0,src/* request */.WY)({
+            if (response.status === 405) {
+                response = await (0,src/* request */.WY)({
                     method: 'GET',
-                    url: opts.url.href,
+                    url: options.url.href,
                     headers,
                     responseType: 'stream',
                     validateStatus: () => true,
-                    timeout: opts.checkOptions.timeout,
+                    timeout: options.checkOptions.timeout,
                 });
-                if (this.shouldRetryAfter(res, opts)) {
+                if (this.shouldRetryAfter(response, options)) {
                     return;
                 }
             }
         }
-        catch (err) {
-            // request failure: invalid domain name, etc.
+        catch (error) {
+            // Request failure: invalid domain name, etc.
             // this also occasionally catches too many redirects, but is still valid (e.g. https://www.ebay.com)
             // for this reason, we also try doing a GET below to see if the link is valid
-            failures.push(err);
+            failures.push(error);
         }
         try {
-            //some sites don't respond to a stream response type correctly, especially with a HEAD. Try a GET with a text response type
-            if ((res === undefined || res.status < 200 || res.status >= 300) &&
-                !opts.crawl) {
-                res = await (0,src/* request */.WY)({
+            // Some sites don't respond to a stream response type correctly, especially with a HEAD. Try a GET with a text response type
+            if ((response === undefined ||
+                response.status < 200 ||
+                response.status >= 300) &&
+                !options.crawl) {
+                response = await (0,src/* request */.WY)({
                     method: 'GET',
-                    url: opts.url.href,
+                    url: options.url.href,
                     responseType: 'stream',
                     validateStatus: () => true,
                     headers,
-                    timeout: opts.checkOptions.timeout,
+                    timeout: options.checkOptions.timeout,
                 });
-                if (this.shouldRetryAfter(res, opts)) {
+                if (this.shouldRetryAfter(response, options)) {
                     return;
                 }
             }
         }
-        catch (ex) {
-            failures.push(ex);
-            // catch the next failure
+        catch (error) {
+            failures.push(error);
+            // Catch the next failure
         }
-        if (res !== undefined) {
-            status = res.status;
-            shouldRecurse = isHtml(res);
+        if (response !== undefined) {
+            status = response.status;
+            shouldRecurse = isHtml(response);
         }
         // If retryErrors is enabled, retry 5xx and 0 status (which indicates
         // a network error likely occurred):
-        if (this.shouldRetryOnError(status, opts)) {
+        if (this.shouldRetryOnError(status, options)) {
             return;
         }
         // Assume any 2xx status is 👌
@@ -22908,69 +22561,69 @@ class LinkChecker extends external_events_.EventEmitter {
             state = LinkState.OK;
         }
         else {
-            failures.push(res);
+            failures.push(response);
         }
         const result = {
-            url: mapUrl(opts.url.href, opts.checkOptions),
+            url: mapUrl(options.url.href, options.checkOptions),
             status,
             state,
-            parent: mapUrl(opts.parent, opts.checkOptions),
+            parent: mapUrl(options.parent, options.checkOptions),
             failureDetails: failures,
         };
-        opts.results.push(result);
+        options.results.push(result);
         this.emit('link', result);
         // If we need to go deeper, scan the next level of depth for links and crawl
-        if (opts.crawl && shouldRecurse) {
-            this.emit('pagestart', opts.url);
-            const urlResults = (res === null || res === void 0 ? void 0 : res.data)
-                ? await getLinks(res.data, opts.url.href)
+        if (options.crawl && shouldRecurse) {
+            this.emit('pagestart', options.url);
+            const urlResults = response?.data
+                ? await getLinks(response.data, options.url.href)
                 : [];
             for (const result of urlResults) {
-                // if there was some sort of problem parsing the link while
+                // If there was some sort of problem parsing the link while
                 // creating a new URL obj, treat it as a broken link.
                 if (!result.url) {
                     const r = {
-                        url: mapUrl(result.link, opts.checkOptions),
+                        url: mapUrl(result.link, options.checkOptions),
                         status: 0,
                         state: LinkState.BROKEN,
-                        parent: mapUrl(opts.url.href, opts.checkOptions),
+                        parent: mapUrl(options.url.href, options.checkOptions),
                     };
-                    opts.results.push(r);
+                    options.results.push(r);
                     this.emit('link', r);
                     continue;
                 }
-                let crawl = (opts.checkOptions.recurse &&
-                    ((_a = result.url) === null || _a === void 0 ? void 0 : _a.href.startsWith(opts.rootPath)));
-                // only crawl links that start with the same host
+                let crawl = options.checkOptions.recurse &&
+                    result.url?.href.startsWith(options.rootPath);
+                // Only crawl links that start with the same host
                 if (crawl) {
                     try {
-                        const pathUrl = new external_url_.URL(opts.rootPath);
+                        const pathUrl = new URL(options.rootPath);
                         crawl = result.url.host === pathUrl.host;
                     }
-                    catch (_b) {
+                    catch {
                         // ignore errors
                     }
                 }
                 // Ensure the url hasn't already been touched, largely to avoid a
                 // very large queue length and runaway memory consumption
-                if (!opts.cache.has(result.url.href)) {
-                    opts.cache.add(result.url.href);
-                    opts.queue.add(async () => {
+                if (!options.cache.has(result.url.href)) {
+                    options.cache.add(result.url.href);
+                    options.queue.add(async () => {
                         await this.crawl({
                             url: result.url,
                             crawl,
-                            cache: opts.cache,
-                            delayCache: opts.delayCache,
-                            retryErrorsCache: opts.retryErrorsCache,
-                            results: opts.results,
-                            checkOptions: opts.checkOptions,
-                            queue: opts.queue,
-                            parent: opts.url.href,
-                            rootPath: opts.rootPath,
-                            retry: opts.retry,
-                            retryErrors: opts.retryErrors,
-                            retryErrorsCount: opts.retryErrorsCount,
-                            retryErrorsJitter: opts.retryErrorsJitter,
+                            cache: options.cache,
+                            delayCache: options.delayCache,
+                            retryErrorsCache: options.retryErrorsCache,
+                            results: options.results,
+                            checkOptions: options.checkOptions,
+                            queue: options.queue,
+                            parent: options.url.href,
+                            rootPath: options.rootPath,
+                            retry: options.retry,
+                            retryErrors: options.retryErrors,
+                            retryErrorsCount: options.retryErrorsCount,
+                            retryErrorsJitter: options.retryErrorsJitter,
                         });
                     });
                 }
@@ -22982,45 +22635,45 @@ class LinkChecker extends external_events_.EventEmitter {
      * and if the status was an HTTP 429, calculate the date at which this
      * request should be retried. Ensure the delayCache knows that we're
      * going to wait on requests for this entire host.
-     * @param res GaxiosResponse returned from the request
+     * @param response GaxiosResponse returned from the request
      * @param opts CrawlOptions used during this request
      */
-    shouldRetryAfter(res, opts) {
-        if (!opts.retry) {
+    shouldRetryAfter(response, options) {
+        if (!options.retry) {
             return false;
         }
-        const retryAfterRaw = res.headers['retry-after'];
-        if (res.status !== 429 || !retryAfterRaw) {
+        const retryAfterRaw = response.headers['retry-after'];
+        if (response.status !== 429 || !retryAfterRaw) {
             return false;
         }
         // The `retry-after` header can come in either <seconds> or
         // A specific date to go check.
         let retryAfter = Number(retryAfterRaw) * 1000 + Date.now();
-        if (isNaN(retryAfter)) {
+        if (Number.isNaN(retryAfter)) {
             retryAfter = Date.parse(retryAfterRaw);
-            if (isNaN(retryAfter)) {
+            if (Number.isNaN(retryAfter)) {
                 return false;
             }
         }
-        // check to see if there is already a request to wait for this host
-        if (opts.delayCache.has(opts.url.host)) {
-            // use whichever time is higher in the cache
-            const currentTimeout = opts.delayCache.get(opts.url.host);
+        // Check to see if there is already a request to wait for this host
+        if (options.delayCache.has(options.url.host)) {
+            // Use whichever time is higher in the cache
+            const currentTimeout = options.delayCache.get(options.url.host);
             if (retryAfter > currentTimeout) {
-                opts.delayCache.set(opts.url.host, retryAfter);
+                options.delayCache.set(options.url.host, retryAfter);
             }
         }
         else {
-            opts.delayCache.set(opts.url.host, retryAfter);
+            options.delayCache.set(options.url.host, retryAfter);
         }
-        opts.queue.add(async () => {
-            await this.crawl(opts);
+        options.queue.add(async () => {
+            await this.crawl(options);
         }, {
             delay: retryAfter - Date.now(),
         });
         const retryDetails = {
-            url: opts.url.href,
-            status: res.status,
+            url: options.url.href,
+            status: response.status,
             secondsUntilRetry: Math.round((retryAfter - Date.now()) / 1000),
         };
         this.emit('retry', retryDetails);
@@ -23031,38 +22684,37 @@ class LinkChecker extends external_events_.EventEmitter {
      * @param status Status returned by request or 0 if request threw.
      * @param opts CrawlOptions used during this request
      */
-    shouldRetryOnError(status, opts) {
-        const maxRetries = opts.retryErrorsCount;
-        if (!opts.retryErrors) {
+    shouldRetryOnError(status, options) {
+        const maxRetries = options.retryErrorsCount;
+        if (!options.retryErrors) {
             return false;
         }
         // Only retry 0 and >5xx status codes:
         if (status > 0 && status < 500) {
             return false;
         }
-        // check to see if there is already a request to wait for this URL:
+        // Check to see if there is already a request to wait for this URL:
         let currentRetries = 1;
-        if (opts.retryErrorsCache.has(opts.url.href)) {
-            // use whichever time is higher in the cache
-            currentRetries = opts.retryErrorsCache.get(opts.url.href);
+        if (options.retryErrorsCache.has(options.url.href)) {
+            // Use whichever time is higher in the cache
+            currentRetries = options.retryErrorsCache.get(options.url.href);
             if (currentRetries > maxRetries)
                 return false;
-            opts.retryErrorsCache.set(opts.url.href, currentRetries + 1);
+            options.retryErrorsCache.set(options.url.href, currentRetries + 1);
         }
         else {
-            opts.retryErrorsCache.set(opts.url.href, 1);
+            options.retryErrorsCache.set(options.url.href, 1);
         }
         // Use exponential backoff algorithm to take pressure off upstream service:
-        const retryAfter = Math.pow(2, currentRetries) * 1000 +
-            Math.random() * opts.retryErrorsJitter;
-        opts.queue.add(async () => {
-            await this.crawl(opts);
+        const retryAfter = 2 ** currentRetries * 1000 + Math.random() * options.retryErrorsJitter;
+        options.queue.add(async () => {
+            await this.crawl(options);
         }, {
             delay: retryAfter,
         });
         const retryDetails = {
-            url: opts.url.href,
-            status: status,
+            url: options.url.href,
+            status,
             secondsUntilRetry: Math.round(retryAfter / 1000),
         };
         this.emit('retry', retryDetails);
@@ -23085,8 +22737,8 @@ async function check(options) {
  */
 function isHtml(response) {
     const contentType = response.headers['content-type'] || '';
-    return (!!contentType.match(/text\/html/g) ||
-        !!contentType.match(/application\/xhtml\+xml/g));
+    return (Boolean(/text\/html/g.test(contentType)) ||
+        Boolean(/application\/xhtml\+xml/g.test(contentType)));
 }
 /**
  * When running a local static web server for the user, translate paths from
@@ -23097,26 +22749,25 @@ function isHtml(response) {
  * @param options Original CheckOptions passed into the client
  */
 function mapUrl(url, options) {
-    var _a, _b;
     if (!url) {
         return url;
     }
     let newUrl = url;
-    // trim the starting http://localhost:0000 if we stood up a local static server
-    if (((_a = options === null || options === void 0 ? void 0 : options.staticHttpServerHost) === null || _a === void 0 ? void 0 : _a.length) &&
-        (url === null || url === void 0 ? void 0 : url.startsWith(options.staticHttpServerHost))) {
+    // Trim the starting http://localhost:0000 if we stood up a local static server
+    if (options?.staticHttpServerHost?.length &&
+        url?.startsWith(options.staticHttpServerHost)) {
         newUrl = url.slice(options.staticHttpServerHost.length);
-        // add the full filesystem path back if we trimmed it
-        if ((_b = options === null || options === void 0 ? void 0 : options.syntheticServerRoot) === null || _b === void 0 ? void 0 : _b.length) {
-            newUrl = external_path_.join(options.syntheticServerRoot, newUrl);
+        // Add the full filesystem path back if we trimmed it
+        if (options?.syntheticServerRoot?.length) {
+            newUrl = external_node_path_namespaceObject.join(options.syntheticServerRoot, newUrl);
         }
         if (newUrl === '') {
-            newUrl = `.${external_path_.sep}`;
+            newUrl = `.${external_node_path_namespaceObject.sep}`;
         }
     }
     return newUrl;
 }
-//# sourceMappingURL=index.js.map
+
 ;// CONCATENATED MODULE: ./src/action.js
 
 
