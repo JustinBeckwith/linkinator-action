@@ -30,7 +30,7 @@
   "homepage": "https://github.com/JustinBeckwith/linkinator-action#readme",
   "dependencies": {
     "@actions/core": "^1.2.6",
-    "linkinator": "5.0.2"
+    "linkinator": "6.1.2"
   },
   "devDependencies": {
     "@vercel/ncc": "^0.38.0",
