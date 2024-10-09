@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.11.0](https://github.com/JustinBeckwith/linkinator-action/compare/v1.10.4...v1.11.0) (2024-10-09)
+
+
+### Features
+
+* upgrade to node 20 ([#187](https://github.com/JustinBeckwith/linkinator-action/issues/187)) ([17d298f](https://github.com/JustinBeckwith/linkinator-action/commit/17d298f1d2e8a77389dd36fbd8cd1831432256a7))
+
+
+### Bug Fixes
+
+* **deps:** update dependency linkinator to v4.1.2 ([#151](https://github.com/JustinBeckwith/linkinator-action/issues/151)) ([6ce2899](https://github.com/JustinBeckwith/linkinator-action/commit/6ce28994e096e04b0fca046df30625d2786b5df5))
+* **deps:** update dependency linkinator to v5 ([#155](https://github.com/JustinBeckwith/linkinator-action/issues/155)) ([ec5ca89](https://github.com/JustinBeckwith/linkinator-action/commit/ec5ca89a9d207b4435445e153fa13ca9c495e0d0))
+* **deps:** update dependency linkinator to v5.0.1 ([#156](https://github.com/JustinBeckwith/linkinator-action/issues/156)) ([871bd93](https://github.com/JustinBeckwith/linkinator-action/commit/871bd9315d524e99df885927c8c5514ae92278ce))
+* **deps:** update dependency linkinator to v5.0.2 ([#159](https://github.com/JustinBeckwith/linkinator-action/issues/159)) ([a5b4c77](https://github.com/JustinBeckwith/linkinator-action/commit/a5b4c77e549a0e5440b583baab55518a673dcb63))
+
 ## [1.10.4](https://github.com/JustinBeckwith/linkinator-action/compare/v1.10.3...v1.10.4) (2022-11-13)
 
 
