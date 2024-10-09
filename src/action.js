@@ -1,6 +1,6 @@
 import core from '@actions/core';
 import { LinkChecker, LinkState, getConfig } from 'linkinator';
-import { promises as fs } from 'fs';
+import fs from 'node:fs/promises';
 
 export async function getFullConfig () {
   const defaults = {
