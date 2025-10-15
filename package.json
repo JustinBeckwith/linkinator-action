@@ -5,8 +5,8 @@
   "main": "dist/index.js",
   "scripts": {
     "test": "c8 mocha",
-    "fix": "semistandard --fix",
-    "lint": "semistandard",
+    "fix": "biome check --write .",
+    "lint": "biome check .",
     "build": "ncc build src/index.js --license licenses.txt --source-map"
   },
   "type": "module",
@@ -33,16 +33,11 @@
     "linkinator": "6.1.2"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.2.6",
     "@vercel/ncc": "^0.38.2",
     "c8": "^10.1.2",
     "mocha": "^11.0.0",
     "nock": "^14.0.0",
-    "semistandard": "^17.0.0",
     "sinon": "^21.0.0"
-  },
-  "semistandard": {
-    "ignore": [
-      "dist/*.*"
-    ]
   }
 }
