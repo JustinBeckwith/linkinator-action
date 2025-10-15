@@ -42,6 +42,21 @@ inputs:
     description: 'Automatically retry requests that return HTTP 429 responses and include a "retry-after" header.'
     default: 'false'
     required: false
+  retryErrors:
+    description: 'Automatically retry requests that return 5xx or network error responses.'
+    default: 'false'
+    required: false
+  retryErrorsCount:
+    description: 'The number of times to retry requests that return 5xx or network error responses. Defaults to 3.'
+    default: '3'
+    required: false
+  retryErrorsJitter:
+    description: 'The maximum jitter in milliseconds to apply to retry delays. Defaults to 2000.'
+    default: '2000'
+    required: false
+  userAgent:
+    description: 'Custom User-Agent header to use for requests.'
+    required: false
   verbosity:
     description: 'Override the default verbosity for this command. Available options are "DEBUG", "INFO", "WARNING", "ERROR", and "NONE".  Defaults to "WARNING".'
     default: 'WARNING'

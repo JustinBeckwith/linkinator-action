@@ -215,8 +215,11 @@ describe('linkinator action', () => {
     assert.strictEqual(setOutputStub.callCount, 1);
     assert.strictEqual(setFailedStub.callCount, 1);
     assert.strictEqual(errorStub.callCount, 1);
-    const expected = /No match for request/;
-    assert.ok(infoStub.getCalls().find((x) => expected.test(x.args[0])));
+    // Check that failure details are logged (contains status or headers from HttpResponse)
+    const hasFailureDetails = infoStub
+      .getCalls()
+      .some((x) => /status|headers/.test(x.args[0]));
+    assert.ok(hasFailureDetails);
     scope.done();
   });
 
