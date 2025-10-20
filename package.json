@@ -7,7 +7,7 @@
     "test": "c8 mocha",
     "fix": "biome check --write .",
     "lint": "biome check .",
-    "build": "rollup --config rollup.config.js"
+    "build": "esbuild src/index.js --bundle --platform=node --format=cjs --outfile=dist/index.cjs --sourcemap"
   },
   "type": "module",
   "engines": {
@@ -36,7 +36,9 @@
     "@biomejs/biome": "2.2.6",
     "@rollup/plugin-commonjs": "^28.0.7",
     "@rollup/plugin-node-resolve": "^16.0.3",
+    "@vercel/ncc": "^0.38.4",
     "c8": "^10.1.2",
+    "esbuild": "^0.25.11",
     "mocha": "^11.0.0",
     "nock": "^14.0.0",
     "rollup": "^4.52.4",

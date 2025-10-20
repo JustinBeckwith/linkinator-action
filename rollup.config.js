@@ -8,15 +8,7 @@ export default {
     format: 'cjs',
     sourcemap: true,
   },
-  external: ['undici'],
-  plugins: [
-    resolve({
-      preferBuiltins: true,
-    }),
-    commonjs({
-      ignoreDynamicRequires: true,
-    }),
-  ],
+  plugins: [resolve(), commonjs()],
   onwarn(warning, warn) {
     // Suppress warnings about 'this' being rewritten in dependencies
     if (warning.code === 'THIS_IS_UNDEFINED') return;
