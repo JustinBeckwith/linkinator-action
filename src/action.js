@@ -15,6 +15,8 @@ export async function getFullConfig() {
     retryErrorsCount: 3,
     retryErrorsJitter: 2000,
     verbosity: 'WARNING',
+    allowInsecureCerts: false,
+    requireHttps: false,
   };
   // The options returned from `getInput` appear to always be strings.
   const actionsConfig = {
@@ -33,6 +35,8 @@ export async function getFullConfig() {
     userAgent: parseString('userAgent'),
     verbosity: parseString('verbosity'),
     config: parseString('config'),
+    allowInsecureCerts: parseBoolean('allowInsecureCerts'),
+    requireHttps: parseBoolean('requireHttps'),
   };
   const urlRewriteSearch = parseString('urlRewriteSearch');
   const urlRewriteReplace = parseString('urlRewriteReplace');

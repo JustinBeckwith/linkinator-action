@@ -51,7 +51,13 @@ jobs:
 - `markdown` - Automatically parse and scan markdown if scanning from a location on disk. Defaults to `true`.
 - `serverRoot` - When scanning a local directory, customize the location on disk where the server is started.  Defaults to the root of your GitHub repository.
 - `directoryListing` - Include an automatic directory index file when linking to a directory. Defaults to `false`.
-- `retry` - Automatically retry requests that return HTTP 429 responses and include a `retry-after` header.
+- `retry` - Automatically retry requests that return HTTP 429 responses and include a `retry-after` header. Defaults to `false`.
+- `retryErrors` - Automatically retry requests that return 5xx or network error responses. Defaults to `false`.
+- `retryErrorsCount` - The number of times to retry requests that return 5xx or network error responses. Defaults to `3`.
+- `retryErrorsJitter` - The maximum jitter in milliseconds to apply to retry delays. Defaults to `2000`.
+- `userAgent` - Custom User-Agent header to use for requests.
+- `allowInsecureCerts` - Allow checking links with insecure certificates. Useful for local development with self-signed certificates. Defaults to `false`.
+- `requireHttps` - Require all links to use HTTPS. Any HTTP links will be treated as broken. Defaults to `false`.
 - `urlRewriteSearch` - Pattern to search for in urls.  Must be used with `urlRewriteReplace`.
 - `urlRewriteReplace` - Expression used to replace search content.  Must be used with `urlRewriteSearch`.
 - `verbosity` - Override the default verbosity for this command. Available options are "DEBUG", "INFO", "WARNING", "ERROR", and "NONE".  Defaults to "WARNING".

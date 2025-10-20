@@ -296,4 +296,24 @@ describe('linkinator action', () => {
     assert.ok(infoStub.called);
     scope.done();
   });
+
+  it('should handle allowInsecureCerts option', async () => {
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
+    inputStub.withArgs('allowInsecureCerts').returns('true');
+    inputStub.returns('');
+    const config = await getFullConfig();
+    assert.strictEqual(config.allowInsecureCerts, true);
+    assert.ok(inputStub.called);
+  });
+
+  it('should handle requireHttps option', async () => {
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
+    inputStub.withArgs('requireHttps').returns('true');
+    inputStub.returns('');
+    const config = await getFullConfig();
+    assert.strictEqual(config.requireHttps, true);
+    assert.ok(inputStub.called);
+  });
 });

@@ -70,6 +70,14 @@ inputs:
   urlRewriteReplace:
     description: Expression used to replace search content.  Must be used with `urlRewriteSearch`.
     required: false
+  allowInsecureCerts:
+    description: Allow checking links with insecure certificates. Useful for local development with self-signed certificates.
+    default: 'false'
+    required: false
+  requireHttps:
+    description: Require all links to use HTTPS. Any HTTP links will be treated as broken.
+    default: 'false'
+    required: false
 outputs:
   results:
     description: 'The full results of the scan.'

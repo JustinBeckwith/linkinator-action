@@ -18,6 +18,7 @@ var require$$6$1 = require('timers');
 var node_events = require('node:events');
 var path$1 = require('node:path');
 var process$1 = require('node:process');
+var undici = require('undici');
 var Stream = require('node:stream');
 var node_string_decoder = require('node:string_decoder');
 var actualFS = require('node:fs');
@@ -13334,6 +13335,8 @@ async function processOptions(options_) {
     if (options.directoryListing === undefined) {
         options.directoryListing = false;
     }
+    // Default redirects to 'allow'
+    options.redirects = options.redirects ?? 'allow';
     // Ensure we do not mix http:// and file system paths.  The paths passed in
     // must all be filesystem paths, or HTTP paths.
     let isUrlType;
@@ -13351,7 +13354,15 @@ async function processOptions(options_) {
         throw new Error("'serverRoot' cannot be defined when the 'path' points to an HTTP endpoint.");
     }
     options.userAgent = options.userAgent ?? DEFAULT_USER_AGENT;
+    options.headers = {
+        'User-Agent': options.userAgent,
+        ...(options.headers ?? {}),
+    };
     options.serverRoot &&= path$1.normalize(options.serverRoot);
+    // Default to 'allow' for redirect handling
+    options.redirects = options.redirects ?? 'allow';
+    // Default to 'off' for HTTPS requirement
+    options.requireHttps = options.requireHttps ?? 'off';
     // Expand globs into paths
     if (!isUrlType) {
         const paths = [];
@@ -13819,11 +13830,17 @@ async function handleRequest(request, response, root, options) {
         const isDirectory = stats.isDirectory();
         if (isDirectory) {
             // This means we got a path with no / at the end!
+            // Create a proper redirect URL that preserves query parameters
+            // Fix for issue #595 - thanks to @maddsua for the solution in PR #596
+            const redirectUrl = new URL(url);
+            if (!redirectUrl.pathname.endsWith('/')) {
+                redirectUrl.pathname += '/';
+            }
             const document = "<html><body>Redirectin'</body></html>";
             response.statusCode = 301;
             response.setHeader('Content-Type', 'text/html; charset=UTF-8');
             response.setHeader('Content-Length', node_buffer.Buffer.byteLength(document));
-            response.setHeader('Location', `${request.url}/`);
+            response.setHeader('Location', redirectUrl.href);
             response.end(document);
             return;
         }
@@ -14139,12 +14156,14 @@ class LinkChecker extends node_events.EventEmitter {
         let shouldRecurse = false;
         let response;
         const failures = [];
+        const originalUrl = options.url.href;
+        const redirectMode = options.checkOptions.redirects === 'error' ? 'manual' : 'follow';
         try {
             response = await makeRequest(options.crawl ? 'GET' : 'HEAD', options.url.href, {
-                headers: {
-                    'User-Agent': options.checkOptions.userAgent || DEFAULT_USER_AGENT,
-                },
+                headers: options.checkOptions.headers,
                 timeout: options.checkOptions.timeout,
+                redirect: redirectMode,
+                allowInsecureCerts: options.checkOptions.allowInsecureCerts,
             });
             if (this.shouldRetryAfter(response, options)) {
                 return;
@@ -14152,10 +14171,10 @@ class LinkChecker extends node_events.EventEmitter {
             // If we got an HTTP 405, the server may not like HEAD. GET instead!
             if (response.status === 405) {
                 response = await makeRequest('GET', options.url.href, {
-                    headers: {
-                        'User-Agent': options.checkOptions.userAgent || DEFAULT_USER_AGENT,
-                    },
+                    headers: options.checkOptions.headers,
                     timeout: options.checkOptions.timeout,
+                    redirect: redirectMode,
+                    allowInsecureCerts: options.checkOptions.allowInsecureCerts,
                 });
                 if (this.shouldRetryAfter(response, options)) {
                     return;
@@ -14176,10 +14195,10 @@ class LinkChecker extends node_events.EventEmitter {
                 response.status >= 300) &&
                 !options.crawl) {
                 response = await makeRequest('GET', options.url.href, {
-                    headers: {
-                        'User-Agent': options.checkOptions.userAgent || DEFAULT_USER_AGENT,
-                    },
+                    headers: options.checkOptions.headers,
                     timeout: options.checkOptions.timeout,
+                    redirect: redirectMode,
+                    allowInsecureCerts: options.checkOptions.allowInsecureCerts,
                 });
                 if (this.shouldRetryAfter(response, options)) {
                     return;
@@ -14195,16 +14214,86 @@ class LinkChecker extends node_events.EventEmitter {
             shouldRecurse = isHtml(response);
         }
         // If retryErrors is enabled, retry 5xx and 0 status (which indicates
-        // a network error likely occurred):
+        // a network error likely occurred) or 429 without retry-after data:
         if (this.shouldRetryOnError(status, options)) {
             return;
         }
-        // Assume any 2xx status is 👌
-        if (status >= 200 && status < 300) {
+        // Detect if this was a redirect
+        const redirect = detectRedirect(status, originalUrl, response);
+        // Special handling for bot protection responses
+        // Status 999: Used by LinkedIn and other sites to block automated requests
+        // Status 403 with cf-mitigated: Cloudflare bot protection challenge
+        // Since we cannot distinguish between valid and invalid URLs when blocked,
+        // treat these as skipped rather than broken.
+        if (status === 999) {
+            state = LinkState.SKIPPED;
+        }
+        else if (status === 403 &&
+            response !== undefined &&
+            response.headers['cf-mitigated']) {
+            state = LinkState.SKIPPED;
+        }
+        // Handle 'error' mode - treat any redirect as broken
+        else if (options.checkOptions.redirects === 'error' &&
+            redirect.isRedirect) {
+            state = LinkState.BROKEN;
+            const targetInfo = redirect.targetUrl ? ` to ${redirect.targetUrl}` : '';
+            failures.push({
+                status,
+                headers: response?.headers || {},
+            });
+            failures.push(new Error(`Redirect detected (${originalUrl}${targetInfo}) but redirects are disabled`));
+        }
+        // Handle 'warn' mode - allow but warn on redirects
+        else if (options.checkOptions.redirects === 'warn') {
+            // Check if a redirect happened (either 3xx status or URL changed)
+            if (redirect.isRedirect || redirect.wasFollowed) {
+                // Emit warning about redirect
+                this.emit('redirect', {
+                    url: originalUrl,
+                    targetUrl: redirect.targetUrl,
+                    // Report actual redirect status if we have it, otherwise 200
+                    status: redirect.isRedirect ? status : 200,
+                    isNonStandard: redirect.isNonStandard,
+                });
+            }
+            // Still check final status for success/failure
+            if (status >= 200 && status < 300) {
+                state = LinkState.OK;
+            }
+            else if (redirect.isRedirect &&
+                redirect.wasFollowed &&
+                response?.body) {
+                // Non-standard redirect with content - treat as OK even in warn mode
+                state = LinkState.OK;
+            }
+            else if (response !== undefined) {
+                failures.push(response);
+            }
+        }
+        // Handle 'allow' mode (default) - accept 2xx or non-standard redirects with content
+        else if (status >= 200 && status < 300) {
+            state = LinkState.OK;
+        }
+        else if (redirect.isRedirect && redirect.wasFollowed && response?.body) {
+            // Non-standard redirect with content - treat as OK in allow mode
             state = LinkState.OK;
         }
         else if (response !== undefined) {
             failures.push(response);
+        }
+        // Handle HTTPS enforcement
+        const isHttpUrl = originalUrl.startsWith('http://');
+        if (isHttpUrl && options.checkOptions.requireHttps === 'error') {
+            // Treat HTTP as broken in error mode
+            state = LinkState.BROKEN;
+            failures.push(new Error(`HTTP link detected (${originalUrl}) but HTTPS is required`));
+        }
+        else if (isHttpUrl && options.checkOptions.requireHttps === 'warn') {
+            // Emit warning about HTTP link in warn mode
+            this.emit('httpInsecure', {
+                url: originalUrl,
+            });
         }
         const result = {
             url: mapUrl(options.url.href, options.checkOptions),
@@ -14332,6 +14421,27 @@ class LinkChecker extends node_events.EventEmitter {
         }
     }
     /**
+     * Parse the retry-after header value into a timestamp.
+     * Supports standard formats (seconds, HTTP date) and non-standard formats (30s, 1m30s).
+     * @param retryAfterRaw Raw retry-after header value
+     * @returns Timestamp in milliseconds when to retry, or NaN if invalid
+     */
+    parseRetryAfter(retryAfterRaw) {
+        // Try parsing as seconds
+        let retryAfter = Number(retryAfterRaw) * 1000 + Date.now();
+        if (!Number.isNaN(retryAfter))
+            return retryAfter;
+        // Try parsing as HTTP date
+        retryAfter = Date.parse(retryAfterRaw);
+        if (!Number.isNaN(retryAfter))
+            return retryAfter;
+        // Handle non-standard formats like "30s" or "1m30s"
+        const matches = retryAfterRaw.match(/^(?:(\d+)m)?(\d+)s$/);
+        if (!matches)
+            return Number.NaN;
+        return ((Number(matches[1] || 0) * 60 + Number(matches[2])) * 1000 + Date.now());
+    }
+    /**
      * Check the incoming response for a `retry-after` header.  If present,
      * and if the status was an HTTP 429, calculate the date at which this
      * request should be retried. Ensure the delayCache knows that we're
@@ -14347,14 +14457,9 @@ class LinkChecker extends node_events.EventEmitter {
         if (response.status !== 429 || !retryAfterRaw) {
             return false;
         }
-        // The `retry-after` header can come in either <seconds> or
-        // A specific date to go check.
-        let retryAfter = Number(retryAfterRaw) * 1000 + Date.now();
+        const retryAfter = this.parseRetryAfter(retryAfterRaw);
         if (Number.isNaN(retryAfter)) {
-            retryAfter = Date.parse(retryAfterRaw);
-            if (Number.isNaN(retryAfter)) {
-                return false;
-            }
+            return false;
         }
         // Check to see if there is already a request to wait for this host
         const currentTimeout = options.delayCache.get(options.url.host);
@@ -14381,7 +14486,9 @@ class LinkChecker extends node_events.EventEmitter {
         return true;
     }
     /**
-     * If the response is a 5xx or synthetic 0 response retry N times.
+     * If the response is a 5xx, synthetic 0 or 429 without retry-after header retry N times.
+     * There are cases where we can get 429 but without retry-after data, for those cases we
+     * are going to handle it as error so we can retry N times.
      * @param status Status returned by request or 0 if request threw.
      * @param opts CrawlOptions used during this request
      */
@@ -14390,8 +14497,8 @@ class LinkChecker extends node_events.EventEmitter {
         if (!options.retryErrors) {
             return false;
         }
-        // Only retry 0 and >5xx status codes:
-        if (status > 0 && status < 500) {
+        // Only retry 0 and >5xx or 429 without retry-after header status codes:
+        if (status > 0 && status < 500 && status !== 429) {
             return false;
         }
         // Check to see if there is already a request to wait for this URL:
@@ -14464,7 +14571,7 @@ function mapUrl(url, options) {
  * Helper function to make HTTP requests using native fetch
  * @param method HTTP method
  * @param url URL to request
- * @param options Additional options (headers, timeout)
+ * @param options Additional options (headers, timeout, allowInsecureCerts)
  * @returns Response with status, headers, and body stream
  */
 async function makeRequest(method, url, options = {}) {
@@ -14483,10 +14590,21 @@ async function makeRequest(method, url, options = {}) {
     const requestOptions = {
         method,
         headers: { ...defaultHeaders, ...options.headers },
-        redirect: 'follow',
+        redirect: options.redirect ?? 'follow',
     };
     if (options.timeout) {
         requestOptions.signal = AbortSignal.timeout(options.timeout);
+    }
+    // If allowInsecureCerts is enabled, use a custom undici dispatcher
+    // that doesn't validate certificates
+    if (options.allowInsecureCerts) {
+        const agent = new undici.Agent({
+            connect: {
+                rejectUnauthorized: false,
+            },
+        });
+        // @ts-expect-error - dispatcher is a valid option for fetch in Node.js but not in the types
+        requestOptions.dispatcher = agent;
     }
     const response = await fetch(url, requestOptions);
     // Convert headers to a plain object
@@ -14494,18 +14612,33 @@ async function makeRequest(method, url, options = {}) {
     response.headers.forEach((value, key) => {
         headers[key] = value;
     });
-    let status = response.status;
-    // Special handling for Cloudflare bot protection
-    // If we get a 403 with cf-mitigated header, the site exists but blocks bots
-    // Treat this as a successful check since the link is valid for humans
-    if (status === 403 && headers['cf-mitigated']) {
-        status = 200;
-    }
+    const status = response.status;
     return {
         status,
         headers,
         body: (response.body ?? undefined),
         url: response.url,
+    };
+}
+/**
+ * Helper function to detect if a redirect occurred
+ * @param status HTTP status code
+ * @param originalUrl Original URL requested
+ * @param response HTTP response object
+ * @returns Redirect detection details
+ */
+function detectRedirect(status, originalUrl, response) {
+    const isRedirectStatus = status >= 300 && status < 400;
+    const urlChanged = response?.url && response.url !== originalUrl;
+    const hasLocation = Boolean(response?.headers.location);
+    const hasBody = response?.body !== undefined;
+    // Non-standard redirect: 3xx status without Location header or with body
+    const isNonStandard = isRedirectStatus && (!hasLocation || (hasBody && !hasLocation));
+    return {
+        isRedirect: isRedirectStatus,
+        wasFollowed: Boolean(urlChanged || (isRedirectStatus && hasBody)),
+        isNonStandard,
+        targetUrl: response?.url || response?.headers.location,
     };
 }
 
@@ -14522,6 +14655,8 @@ async function getFullConfig() {
     retryErrorsCount: 3,
     retryErrorsJitter: 2000,
     verbosity: 'WARNING',
+    allowInsecureCerts: false,
+    requireHttps: false,
   };
   // The options returned from `getInput` appear to always be strings.
   const actionsConfig = {
@@ -14540,6 +14675,8 @@ async function getFullConfig() {
     userAgent: parseString('userAgent'),
     verbosity: parseString('verbosity'),
     config: parseString('config'),
+    allowInsecureCerts: parseBoolean('allowInsecureCerts'),
+    requireHttps: parseBoolean('requireHttps'),
   };
   const urlRewriteSearch = parseString('urlRewriteSearch');
   const urlRewriteReplace = parseString('urlRewriteReplace');
