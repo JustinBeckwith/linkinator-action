@@ -36,7 +36,6 @@
     "@biomejs/biome": "2.2.6",
     "@rollup/plugin-commonjs": "^28.0.7",
     "@rollup/plugin-node-resolve": "^16.0.3",
-    "@vercel/ncc": "^0.38.4",
     "c8": "^10.1.2",
     "esbuild": "^0.25.11",
     "mocha": "^11.0.0",
