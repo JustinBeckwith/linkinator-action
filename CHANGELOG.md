@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.0](https://github.com/JustinBeckwith/linkinator-action/compare/linkinator-action-v2.0.0...linkinator-action-v2.1.0) (2025-10-21)
+
+
+### Features
+
+* add linkinator 7.2 options (allowInsecureCerts and requireHttps) ([#207](https://github.com/JustinBeckwith/linkinator-action/issues/207)) ([3b63c81](https://github.com/JustinBeckwith/linkinator-action/commit/3b63c8166b8dc937c7d364811efffbb1bc255f35))
+
+
+### Bug Fixes
+
+* prevent branch name duplication in URL rewriting (fixes [#85](https://github.com/JustinBeckwith/linkinator-action/issues/85)) ([#209](https://github.com/JustinBeckwith/linkinator-action/issues/209)) ([ba135b2](https://github.com/JustinBeckwith/linkinator-action/commit/ba135b2845c261a8fe870d90da8fd6e3f7f42c5e))
+
 ## [2.0.0](https://github.com/JustinBeckwith/linkinator-action/compare/linkinator-action-v1.11.0...linkinator-action-v2.0.0) (2025-10-15)
 
 
