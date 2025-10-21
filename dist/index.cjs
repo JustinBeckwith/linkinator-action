@@ -35907,11 +35907,13 @@ async function main() {
           if (!config.urlRewriteExpressions) {
             config.urlRewriteExpressions = [];
           }
+          const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const escapedBaseRef = escapeRegex(GITHUB_BASE_REF);
           config.urlRewriteExpressions.push({
             pattern: new RegExp(
-              `github.com/${GITHUB_REPOSITORY}(/.*/)(${GITHUB_BASE_REF})/(.*)`
+              `github\\.com/${GITHUB_REPOSITORY}/(blob|tree)/(${escapedBaseRef})/(.*)`
             ),
-            replacement: `github.com/${repo}$1${GITHUB_HEAD_REF}/$3`
+            replacement: `github.com/${repo}/$1/${GITHUB_HEAD_REF}/$3`
           });
         }
       } catch (err) {
