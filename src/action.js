@@ -53,6 +53,75 @@ export async function getFullConfig() {
   return config;
 }
 
+export async function generateJobSummary(result, logger) {
+  const brokenLinks = result.links.filter((x) => x.state === 'BROKEN');
+  const okLinks = result.links.filter((x) => x.state === 'OK');
+  const skippedLinks = result.links.filter((x) => x.state === 'SKIPPED');
+  const totalLinks = result.links.length;
+
+  // Start building the summary
+  const summary = core.summary.addHeading('🔗 Linkinator Results', 2);
+
+  // Add status line
+  if (result.passed) {
+    summary.addRaw(
+      `\n**Status:** ✅ All links are valid!\n\n`,
+    );
+  } else {
+    summary.addRaw(
+      `\n**Status:** ❌ Found ${brokenLinks.length} broken ${brokenLinks.length === 1 ? 'link' : 'links'}\n\n`,
+    );
+  }
+
+  // Add statistics
+  summary.addHeading('📊 Summary', 3);
+  summary.addList([
+    `Total links scanned: ${totalLinks}`,
+    `✅ Passed: ${okLinks.length}`,
+    `❌ Broken: ${brokenLinks.length}`,
+    `⏭️ Skipped: ${skippedLinks.length}`,
+  ]);
+
+  // Add broken links table if any exist
+  if (brokenLinks.length > 0) {
+    summary.addHeading('❌ Broken Links', 3);
+
+    // Group broken links by parent
+    const parents = brokenLinks.reduce((acc, curr) => {
+      const parent = curr.parent || '(unknown)';
+      if (!acc[parent]) {
+        acc[parent] = [];
+      }
+      acc[parent].push(curr);
+      return acc;
+    }, {});
+
+    // Create table rows grouped by parent
+    const tableRows = [
+      [
+        { data: 'Status', header: true },
+        { data: 'URL', header: true },
+        { data: 'Source', header: true },
+      ],
+    ];
+
+    for (const parent of Object.keys(parents).sort()) {
+      for (const link of parents[parent]) {
+        tableRows.push([
+          String(link.status),
+          link.url,
+          parent,
+        ]);
+      }
+    }
+
+    summary.addTable(tableRows);
+  }
+
+  // Write the summary
+  await summary.write();
+}
+
 export async function main() {
   try {
     const config = await getFullConfig();
@@ -115,6 +184,10 @@ export async function main() {
     const result = await checker.check(config);
     const nonSkippedLinks = result.links.filter((x) => x.state !== 'SKIPPED');
     core.info(`Scanned total of ${nonSkippedLinks.length} links!`);
+
+    // Generate job summary
+    await generateJobSummary(result, logger);
+
     if (!result.passed) {
       const brokenLinks = result.links.filter((x) => x.state === 'BROKEN');
       let failureOutput = `Detected ${brokenLinks.length} broken links.`;

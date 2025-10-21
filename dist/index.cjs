@@ -35886,6 +35886,64 @@ async function getFullConfig() {
   config.linksToSkip = config.skip;
   return config;
 }
+async function generateJobSummary(result, logger) {
+  const brokenLinks = result.links.filter((x2) => x2.state === "BROKEN");
+  const okLinks = result.links.filter((x2) => x2.state === "OK");
+  const skippedLinks = result.links.filter((x2) => x2.state === "SKIPPED");
+  const totalLinks = result.links.length;
+  const summary = import_core.default.summary.addHeading("\u{1F517} Linkinator Results", 2);
+  if (result.passed) {
+    summary.addRaw(
+      `
+**Status:** \u2705 All links are valid!
+
+`
+    );
+  } else {
+    summary.addRaw(
+      `
+**Status:** \u274C Found ${brokenLinks.length} broken ${brokenLinks.length === 1 ? "link" : "links"}
+
+`
+    );
+  }
+  summary.addHeading("\u{1F4CA} Summary", 3);
+  summary.addList([
+    `Total links scanned: ${totalLinks}`,
+    `\u2705 Passed: ${okLinks.length}`,
+    `\u274C Broken: ${brokenLinks.length}`,
+    `\u23ED\uFE0F Skipped: ${skippedLinks.length}`
+  ]);
+  if (brokenLinks.length > 0) {
+    summary.addHeading("\u274C Broken Links", 3);
+    const parents = brokenLinks.reduce((acc, curr) => {
+      const parent = curr.parent || "(unknown)";
+      if (!acc[parent]) {
+        acc[parent] = [];
+      }
+      acc[parent].push(curr);
+      return acc;
+    }, {});
+    const tableRows = [
+      [
+        { data: "Status", header: true },
+        { data: "URL", header: true },
+        { data: "Source", header: true }
+      ]
+    ];
+    for (const parent of Object.keys(parents).sort()) {
+      for (const link of parents[parent]) {
+        tableRows.push([
+          String(link.status),
+          link.url,
+          parent
+        ]);
+      }
+    }
+    summary.addTable(tableRows);
+  }
+  await summary.write();
+}
 async function main() {
   try {
     const config = await getFullConfig();
@@ -35939,6 +35997,7 @@ async function main() {
     const result = await checker.check(config);
     const nonSkippedLinks = result.links.filter((x2) => x2.state !== "SKIPPED");
     import_core.default.info(`Scanned total of ${nonSkippedLinks.length} links!`);
+    await generateJobSummary(result, logger);
     if (!result.passed) {
       const brokenLinks = result.links.filter((x2) => x2.state === "BROKEN");
       let failureOutput = `Detected ${brokenLinks.length} broken links.`;

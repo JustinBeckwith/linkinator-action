@@ -3,10 +3,23 @@ import core from '@actions/core';
 import { afterEach, describe, it } from 'mocha';
 import nock from 'nock';
 import sinon from 'sinon';
-import { getFullConfig, main } from '../src/action.js';
+import { getFullConfig, main, generateJobSummary } from '../src/action.js';
 
 nock.disableNetConnect();
 nock.enableNetConnect('localhost');
+
+// Helper to stub out core.summary for tests
+function stubSummary() {
+  const summaryStub = {
+    addHeading: sinon.stub().returnsThis(),
+    addRaw: sinon.stub().returnsThis(),
+    addList: sinon.stub().returnsThis(),
+    addTable: sinon.stub().returnsThis(),
+    write: sinon.stub().resolves(),
+  };
+  sinon.stub(core, 'summary').value(summaryStub);
+  return summaryStub;
+}
 
 describe('linkinator action', () => {
   afterEach(() => {
@@ -15,6 +28,7 @@ describe('linkinator action', () => {
   });
 
   it('should return ok for a valid README', async () => {
+    stubSummary();
     const inputStub = sinon.stub(core, 'getInput');
     inputStub.withArgs('paths').returns('test/fixtures/test.md');
     inputStub.returns('');
@@ -35,6 +49,7 @@ describe('linkinator action', () => {
   });
 
   it('should call setFailed on failures', async () => {
+    stubSummary();
     const inputStub = sinon.stub(core, 'getInput');
     inputStub.withArgs('paths').returns('test/fixtures/test.md');
     inputStub.returns('');
@@ -56,6 +71,7 @@ describe('linkinator action', () => {
   });
 
   it('should surface exceptions from linkinator with call stack', async () => {
+    stubSummary();
     const inputStub = sinon.stub(core, 'getInput').throws(new Error('😱'));
     const setFailedStub = sinon.stub(core, 'setFailed');
     await main();
@@ -65,6 +81,7 @@ describe('linkinator action', () => {
   });
 
   it('should handle linksToSkip', async () => {
+    stubSummary();
     const inputStub = sinon.stub(core, 'getInput');
     inputStub.withArgs('paths').returns('test/fixtures/test.md');
     inputStub
@@ -83,6 +100,7 @@ describe('linkinator action', () => {
   });
 
   it('should handle skips and spaces', async () => {
+    stubSummary();
     const inputStub = sinon.stub(core, 'getInput');
     inputStub.withArgs('paths').returns('test/fixtures/test.md');
     inputStub
@@ -101,6 +119,7 @@ describe('linkinator action', () => {
   });
 
   it('should handle multiple paths', async () => {
+    stubSummary();
     const inputStub = sinon.stub(core, 'getInput');
     inputStub
       .withArgs('paths')
@@ -124,6 +143,7 @@ describe('linkinator action', () => {
   });
 
   it('should respect verbosity set to ERROR', async () => {
+    stubSummary();
     const inputStub = sinon.stub(core, 'getInput');
     inputStub.withArgs('paths').returns('test/fixtures/test.md');
     inputStub.withArgs('verbosity').returns('ERROR');
@@ -170,6 +190,7 @@ describe('linkinator action', () => {
   });
 
   it('should show skipped links when verbosity is INFO', async () => {
+    stubSummary();
     // Unset GITHUB_EVENT_PATH, so that no replacement is attempted.
     sinon.stub(process, 'env').value({
       GITHUB_EVENT_PATH: undefined,
@@ -196,6 +217,7 @@ describe('linkinator action', () => {
   });
 
   it('should show failure details when verbosity is DEBUG', async () => {
+    stubSummary();
     const inputStub = sinon.stub(core, 'getInput');
     inputStub.withArgs('paths').returns('test/fixtures/test.md');
     inputStub.withArgs('verbosity').returns('DEBUG');
@@ -241,6 +263,7 @@ describe('linkinator action', () => {
   });
 
   it('should throw for invalid verbosity', async () => {
+    stubSummary();
     const inputStub = sinon.stub(core, 'getInput');
     inputStub.withArgs('paths').returns('test/fixtures/test.md');
     inputStub.withArgs('verbosity').returns('NOT_VALID');
@@ -251,6 +274,7 @@ describe('linkinator action', () => {
   });
 
   it('should respect url rewrite rules', async () => {
+    stubSummary();
     const inputStub = sinon.stub(core, 'getInput');
     inputStub.withArgs('paths').returns('test/fixtures/test.md');
     inputStub.withArgs('urlRewriteSearch').returns('fake.local');
@@ -274,6 +298,7 @@ describe('linkinator action', () => {
   });
 
   it('should automatically rewrite urls on the incoming branch', async () => {
+    stubSummary();
     sinon.stub(process, 'env').value({
       GITHUB_HEAD_REF: 'incoming',
       GITHUB_BASE_REF: 'main',
@@ -318,6 +343,7 @@ describe('linkinator action', () => {
   });
 
   it('should handle branch names with slashes in URL rewriting', async () => {
+    stubSummary();
     sinon.stub(process, 'env').value({
       GITHUB_HEAD_REF: 'release-please/branches/main',
       GITHUB_BASE_REF: 'main',
@@ -349,6 +375,7 @@ describe('linkinator action', () => {
   });
 
   it('should handle branch names with multiple slashes', async () => {
+    stubSummary();
     sinon.stub(process, 'env').value({
       GITHUB_HEAD_REF: 'feature/deep/nested/branch',
       GITHUB_BASE_REF: 'main',
@@ -377,6 +404,7 @@ describe('linkinator action', () => {
   });
 
   it('should handle tree URLs as well as blob URLs', async () => {
+    stubSummary();
     sinon.stub(process, 'env').value({
       GITHUB_HEAD_REF: 'feature/test',
       GITHUB_BASE_REF: 'main',
@@ -402,6 +430,7 @@ describe('linkinator action', () => {
   });
 
   it('should not duplicate branch names when URL already contains head ref substring', async () => {
+    stubSummary();
     // Regression test for issue #85
     // When branch is "release-please/branches/main" and base is "main",
     // a URL already containing the full branch name should not get it duplicated
@@ -444,6 +473,7 @@ describe('linkinator action', () => {
   });
 
   it('should handle base refs with special regex characters', async () => {
+    stubSummary();
     // Test that branch names with regex special chars are properly escaped
     const fs = await import('node:fs/promises');
     const testContent = '[Link](https://github.com/JustinBeckwith/linkinator-action/blob/v1.0.0/FILE.md)';
@@ -474,5 +504,117 @@ describe('linkinator action', () => {
 
     // Cleanup
     await fs.unlink('test/fixtures/github-special-chars.md');
+  });
+
+  describe('Job Summary', () => {
+    it('should generate summary for successful scan', async () => {
+      const summaryStub = stubSummary();
+
+      const result = {
+        passed: true,
+        links: [
+          { url: 'http://example.com', state: 'OK', status: 200, parent: 'test.md' },
+          { url: 'http://example.org', state: 'OK', status: 200, parent: 'test.md' },
+          { url: 'http://skipped.com', state: 'SKIPPED', status: 0, parent: 'test.md' },
+        ],
+      };
+
+      await generateJobSummary(result);
+
+      assert.ok(summaryStub.addHeading.calledWith('🔗 Linkinator Results', 2));
+      assert.ok(summaryStub.addRaw.calledWith('\n**Status:** ✅ All links are valid!\n\n'));
+      assert.ok(summaryStub.addHeading.calledWith('📊 Summary', 3));
+      assert.ok(summaryStub.addList.called);
+      assert.ok(summaryStub.write.called);
+      // Should not add broken links table
+      assert.strictEqual(summaryStub.addTable.called, false);
+    });
+
+    it('should generate summary with broken links table', async () => {
+      const summaryStub = stubSummary();
+
+      const result = {
+        passed: false,
+        links: [
+          { url: 'http://broken.com', state: 'BROKEN', status: 404, parent: 'test.md' },
+          { url: 'http://error.com', state: 'BROKEN', status: 500, parent: 'other.md' },
+          { url: 'http://example.com', state: 'OK', status: 200, parent: 'test.md' },
+        ],
+      };
+
+      await generateJobSummary(result);
+
+      assert.ok(summaryStub.addHeading.calledWith('🔗 Linkinator Results', 2));
+      assert.ok(summaryStub.addRaw.calledWith('\n**Status:** ❌ Found 2 broken links\n\n'));
+      assert.ok(summaryStub.addHeading.calledWith('❌ Broken Links', 3));
+      assert.ok(summaryStub.addTable.called);
+      assert.ok(summaryStub.write.called);
+
+      // Check table structure
+      const tableCall = summaryStub.addTable.getCall(0);
+      const tableRows = tableCall.args[0];
+      assert.strictEqual(tableRows.length, 3); // header + 2 broken links
+      assert.deepStrictEqual(tableRows[0], [
+        { data: 'Status', header: true },
+        { data: 'URL', header: true },
+        { data: 'Source', header: true },
+      ]);
+    });
+
+    it('should handle singular vs plural in broken links message', async () => {
+      const summaryStub = stubSummary();
+
+      const result = {
+        passed: false,
+        links: [
+          { url: 'http://broken.com', state: 'BROKEN', status: 404, parent: 'test.md' },
+        ],
+      };
+
+      await generateJobSummary(result);
+
+      assert.ok(summaryStub.addRaw.calledWith('\n**Status:** ❌ Found 1 broken link\n\n'));
+    });
+
+    it('should group broken links by parent in table', async () => {
+      const summaryStub = stubSummary();
+
+      const result = {
+        passed: false,
+        links: [
+          { url: 'http://broken1.com', state: 'BROKEN', status: 404, parent: 'test.md' },
+          { url: 'http://broken2.com', state: 'BROKEN', status: 500, parent: 'test.md' },
+          { url: 'http://broken3.com', state: 'BROKEN', status: 403, parent: 'other.md' },
+        ],
+      };
+
+      await generateJobSummary(result);
+
+      const tableCall = summaryStub.addTable.getCall(0);
+      const tableRows = tableCall.args[0];
+      assert.strictEqual(tableRows.length, 4); // header + 3 broken links
+
+      // Check links are sorted by parent
+      assert.strictEqual(tableRows[1][2], 'other.md');
+      assert.strictEqual(tableRows[2][2], 'test.md');
+      assert.strictEqual(tableRows[3][2], 'test.md');
+    });
+
+    it('should handle links with no parent', async () => {
+      const summaryStub = stubSummary();
+
+      const result = {
+        passed: false,
+        links: [
+          { url: 'http://broken.com', state: 'BROKEN', status: 404, parent: '' },
+        ],
+      };
+
+      await generateJobSummary(result);
+
+      const tableCall = summaryStub.addTable.getCall(0);
+      const tableRows = tableCall.args[0];
+      assert.strictEqual(tableRows[1][2], '(unknown)');
+    });
   });
 });
