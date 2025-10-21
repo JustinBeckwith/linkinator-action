@@ -75,11 +75,18 @@ export async function main() {
           if (!config.urlRewriteExpressions) {
             config.urlRewriteExpressions = [];
           }
+          // Escape special regex characters in branch names
+          const escapeRegex = (str) =>
+            str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const escapedBaseRef = escapeRegex(GITHUB_BASE_REF);
+
+          // Match GitHub blob/tree URLs specifically to avoid greedy matching
+          // that could include parts of the branch name in the path capture
           config.urlRewriteExpressions.push({
             pattern: new RegExp(
-              `github.com/${GITHUB_REPOSITORY}(/.*/)(${GITHUB_BASE_REF})/(.*)`,
+              `github\\.com/${GITHUB_REPOSITORY}/(blob|tree)/(${escapedBaseRef})/(.*)`,
             ),
-            replacement: `github.com/${repo}$1${GITHUB_HEAD_REF}/$3`,
+            replacement: `github.com/${repo}/$1/${GITHUB_HEAD_REF}/$3`,
           });
         }
       } catch (err) {

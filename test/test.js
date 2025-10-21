@@ -316,4 +316,163 @@ describe('linkinator action', () => {
     assert.strictEqual(config.requireHttps, true);
     assert.ok(inputStub.called);
   });
+
+  it('should handle branch names with slashes in URL rewriting', async () => {
+    sinon.stub(process, 'env').value({
+      GITHUB_HEAD_REF: 'release-please/branches/main',
+      GITHUB_BASE_REF: 'main',
+      GITHUB_REPOSITORY: 'JustinBeckwith/linkinator-action',
+      GITHUB_EVENT_PATH: './test/fixtures/payload-slashes.json',
+    });
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/github-slashed-branch.md');
+    inputStub.returns('');
+    const setOutputStub = sinon.stub(core, 'setOutput');
+    const setFailedStub = sinon.stub(core, 'setFailed');
+    const infoStub = sinon.stub(core, 'info');
+
+    // The action should rewrite URLs from main branch to the slashed branch
+    // Original: https://github.com/JustinBeckwith/linkinator-action/blob/main/CONTRIBUTING.md
+    // Expected: https://github.com/Codertocat/Hello-World/blob/release-please/branches/main/CONTRIBUTING.md
+    const scope = nock('https://github.com')
+      .get('/Codertocat/Hello-World/blob/release-please/branches/main/CONTRIBUTING.md')
+      .reply(200)
+      .get('/Codertocat/Hello-World/blob/release-please/branches/main/CODE_OF_CONDUCT.md')
+      .reply(200);
+
+    await main();
+    assert.ok(inputStub.called);
+    assert.ok(setOutputStub.called);
+    assert.ok(setFailedStub.notCalled);
+    assert.ok(infoStub.called);
+    scope.done();
+  });
+
+  it('should handle branch names with multiple slashes', async () => {
+    sinon.stub(process, 'env').value({
+      GITHUB_HEAD_REF: 'feature/deep/nested/branch',
+      GITHUB_BASE_REF: 'main',
+      GITHUB_REPOSITORY: 'JustinBeckwith/linkinator-action',
+      GITHUB_EVENT_PATH: './test/fixtures/payload-slashes.json',
+    });
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/github-slashed-branch.md');
+    inputStub.returns('');
+    const setOutputStub = sinon.stub(core, 'setOutput');
+    const setFailedStub = sinon.stub(core, 'setFailed');
+    const infoStub = sinon.stub(core, 'info');
+
+    const scope = nock('https://github.com')
+      .get('/Codertocat/Hello-World/blob/feature/deep/nested/branch/CONTRIBUTING.md')
+      .reply(200)
+      .get('/Codertocat/Hello-World/blob/feature/deep/nested/branch/CODE_OF_CONDUCT.md')
+      .reply(200);
+
+    await main();
+    assert.ok(inputStub.called);
+    assert.ok(setOutputStub.called);
+    assert.ok(setFailedStub.notCalled);
+    assert.ok(infoStub.called);
+    scope.done();
+  });
+
+  it('should handle tree URLs as well as blob URLs', async () => {
+    sinon.stub(process, 'env').value({
+      GITHUB_HEAD_REF: 'feature/test',
+      GITHUB_BASE_REF: 'main',
+      GITHUB_REPOSITORY: 'JustinBeckwith/linkinator-action',
+      GITHUB_EVENT_PATH: './test/fixtures/payload-slashes.json',
+    });
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
+    inputStub.returns('');
+    sinon.stub(core, 'setOutput');
+    sinon.stub(core, 'setFailed');
+    sinon.stub(core, 'info');
+
+    // Mock both blob and tree URLs
+    const scope = nock('http://fake.local')
+      .head('/')
+      .reply(200)
+      .head('/fake')
+      .reply(200);
+
+    await main();
+    scope.done();
+  });
+
+  it('should not duplicate branch names when URL already contains head ref substring', async () => {
+    // Regression test for issue #85
+    // When branch is "release-please/branches/main" and base is "main",
+    // a URL already containing the full branch name should not get it duplicated
+
+    // Create a fixture that has a URL with the branch name already in it
+    const fs = await import('node:fs/promises');
+    const testContent = '[Link](https://github.com/JustinBeckwith/linkinator-action/blob/release-please/branches/main/FILE.md)';
+    await fs.writeFile('test/fixtures/github-already-on-branch.md', testContent);
+
+    sinon.stub(process, 'env').value({
+      GITHUB_HEAD_REF: 'release-please/branches/main',
+      GITHUB_BASE_REF: 'main', // Note: base is just "main", a substring of the head ref!
+      GITHUB_REPOSITORY: 'JustinBeckwith/linkinator-action',
+      GITHUB_EVENT_PATH: './test/fixtures/payload-slashes.json',
+    });
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/github-already-on-branch.md');
+    inputStub.returns('');
+    const setOutputStub = sinon.stub(core, 'setOutput');
+    const setFailedStub = sinon.stub(core, 'setFailed');
+    sinon.stub(core, 'info');
+
+    // The URL should NOT be rewritten because it's already on the correct branch
+    // It should NOT become: /blob/release-please/branches/release-please/branches/main/FILE.md
+    // With the old regex, it WOULD match and duplicate. With the new regex, it should NOT match at all
+    // because the pattern is specifically /blob/{BASE_REF}/ not /blob/anything/with/main/at/end/
+    // Since it doesn't match the base ref, it stays as-is and checks the original repo
+    const scope = nock('https://github.com')
+      .get('/JustinBeckwith/linkinator-action/blob/release-please/branches/main/FILE.md')
+      .reply(200);
+
+    await main();
+    assert.ok(inputStub.called);
+    assert.ok(setOutputStub.called);
+    assert.ok(setFailedStub.notCalled);
+    scope.done();
+
+    // Cleanup
+    await fs.unlink('test/fixtures/github-already-on-branch.md');
+  });
+
+  it('should handle base refs with special regex characters', async () => {
+    // Test that branch names with regex special chars are properly escaped
+    const fs = await import('node:fs/promises');
+    const testContent = '[Link](https://github.com/JustinBeckwith/linkinator-action/blob/v1.0.0/FILE.md)';
+    await fs.writeFile('test/fixtures/github-special-chars.md', testContent);
+
+    sinon.stub(process, 'env').value({
+      GITHUB_HEAD_REF: 'feature/test',
+      GITHUB_BASE_REF: 'v1.0.0', // Contains dots which are regex wildcards
+      GITHUB_REPOSITORY: 'JustinBeckwith/linkinator-action',
+      GITHUB_EVENT_PATH: './test/fixtures/payload-slashes.json',
+    });
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/github-special-chars.md');
+    inputStub.returns('');
+    const setOutputStub = sinon.stub(core, 'setOutput');
+    const setFailedStub = sinon.stub(core, 'setFailed');
+    sinon.stub(core, 'info');
+
+    const scope = nock('https://github.com')
+      .get('/Codertocat/Hello-World/blob/feature/test/FILE.md')
+      .reply(200);
+
+    await main();
+    assert.ok(inputStub.called);
+    assert.ok(setOutputStub.called);
+    assert.ok(setFailedStub.notCalled);
+    scope.done();
+
+    // Cleanup
+    await fs.unlink('test/fixtures/github-special-chars.md');
+  });
 });
