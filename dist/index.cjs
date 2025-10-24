@@ -12572,7 +12572,7 @@ var require_readable = __commonJS({
   "node_modules/undici/lib/api/readable.js"(exports2, module2) {
     "use strict";
     var assert = require("node:assert");
-    var { Readable } = require("node:stream");
+    var { Readable: Readable3 } = require("node:stream");
     var { RequestAbortedError, NotSupportedError, InvalidArgumentError, AbortError } = require_errors();
     var util = require_util();
     var { ReadableStreamFrom } = require_util();
@@ -12586,7 +12586,7 @@ var require_readable = __commonJS({
     var kBytesRead = Symbol("kBytesRead");
     var noop = () => {
     };
-    var BodyReadable = class extends Readable {
+    var BodyReadable = class extends Readable3 {
       /**
        * @param {object} opts
        * @param {(this: Readable, size: number) => void} opts.resume
@@ -12975,7 +12975,7 @@ var require_api_request = __commonJS({
     "use strict";
     var assert = require("node:assert");
     var { AsyncResource } = require("node:async_hooks");
-    var { Readable } = require_readable();
+    var { Readable: Readable3 } = require_readable();
     var { InvalidArgumentError, RequestAbortedError } = require_errors();
     var util = require_util();
     function noop() {
@@ -13056,7 +13056,7 @@ var require_api_request = __commonJS({
         const parsedHeaders = responseHeaders === "raw" ? util.parseHeaders(rawHeaders) : headers;
         const contentType = parsedHeaders["content-type"];
         const contentLength = parsedHeaders["content-length"];
-        const res = new Readable({
+        const res = new Readable3({
           resume,
           abort,
           contentType,
@@ -13364,7 +13364,7 @@ var require_api_pipeline = __commonJS({
   "node_modules/undici/lib/api/api-pipeline.js"(exports2, module2) {
     "use strict";
     var {
-      Readable,
+      Readable: Readable3,
       Duplex,
       PassThrough
     } = require("node:stream");
@@ -13380,7 +13380,7 @@ var require_api_pipeline = __commonJS({
     function noop() {
     }
     var kResume = Symbol("resume");
-    var PipelineRequest = class extends Readable {
+    var PipelineRequest = class extends Readable3 {
       constructor() {
         super({ autoDestroy: true });
         this[kResume] = null;
@@ -13397,7 +13397,7 @@ var require_api_pipeline = __commonJS({
         callback(err);
       }
     };
-    var PipelineResponse = class extends Readable {
+    var PipelineResponse = class extends Readable3 {
       constructor(resume) {
         super({ autoDestroy: true });
         this[kResume] = resume;
@@ -17755,7 +17755,7 @@ var require_cache2 = __commonJS({
   "node_modules/undici/lib/interceptor/cache.js"(exports2, module2) {
     "use strict";
     var assert = require("node:assert");
-    var { Readable } = require("node:stream");
+    var { Readable: Readable3 } = require("node:stream");
     var util = require_util();
     var CacheHandler = require_cache_handler();
     var MemoryCacheStore = require_memory_cache_store();
@@ -17825,7 +17825,7 @@ var require_cache2 = __commonJS({
       return dispatch(opts, new CacheHandler(globalOpts, cacheKey, handler));
     }
     function sendCachedValue(handler, opts, result, age, context, isStale) {
-      const stream2 = util.isStream(result.body) ? result.body : Readable.from(result.body ?? []);
+      const stream2 = util.isStream(result.body) ? result.body : Readable3.from(result.body ?? []);
       assert(!stream2.destroyed, "stream should not be destroyed");
       assert(!stream2.readableDidRead, "stream should not be readableDidRead");
       const controller = {
@@ -20444,7 +20444,7 @@ var require_fetch = __commonJS({
       subresourceSet
     } = require_constants3();
     var EE = require("node:events");
-    var { Readable, pipeline, finished, isErrored, isReadable: isReadable2 } = require("node:stream");
+    var { Readable: Readable3, pipeline, finished, isErrored, isReadable: isReadable2 } = require("node:stream");
     var { addAbortListener, bufferToLowerCasedHeaderName } = require_util();
     var { dataURLProcessor, serializeAMimeType, minimizeSupportedMimeType } = require_data_url();
     var { getGlobalDispatcher } = require_global2();
@@ -21346,7 +21346,7 @@ var require_fetch = __commonJS({
                 headersList.append(bufferToLowerCasedHeaderName(rawHeaders[i]), rawHeaders[i + 1].toString("latin1"), true);
               }
               const location = headersList.get("location", true);
-              this.body = new Readable({ read: resume });
+              this.body = new Readable3({ read: resume });
               const willFollow = location && request.redirect === "follow" && redirectStatusSet.has(status);
               const decoders = [];
               if (request.method !== "HEAD" && request.method !== "CONNECT" && !nullBodyStatus.includes(status) && !willFollow) {
@@ -25701,6 +25701,9 @@ var path5 = __toESM(require("node:path"), 1);
 var import_node_process3 = __toESM(require("node:process"), 1);
 var import_undici = __toESM(require_undici(), 1);
 
+// node_modules/linkinator/build/src/links.js
+var import_node_stream2 = require("node:stream");
+
 // node_modules/entities/dist/esm/generated/decode-data-html.js
 var htmlDecodeTree = /* @__PURE__ */ new Uint16Array(
   // prettier-ignore
@@ -27392,25 +27395,51 @@ for (const attribute of Object.keys(linksAttribute)) {
     tagAttribute[tag].push(attribute);
   }
 }
-async function getLinks(source, baseUrl) {
+function parseMetaRefresh(content) {
+  const match2 = content.match(/^\s*\d+\s*;\s*url\s*=\s*(.+)/i);
+  if (match2?.[1]) {
+    return match2[1].trim();
+  }
+  return null;
+}
+async function getLinks(source, baseUrl, checkCss = false) {
   let realBaseUrl = baseUrl;
   let baseSet = false;
   const links = [];
+  let isInStyleTag = false;
+  let styleTagContent = "";
   const parser = new WritableStream2({
     onopentag(tag, attributes) {
       if (tag === "base" && !baseSet) {
         realBaseUrl = getBaseUrl(attributes.href, baseUrl);
         baseSet = true;
       }
+      if (tag === "style" && checkCss) {
+        isInStyleTag = true;
+        styleTagContent = "";
+      }
       const relValuesToIgnore = ["dns-prefetch", "preconnect"];
       if (tag === "link" && relValuesToIgnore.includes(attributes.rel)) {
         return;
       }
       if (tag === "meta" && attributes.content) {
+        if (attributes["http-equiv"]?.toLowerCase() === "refresh") {
+          const refreshUrl = parseMetaRefresh(attributes.content);
+          if (refreshUrl) {
+            links.push(parseLink(refreshUrl, realBaseUrl));
+          }
+          return;
+        }
         try {
           new URL(attributes.content);
         } catch {
           return;
+        }
+      }
+      if (attributes.style && checkCss) {
+        const urls = extractUrlsFromCss(attributes.style);
+        for (const url of urls) {
+          links.push(parseLink(url, realBaseUrl));
         }
       }
       if (tagAttribute[tag]) {
@@ -27422,6 +27451,21 @@ async function getLinks(source, baseUrl) {
             }
           }
         }
+      }
+    },
+    ontext(text) {
+      if (isInStyleTag) {
+        styleTagContent += text;
+      }
+    },
+    onclosetag(tag) {
+      if (tag === "style" && isInStyleTag) {
+        isInStyleTag = false;
+        const urls = extractUrlsFromCss(styleTagContent);
+        for (const url of urls) {
+          links.push(parseLink(url, realBaseUrl));
+        }
+        styleTagContent = "";
       }
     }
   });
@@ -27458,11 +27502,84 @@ function parseAttribute(name, value) {
 function parseLink(link, baseUrl) {
   try {
     const url = new URL(link, baseUrl);
+    const fragment = url.hash ? decodeURIComponent(url.hash.slice(1)) : void 0;
     url.hash = "";
-    return { link, url };
+    return { link, url, fragment };
   } catch (error) {
     return { link, error };
   }
+}
+async function getCssLinks(source, baseUrl) {
+  const links = [];
+  const chunks = [];
+  for await (const chunk of source) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  const cssContent = Buffer.concat(chunks).toString("utf-8");
+  const urls = extractUrlsFromCss(cssContent);
+  for (const url of urls) {
+    links.push(parseLink(url, baseUrl));
+  }
+  return links;
+}
+function extractUrlsFromCss(css) {
+  const urls = [];
+  const cleanCss = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const importRegex = /@import\s+(?:url\(\s*['"]?([^'")]+)['"]?\s*\)|['"]([^'"]+)['"])/gi;
+  let match2;
+  match2 = importRegex.exec(cleanCss);
+  while (match2 !== null) {
+    const url = match2[1] || match2[2];
+    if (url) {
+      urls.push(url.trim());
+    }
+    match2 = importRegex.exec(cleanCss);
+  }
+  const urlRegex = /url\(\s*['"]?([^'")]+)['"]?\s*\)/gi;
+  match2 = urlRegex.exec(cleanCss);
+  while (match2 !== null) {
+    const url = match2[1];
+    if (url && !url.startsWith("data:")) {
+      urls.push(url.trim());
+    }
+    match2 = urlRegex.exec(cleanCss);
+  }
+  return urls;
+}
+async function extractFragmentIds(source) {
+  const fragments = /* @__PURE__ */ new Set();
+  const parser = new WritableStream2({
+    onopentag(_tag, attributes) {
+      if (attributes.id) {
+        fragments.add(attributes.id);
+      }
+      if (_tag === "a" && attributes.name) {
+        fragments.add(attributes.name);
+      }
+      if (_tag === "a" && attributes.href) {
+        const href = attributes.href;
+        if (href.startsWith("#") && href.length > 1) {
+          fragments.add(href.substring(1));
+        }
+      }
+    }
+  });
+  await new Promise((resolve, reject) => {
+    source.pipe(parser).on("finish", resolve).on("error", reject);
+  });
+  return fragments;
+}
+async function validateFragments(htmlContent, fragmentsToValidate) {
+  const fragmentStream = import_node_stream2.Readable.from([htmlContent]);
+  const validFragments = await extractFragmentIds(fragmentStream);
+  const results = [];
+  for (const fragment of fragmentsToValidate) {
+    results.push({
+      fragment,
+      isValid: validFragments.has(fragment)
+    });
+  }
+  return results;
 }
 
 // node_modules/linkinator/build/src/options.js
@@ -30088,15 +30205,15 @@ var import_promises = require("node:fs/promises");
 
 // node_modules/minipass/dist/esm/index.js
 var import_node_events = require("node:events");
-var import_node_stream2 = __toESM(require("node:stream"), 1);
+var import_node_stream3 = __toESM(require("node:stream"), 1);
 var import_node_string_decoder2 = require("node:string_decoder");
 var proc = typeof process === "object" && process ? process : {
   stdout: null,
   stderr: null
 };
-var isStream = (s) => !!s && typeof s === "object" && (s instanceof Minipass || s instanceof import_node_stream2.default || isReadable(s) || isWritable(s));
+var isStream = (s) => !!s && typeof s === "object" && (s instanceof Minipass || s instanceof import_node_stream3.default || isReadable(s) || isWritable(s));
 var isReadable = (s) => !!s && typeof s === "object" && s instanceof import_node_events.EventEmitter && typeof s.pipe === "function" && // node core Writable streams have a pipe() method, but it throws
-s.pipe !== import_node_stream2.default.Writable.prototype.pipe;
+s.pipe !== import_node_stream3.default.Writable.prototype.pipe;
 var isWritable = (s) => !!s && typeof s === "object" && s instanceof import_node_events.EventEmitter && typeof s.write === "function" && typeof s.end === "function";
 var EOF = Symbol("EOF");
 var MAYBE_EMIT_END = Symbol("maybeEmitEnd");
@@ -33749,7 +33866,6 @@ var glob = Object.assign(glob_, {
 glob.glob = glob;
 
 // node_modules/linkinator/build/src/options.js
-var DEFAULT_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.117 Safari/537.36";
 async function processOptions(options_) {
   const options = { ...options_ };
   if (options.path.length === 0) {
@@ -33774,11 +33890,14 @@ async function processOptions(options_) {
   if (options.serverRoot && isUrlType) {
     throw new Error("'serverRoot' cannot be defined when the 'path' points to an HTTP endpoint.");
   }
-  options.userAgent = options.userAgent ?? DEFAULT_USER_AGENT;
-  options.headers = {
-    "User-Agent": options.userAgent,
-    ...options.headers ?? {}
-  };
+  if (options.userAgent) {
+    options.headers = {
+      "User-Agent": options.userAgent,
+      ...options.headers ?? {}
+    };
+  } else {
+    options.headers = options.headers ?? {};
+  }
   options.serverRoot &&= import_node_path2.default.normalize(options.serverRoot);
   options.redirects = options.redirects ?? "allow";
   options.requireHttps = options.requireHttps ?? "off";
@@ -35196,6 +35315,24 @@ async function handleRequest(request, response, root, options) {
     }
   } catch (error) {
     const error_ = error;
+    if (options.cleanUrls && !localPath.endsWith(".html")) {
+      try {
+        const htmlPath = `${localPath}.html`;
+        if (htmlPath.startsWith(root)) {
+          const htmlStats = await import_node_fs2.promises.stat(htmlPath);
+          if (!htmlStats.isDirectory()) {
+            const data = await import_node_fs2.promises.readFile(htmlPath, { encoding: "utf8" });
+            const mimeType = "text/html; charset=UTF-8";
+            response.setHeader("Content-Type", mimeType);
+            response.setHeader("Content-Length", import_node_buffer.Buffer.byteLength(data));
+            response.writeHead(200);
+            response.end(data);
+            return;
+          }
+        }
+      } catch {
+      }
+    }
     if (!maybeListing) {
       return404(response, error_);
       return;
@@ -35239,6 +35376,22 @@ async function handleRequest(request, response, root, options) {
 function return404(response, error) {
   response.writeHead(404);
   response.end(JSON.stringify(error));
+}
+
+// node_modules/linkinator/build/src/stream-utils.js
+var import_node_stream4 = require("node:stream");
+function toNodeReadable(body) {
+  if (body && "pipe" in body) {
+    return body;
+  }
+  return import_node_stream4.Readable.fromWeb(body);
+}
+async function bufferStream(stream2) {
+  const chunks = [];
+  for await (const chunk of stream2) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
 }
 
 // node_modules/linkinator/build/src/config.js
@@ -35317,6 +35470,8 @@ var LinkState;
   LinkState2["SKIPPED"] = "SKIPPED";
 })(LinkState || (LinkState = {}));
 var LinkChecker = class extends import_node_events3.EventEmitter {
+  // Track which fragments need to be checked for each URL
+  fragmentsToCheck = /* @__PURE__ */ new Map();
   // biome-ignore lint/suspicious/noExplicitAny: this can in fact be generic
   on(event, listener) {
     return super.on(event, listener);
@@ -35340,7 +35495,8 @@ var LinkChecker = class extends import_node_events3.EventEmitter {
         root: options.serverRoot ?? "",
         port,
         markdown: options.markdown,
-        directoryListing: options.directoryListing
+        directoryListing: options.directoryListing,
+        cleanUrls: options.cleanUrls
       });
       if (port === void 0) {
         const addr = server.address();
@@ -35515,7 +35671,40 @@ var LinkChecker = class extends import_node_events3.EventEmitter {
     }
     if (response !== void 0) {
       status = response.status;
-      shouldRecurse = isHtml(response);
+      shouldRecurse = isHtml(response) || isCss(response) && options.checkOptions.checkCss === true;
+    }
+    if (shouldRecurse && response !== void 0 && isCss(response) && !response.body && options.crawl && options.checkOptions.checkCss) {
+      try {
+        response = await makeRequest("GET", options.url.href, {
+          headers: options.checkOptions.headers,
+          timeout: options.checkOptions.timeout,
+          redirect: redirectMode,
+          allowInsecureCerts: options.checkOptions.allowInsecureCerts
+        });
+        if (response !== void 0) {
+          status = response.status;
+        }
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (options.checkOptions.checkFragments && response !== void 0 && isHtml(response) && !response.body) {
+      const fragmentsToCheck = this.fragmentsToCheck.get(options.url.href);
+      if (fragmentsToCheck && fragmentsToCheck.size > 0) {
+        try {
+          response = await makeRequest("GET", options.url.href, {
+            headers: options.checkOptions.headers,
+            timeout: options.checkOptions.timeout,
+            redirect: redirectMode,
+            allowInsecureCerts: options.checkOptions.allowInsecureCerts
+          });
+          if (response !== void 0) {
+            status = response.status;
+          }
+        } catch (error) {
+          failures.push(error);
+        }
+      }
     }
     if (this.shouldRetryOnError(status, options)) {
       return;
@@ -35575,14 +35764,47 @@ var LinkChecker = class extends import_node_events3.EventEmitter {
     };
     options.results.push(result);
     this.emit("link", result);
+    if (options.checkOptions.checkFragments && response?.body && isHtml(response) && state === LinkState.OK) {
+      const fragmentsToValidate = this.fragmentsToCheck.get(options.url.href);
+      if (fragmentsToValidate && fragmentsToValidate.size > 0) {
+        const nodeStream = toNodeReadable(response.body);
+        const htmlContent = await bufferStream(nodeStream);
+        const htmlString = htmlContent.toString("utf-8");
+        const isSoft404 = htmlString.includes('content="noindex') && htmlString.includes("nofollow");
+        if (!isSoft404) {
+          const validationResults = await validateFragments(htmlContent, fragmentsToValidate);
+          for (const result2 of validationResults) {
+            if (!result2.isValid) {
+              const fragmentResult = {
+                url: mapUrl(`${options.url.href}#${result2.fragment}`, options.checkOptions),
+                status: response.status,
+                state: LinkState.BROKEN,
+                parent: mapUrl(options.parent, options.checkOptions),
+                failureDetails: [
+                  new Error(`Fragment identifier '#${result2.fragment}' not found on page`)
+                ]
+              };
+              options.results.push(fragmentResult);
+              this.emit("link", fragmentResult);
+            }
+          }
+        }
+        const { Readable: Readable3 } = await import("node:stream");
+        const linkStream = Readable3.from([htmlContent]);
+        response.body = linkStream;
+      }
+    }
     if (options.crawl && shouldRecurse) {
       this.emit("pagestart", options.url);
       let urlResults = [];
       if (response?.body) {
-        const { Readable } = await import("node:stream");
-        const nodeStream = Readable.fromWeb(response.body);
+        const nodeStream = toNodeReadable(response.body);
         const baseUrl = response.url || options.url.href;
-        urlResults = await getLinks(nodeStream, baseUrl);
+        if (isHtml(response)) {
+          urlResults = await getLinks(nodeStream, baseUrl, options.checkOptions.checkCss);
+        } else if (isCss(response) && options.checkOptions.checkCss) {
+          urlResults = await getCssLinks(nodeStream, baseUrl);
+        }
       }
       for (const result2 of urlResults) {
         if (!result2.url) {
@@ -35595,6 +35817,13 @@ var LinkChecker = class extends import_node_events3.EventEmitter {
           options.results.push(r);
           this.emit("link", r);
           continue;
+        }
+        if (options.checkOptions.checkFragments && result2.fragment && result2.fragment.length > 0) {
+          const urlKey = result2.url.href;
+          if (!this.fragmentsToCheck.has(urlKey)) {
+            this.fragmentsToCheck.set(urlKey, /* @__PURE__ */ new Set());
+          }
+          this.fragmentsToCheck.get(urlKey)?.add(result2.fragment);
         }
         let crawl = options.checkOptions.recurse && result2.url?.href.startsWith(options.rootPath);
         if (crawl) {
@@ -35765,6 +35994,10 @@ function isHtml(response) {
   const contentType = response.headers["content-type"] || "";
   return Boolean(/text\/html/g.test(contentType)) || Boolean(/application\/xhtml\+xml/g.test(contentType));
 }
+function isCss(response) {
+  const contentType = response.headers["content-type"] || "";
+  return Boolean(/text\/css/g.test(contentType));
+}
 function mapUrl(url, options) {
   if (!url) {
     return url;
@@ -35851,7 +36084,10 @@ async function getFullConfig() {
     retryErrorsJitter: 2e3,
     verbosity: "WARNING",
     allowInsecureCerts: false,
-    requireHttps: false
+    requireHttps: false,
+    cleanUrls: false,
+    checkCss: false,
+    checkFragments: false
   };
   const actionsConfig = {
     path: parseList("paths"),
@@ -35870,7 +36106,10 @@ async function getFullConfig() {
     verbosity: parseString("verbosity"),
     config: parseString("config"),
     allowInsecureCerts: parseBoolean("allowInsecureCerts"),
-    requireHttps: parseBoolean("requireHttps")
+    requireHttps: parseBoolean("requireHttps"),
+    cleanUrls: parseBoolean("cleanUrls"),
+    checkCss: parseBoolean("checkCss"),
+    checkFragments: parseBoolean("checkFragments")
   };
   const urlRewriteSearch = parseString("urlRewriteSearch");
   const urlRewriteReplace = parseString("urlRewriteReplace");

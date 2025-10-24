@@ -78,6 +78,18 @@ inputs:
     description: Require all links to use HTTPS. Any HTTP links will be treated as broken.
     default: 'false'
     required: false
+  cleanUrls:
+    description: Enable support for clean URLs (extensionless paths). Allows validation of URLs without file extensions, useful for modern static hosting.
+    default: 'false'
+    required: false
+  checkCss:
+    description: Enable parsing and extraction of URLs from CSS files, style blocks, and inline styles.
+    default: 'false'
+    required: false
+  checkFragments:
+    description: Enable validation of fragment identifiers (anchor links) on HTML pages.
+    default: 'false'
+    required: false
 outputs:
   results:
     description: 'The full results of the scan.'

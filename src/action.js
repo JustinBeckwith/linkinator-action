@@ -17,6 +17,9 @@ export async function getFullConfig() {
     verbosity: 'WARNING',
     allowInsecureCerts: false,
     requireHttps: false,
+    cleanUrls: false,
+    checkCss: false,
+    checkFragments: false,
   };
   // The options returned from `getInput` appear to always be strings.
   const actionsConfig = {
@@ -37,6 +40,9 @@ export async function getFullConfig() {
     config: parseString('config'),
     allowInsecureCerts: parseBoolean('allowInsecureCerts'),
     requireHttps: parseBoolean('requireHttps'),
+    cleanUrls: parseBoolean('cleanUrls'),
+    checkCss: parseBoolean('checkCss'),
+    checkFragments: parseBoolean('checkFragments'),
   };
   const urlRewriteSearch = parseString('urlRewriteSearch');
   const urlRewriteReplace = parseString('urlRewriteReplace');

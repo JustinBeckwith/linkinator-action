@@ -58,6 +58,9 @@ jobs:
 - `userAgent` - Custom User-Agent header to use for requests.
 - `allowInsecureCerts` - Allow checking links with insecure certificates. Useful for local development with self-signed certificates. Defaults to `false`.
 - `requireHttps` - Require all links to use HTTPS. Any HTTP links will be treated as broken. Defaults to `false`.
+- `cleanUrls` - Enable support for clean URLs (extensionless paths). Allows validation of URLs without file extensions, useful for modern static hosting. Defaults to `false`.
+- `checkCss` - Enable parsing and extraction of URLs from CSS files, style blocks, and inline styles. Defaults to `false`.
+- `checkFragments` - Enable validation of fragment identifiers (anchor links) on HTML pages. Defaults to `false`.
 - `urlRewriteSearch` - Pattern to search for in urls.  Must be used with `urlRewriteReplace`.
 - `urlRewriteReplace` - Expression used to replace search content.  Must be used with `urlRewriteSearch`.
 - `verbosity` - Override the default verbosity for this command. Available options are "DEBUG", "INFO", "WARNING", "ERROR", and "NONE".  Defaults to "WARNING".
