@@ -342,6 +342,36 @@ describe('linkinator action', () => {
     assert.ok(inputStub.called);
   });
 
+  it('should handle cleanUrls option', async () => {
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
+    inputStub.withArgs('cleanUrls').returns('true');
+    inputStub.returns('');
+    const config = await getFullConfig();
+    assert.strictEqual(config.cleanUrls, true);
+    assert.ok(inputStub.called);
+  });
+
+  it('should handle checkCss option', async () => {
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
+    inputStub.withArgs('checkCss').returns('true');
+    inputStub.returns('');
+    const config = await getFullConfig();
+    assert.strictEqual(config.checkCss, true);
+    assert.ok(inputStub.called);
+  });
+
+  it('should handle checkFragments option', async () => {
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
+    inputStub.withArgs('checkFragments').returns('true');
+    inputStub.returns('');
+    const config = await getFullConfig();
+    assert.strictEqual(config.checkFragments, true);
+    assert.ok(inputStub.called);
+  });
+
   it('should handle branch names with slashes in URL rewriting', async () => {
     stubSummary();
     sinon.stub(process, 'env').value({
