@@ -1,7 +1,11 @@
 # linkinator-action
+
 > A happy little GitHub Action that checks your README.md and other markdown for broken links.  Uses [linkinator](https://github.com/JustinBeckwith/linkinator) under the hood.
 
+![linkinator-action](https://raw.githubusercontent.com/JustinBeckwith/linkinator-action/main/site/linkinator-action.webp)
+
 ## Example usage
+
 With no arguments, this will scan your `README.md` in the root of the GitHub repository:
 
 ```yaml
@@ -42,6 +46,7 @@ jobs:
 ```
 
 ## Inputs
+
 - `paths` - Paths to scan for 404s. Defaults to `*.md`.
 - `config` - Path to a config file to use. Looks for `linkinator.config.json` by default. Options defined via the GitHub Action config will take precedence.
 - `concurrency` - The number of connections to make simultaneously. Defaults to `100`.
@@ -66,10 +71,13 @@ jobs:
 - `verbosity` - Override the default verbosity for this command. Available options are "DEBUG", "INFO", "WARNING", "ERROR", and "NONE".  Defaults to "WARNING".
 
 ## Outputs
+
 - `results` - An object with the results of the run.
 
 ## Debugging
+
 To view skipped links, failure details, and more debugging information [enable step debug logging](https://docs.github.com/en/free-pro-team@latest/actions/managing-workflow-runs/enabling-debug-logging#enabling-step-debug-logging).
 
 ## License
+
 [MIT](LICENSE)
