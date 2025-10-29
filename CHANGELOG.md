@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.2.0](https://github.com/JustinBeckwith/linkinator-action/compare/linkinator-action-v2.1.0...linkinator-action-v2.2.0) (2025-10-29)
+
+
+### Features
+
+* add GitHub Actions Job Summary for broken links ([#210](https://github.com/JustinBeckwith/linkinator-action/issues/210)) ([8e8b743](https://github.com/JustinBeckwith/linkinator-action/commit/8e8b743e560eef245926ff9cefbb86732e2a3ea0))
+* upgrade to linkinator 7.3 and add new feature flags ([#213](https://github.com/JustinBeckwith/linkinator-action/issues/213)) ([6a93443](https://github.com/JustinBeckwith/linkinator-action/commit/6a9344318d5006da49fe3572ecb8b43dea6a603d))
+* upgrade to linkinator 7.4 and add statusCodes and redirects options ([#216](https://github.com/JustinBeckwith/linkinator-action/issues/216)) ([9b086c6](https://github.com/JustinBeckwith/linkinator-action/commit/9b086c6dc276c9aa648666f77d87beec66edd70e))
+
 ## [2.1.0](https://github.com/JustinBeckwith/linkinator-action/compare/linkinator-action-v2.0.0...linkinator-action-v2.1.0) (2025-10-21)
 
 
