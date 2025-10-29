@@ -90,6 +90,13 @@ inputs:
     description: Enable validation of fragment identifiers (anchor links) on HTML pages.
     default: 'false'
     required: false
+  statusCodes:
+    description: JSON object mapping HTTP status codes to actions (ok, warn, skip, error). Supports patterns like 4xx or 5xx. Example - {"404":"error","5xx":"warn"}
+    required: false
+  redirects:
+    description: How to handle HTTP redirects. Options - "allow" (default), "warn", or "error".
+    default: 'allow'
+    required: false
 outputs:
   results:
     description: 'The full results of the scan.'

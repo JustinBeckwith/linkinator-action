@@ -20,6 +20,7 @@ export async function getFullConfig() {
     cleanUrls: false,
     checkCss: false,
     checkFragments: false,
+    redirects: 'allow',
   };
   // The options returned from `getInput` appear to always be strings.
   const actionsConfig = {
@@ -43,6 +44,8 @@ export async function getFullConfig() {
     cleanUrls: parseBoolean('cleanUrls'),
     checkCss: parseBoolean('checkCss'),
     checkFragments: parseBoolean('checkFragments'),
+    statusCodes: parseJSON('statusCodes'),
+    redirects: parseString('redirects'),
   };
   const urlRewriteSearch = parseString('urlRewriteSearch');
   const urlRewriteReplace = parseString('urlRewriteReplace');
@@ -250,6 +253,18 @@ function parseBoolean(input) {
   const value = core.getInput(input) || undefined;
   if (value) {
     return Boolean(value);
+  }
+  return undefined;
+}
+
+function parseJSON(input) {
+  const value = core.getInput(input) || undefined;
+  if (value) {
+    try {
+      return JSON.parse(value);
+    } catch (err) {
+      throw new Error(`Invalid JSON for ${input}: ${err.message}`);
+    }
   }
   return undefined;
 }
