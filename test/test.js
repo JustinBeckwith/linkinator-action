@@ -372,6 +372,37 @@ describe('linkinator action', () => {
     assert.ok(inputStub.called);
   });
 
+  it('should handle statusCodes option', async () => {
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
+    inputStub.withArgs('statusCodes').returns('{"404":"error","5xx":"warn"}');
+    inputStub.returns('');
+    const config = await getFullConfig();
+    assert.deepStrictEqual(config.statusCodes, { '404': 'error', '5xx': 'warn' });
+    assert.ok(inputStub.called);
+  });
+
+  it('should handle redirects option', async () => {
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
+    inputStub.withArgs('redirects').returns('warn');
+    inputStub.returns('');
+    const config = await getFullConfig();
+    assert.strictEqual(config.redirects, 'warn');
+    assert.ok(inputStub.called);
+  });
+
+  it('should throw for invalid statusCodes JSON', async () => {
+    const inputStub = sinon.stub(core, 'getInput');
+    inputStub.withArgs('paths').returns('test/fixtures/test.md');
+    inputStub.withArgs('statusCodes').returns('{invalid json}');
+    inputStub.returns('');
+    await assert.rejects(
+      async () => await getFullConfig(),
+      /Invalid JSON for statusCodes/
+    );
+  });
+
   it('should handle branch names with slashes in URL rewriting', async () => {
     stubSummary();
     sinon.stub(process, 'env').value({

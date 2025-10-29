@@ -35394,6 +35394,30 @@ async function bufferStream(stream2) {
   return Buffer.concat(chunks);
 }
 
+// node_modules/linkinator/build/src/url-utils.js
+function normalizeBaseUrl(baseUrl, cleanUrls = false) {
+  if (cleanUrls) {
+    return baseUrl;
+  }
+  try {
+    const url = new URL(baseUrl);
+    const pathname = url.pathname;
+    if (pathname.endsWith("/")) {
+      return baseUrl;
+    }
+    const lastSegment = pathname.split("/").pop() || "";
+    const hasExtension = lastSegment.includes(".") && lastSegment.indexOf(".") > 0;
+    const isCommonPageName = ["index", "default", "home", "main"].includes(lastSegment.toLowerCase());
+    if (!hasExtension && !isCommonPageName) {
+      url.pathname = `${pathname}/`;
+      return url.href;
+    }
+    return baseUrl;
+  } catch {
+    return baseUrl;
+  }
+}
+
 // node_modules/linkinator/build/src/config.js
 var import_node_fs3 = require("node:fs");
 var import_node_path4 = __toESM(require("node:path"), 1);
@@ -35710,7 +35734,23 @@ var LinkChecker = class extends import_node_events3.EventEmitter {
       return;
     }
     const redirect = detectRedirect(status, originalUrl, response);
-    if (status === 999) {
+    const customAction = getStatusCodeAction(status, options.checkOptions.statusCodes);
+    if (customAction === "ok") {
+      state = LinkState.OK;
+    } else if (customAction === "warn") {
+      state = LinkState.OK;
+      this.emit("statusCodeWarning", {
+        url: originalUrl,
+        status
+      });
+    } else if (customAction === "skip") {
+      state = LinkState.SKIPPED;
+    } else if (customAction === "error") {
+      state = LinkState.BROKEN;
+      if (response !== void 0) {
+        failures.push(response);
+      }
+    } else if (status === 999) {
       state = LinkState.SKIPPED;
     } else if (status === 403 && response !== void 0 && response.headers["cf-mitigated"]) {
       state = LinkState.SKIPPED;
@@ -35799,7 +35839,10 @@ var LinkChecker = class extends import_node_events3.EventEmitter {
       let urlResults = [];
       if (response?.body) {
         const nodeStream = toNodeReadable(response.body);
-        const baseUrl = response.url || options.url.href;
+        let baseUrl = response.url || options.url.href;
+        if (isHtml(response)) {
+          baseUrl = normalizeBaseUrl(baseUrl, options.checkOptions.cleanUrls);
+        }
         if (isHtml(response)) {
           urlResults = await getLinks(nodeStream, baseUrl, options.checkOptions.checkCss);
         } else if (isCss(response) && options.checkOptions.checkCss) {
@@ -36055,6 +36098,32 @@ async function makeRequest(method, url, options = {}) {
     url: response.url
   };
 }
+function matchesStatusCodePattern(status, pattern) {
+  if (pattern === status.toString()) {
+    return true;
+  }
+  if (pattern.endsWith("xx") && pattern.length === 3) {
+    const firstDigit = pattern[0];
+    const statusFirstDigit = Math.floor(status / 100).toString();
+    return firstDigit === statusFirstDigit;
+  }
+  return false;
+}
+function getStatusCodeAction(status, statusCodes) {
+  if (!statusCodes) {
+    return void 0;
+  }
+  const exactMatch = statusCodes[status.toString()];
+  if (exactMatch) {
+    return exactMatch;
+  }
+  for (const [pattern, action] of Object.entries(statusCodes)) {
+    if (matchesStatusCodePattern(status, pattern)) {
+      return action;
+    }
+  }
+  return void 0;
+}
 function detectRedirect(status, originalUrl, response) {
   const isRedirectStatus = status >= 300 && status < 400;
   const urlChanged = response?.url && response.url !== originalUrl;
@@ -36087,7 +36156,8 @@ async function getFullConfig() {
     requireHttps: false,
     cleanUrls: false,
     checkCss: false,
-    checkFragments: false
+    checkFragments: false,
+    redirects: "allow"
   };
   const actionsConfig = {
     path: parseList("paths"),
@@ -36109,7 +36179,9 @@ async function getFullConfig() {
     requireHttps: parseBoolean("requireHttps"),
     cleanUrls: parseBoolean("cleanUrls"),
     checkCss: parseBoolean("checkCss"),
-    checkFragments: parseBoolean("checkFragments")
+    checkFragments: parseBoolean("checkFragments"),
+    statusCodes: parseJSON("statusCodes"),
+    redirects: parseString("redirects")
   };
   const urlRewriteSearch = parseString("urlRewriteSearch");
   const urlRewriteReplace = parseString("urlRewriteReplace");
@@ -36287,6 +36359,17 @@ function parseBoolean(input) {
   const value = import_core.default.getInput(input) || void 0;
   if (value) {
     return Boolean(value);
+  }
+  return void 0;
+}
+function parseJSON(input) {
+  const value = import_core.default.getInput(input) || void 0;
+  if (value) {
+    try {
+      return JSON.parse(value);
+    } catch (err) {
+      throw new Error(`Invalid JSON for ${input}: ${err.message}`);
+    }
   }
   return void 0;
 }

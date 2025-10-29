@@ -66,6 +66,8 @@ jobs:
 - `cleanUrls` - Enable support for clean URLs (extensionless paths). Allows validation of URLs without file extensions, useful for modern static hosting. Defaults to `false`.
 - `checkCss` - Enable parsing and extraction of URLs from CSS files, style blocks, and inline styles. Defaults to `false`.
 - `checkFragments` - Enable validation of fragment identifiers (anchor links) on HTML pages. Defaults to `false`.
+- `statusCodes` - JSON object mapping HTTP status codes to actions (`ok`, `warn`, `skip`, `error`). Supports patterns like `4xx` or `5xx`. Example: `{"404": "error", "5xx": "warn", "301": "ok"}`.
+- `redirects` - How to handle HTTP redirects. Options: `allow` (default), `warn`, or `error`.
 - `urlRewriteSearch` - Pattern to search for in urls.  Must be used with `urlRewriteReplace`.
 - `urlRewriteReplace` - Expression used to replace search content.  Must be used with `urlRewriteSearch`.
 - `verbosity` - Override the default verbosity for this command. Available options are "DEBUG", "INFO", "WARNING", "ERROR", and "NONE".  Defaults to "WARNING".
