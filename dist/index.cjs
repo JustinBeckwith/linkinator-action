@@ -36297,23 +36297,42 @@ async function getFullConfig() {
   config.linksToSkip = config.skip;
   return config;
 }
+function isFragmentFailure(link) {
+  if (link.failureDetails && link.failureDetails.length > 0) {
+    for (const detail of link.failureDetails) {
+      if (detail instanceof Error) {
+        const message = detail.message || "";
+        if (message.includes("fragment") || message.includes("anchor")) {
+          return true;
+        }
+      }
+    }
+  }
+  if (link.status === 200 && link.state === "BROKEN") {
+    return true;
+  }
+  return false;
+}
+function getDisplayStatus(link) {
+  if (isFragmentFailure(link)) {
+    return "x";
+  }
+  return String(link.status || "");
+}
 function getFailureReason(link) {
   if (!link.failureDetails || link.failureDetails.length === 0) {
     return link.status ? "HTTP Error" : "Request failed";
   }
+  if (isFragmentFailure(link)) {
+    return "Fragment not found";
+  }
   for (const detail of link.failureDetails) {
     if (detail instanceof Error) {
       const message = detail.message || "";
-      if (message.includes("fragment") || message.includes("anchor")) {
-        return "Fragment not found";
-      }
       if (message && message.length < 100) {
         return message;
       }
     }
-  }
-  if (link.status === 200) {
-    return "Fragment not found";
   }
   return link.status ? `HTTP ${link.status}` : "Request failed";
 }
@@ -36366,8 +36385,9 @@ async function generateJobSummary(result, logger) {
     for (const parent of Object.keys(parents).sort()) {
       for (const link of parents[parent]) {
         const reason = getFailureReason(link);
+        const displayStatus = getDisplayStatus(link);
         tableRows.push([
-          String(link.status),
+          displayStatus,
           link.url,
           reason,
           parent
@@ -36416,7 +36436,8 @@ async function main() {
       switch (link.state) {
         case LinkState.BROKEN: {
           const reason = getFailureReason(link);
-          logger.error(`[${link.status.toString()}] ${link.url} - ${reason}`);
+          const displayStatus = getDisplayStatus(link);
+          logger.error(`[${displayStatus}] ${link.url} - ${reason}`);
           break;
         }
         case LinkState.OK:
@@ -36450,8 +36471,9 @@ async function main() {
  ${parent}`;
         for (const link of parents[parent]) {
           const reason = getFailureReason(link);
+          const displayStatus = getDisplayStatus(link);
           failureOutput += `
-   [${link.status}] ${link.url} - ${reason}`;
+   [${displayStatus}] ${link.url} - ${reason}`;
           logger.debug(JSON.stringify(link.failureDetails, null, 2));
         }
       }
