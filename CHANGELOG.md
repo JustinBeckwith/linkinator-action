@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.0](https://github.com/JustinBeckwith/linkinator-action/compare/linkinator-action-v2.2.0...linkinator-action-v2.3.0) (2025-10-31)
+
+
+### Features
+
+* upgrade to linkinator 7.4.1 and improve fragment validation error messaging ([#219](https://github.com/JustinBeckwith/linkinator-action/issues/219)) ([4b5cba3](https://github.com/JustinBeckwith/linkinator-action/commit/4b5cba34503b7cd67b06fcb98bb70aa7f63e8138))
+
 ## [2.2.0](https://github.com/JustinBeckwith/linkinator-action/compare/linkinator-action-v2.1.0...linkinator-action-v2.2.0) (2025-10-29)
 
 
