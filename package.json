@@ -34,13 +34,10 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.7",
-    "@rollup/plugin-commonjs": "^29.0.0",
-    "@rollup/plugin-node-resolve": "^16.0.3",
     "c8": "^10.1.2",
     "esbuild": "^0.25.11",
     "mocha": "^11.0.0",
     "nock": "^14.0.0",
-    "rollup": "^4.52.4",
     "sinon": "^21.0.0"
   }
 }
