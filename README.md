@@ -4,6 +4,9 @@
 
 ![linkinator-action](https://raw.githubusercontent.com/JustinBeckwith/linkinator-action/main/site/linkinator-action.webp)
 
+<!-- TEST: Intentional bad fragment link to test error messaging -->
+For more information, see the [GitHub Actions documentation](https://docs.github.com/en/actions#this-anchor-does-not-exist).
+
 ## Example usage
 
 With no arguments, this will scan your `README.md` in the root of the GitHub repository:
