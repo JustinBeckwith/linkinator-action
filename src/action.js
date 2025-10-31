@@ -62,6 +62,75 @@ export async function getFullConfig() {
   return config;
 }
 
+/**
+ * Check if a link failure is due to a fragment/anchor validation error
+ * @param {object} link The link result object
+ * @returns {boolean} True if this is a fragment validation failure
+ */
+function isFragmentFailure(link) {
+  // Check for fragment/anchor validation errors in failure details
+  if (link.failureDetails && link.failureDetails.length > 0) {
+    for (const detail of link.failureDetails) {
+      if (detail instanceof Error) {
+        const message = detail.message || '';
+        if (message.includes('fragment') || message.includes('anchor')) {
+          return true;
+        }
+      }
+    }
+  }
+
+  // If we got a 200 but still failed, it's likely a fragment issue
+  if (link.status === 200 && link.state === 'BROKEN') {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Get the display status for a link (shows 'x' for fragment failures)
+ * @param {object} link The link result object
+ * @returns {string} The status to display
+ */
+function getDisplayStatus(link) {
+  if (isFragmentFailure(link)) {
+    return 'x';
+  }
+  return String(link.status || '');
+}
+
+/**
+ * Extract a user-friendly failure reason from a link result
+ * @param {object} link The link result object
+ * @returns {string} A human-readable failure reason
+ */
+function getFailureReason(link) {
+  // If there are no failure details, return generic message
+  if (!link.failureDetails || link.failureDetails.length === 0) {
+    return link.status ? 'HTTP Error' : 'Request failed';
+  }
+
+  // Check for fragment/anchor validation errors
+  if (isFragmentFailure(link)) {
+    return 'Fragment not found';
+  }
+
+  // Check for other error messages in failure details
+  for (const detail of link.failureDetails) {
+    if (detail instanceof Error) {
+      const message = detail.message || '';
+      // Return the error message if it's informative
+      if (message && message.length < 100) {
+        return message;
+      }
+    }
+  }
+
+  // Default to HTTP error for other cases
+  return link.status ? `HTTP ${link.status}` : 'Request failed';
+}
+
 export async function generateJobSummary(result, logger) {
   const brokenLinks = result.links.filter((x) => x.state === 'BROKEN');
   const okLinks = result.links.filter((x) => x.state === 'OK');
@@ -110,15 +179,19 @@ export async function generateJobSummary(result, logger) {
       [
         { data: 'Status', header: true },
         { data: 'URL', header: true },
+        { data: 'Reason', header: true },
         { data: 'Source', header: true },
       ],
     ];
 
     for (const parent of Object.keys(parents).sort()) {
       for (const link of parents[parent]) {
+        const reason = getFailureReason(link);
+        const displayStatus = getDisplayStatus(link);
         tableRows.push([
-          String(link.status),
+          displayStatus,
           link.url,
+          reason,
           parent,
         ]);
       }
@@ -175,9 +248,12 @@ export async function main() {
     const checker = new LinkChecker()
       .on('link', (link) => {
         switch (link.state) {
-          case LinkState.BROKEN:
-            logger.error(`[${link.status.toString()}] ${link.url}`);
+          case LinkState.BROKEN: {
+            const reason = getFailureReason(link);
+            const displayStatus = getDisplayStatus(link);
+            logger.error(`[${displayStatus}] ${link.url} - ${reason}`);
             break;
+          }
           case LinkState.OK:
             logger.warn(`[${link.status.toString()}] ${link.url}`);
             break;
@@ -214,7 +290,9 @@ export async function main() {
       for (const parent of Object.keys(parents)) {
         failureOutput += `\n ${parent}`;
         for (const link of parents[parent]) {
-          failureOutput += `\n   [${link.status}] ${link.url}`;
+          const reason = getFailureReason(link);
+          const displayStatus = getDisplayStatus(link);
+          failureOutput += `\n   [${displayStatus}] ${link.url} - ${reason}`;
           logger.debug(JSON.stringify(link.failureDetails, null, 2));
         }
       }

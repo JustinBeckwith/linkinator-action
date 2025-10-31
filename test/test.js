@@ -175,7 +175,7 @@ describe('linkinator action', () => {
       setFailedStub.getCalls().filter((x) => {
         return (
           x.args[0] ===
-          'Detected 1 broken links.\n test/fixtures/test.md\n   [500] http://fake.local/fake'
+          'Detected 1 broken links.\n test/fixtures/test.md\n   [500] http://fake.local/fake - HTTP 500'
         );
       }).length,
       1,
@@ -183,7 +183,7 @@ describe('linkinator action', () => {
 
     // Ensure `core.error` is called for each failure
     assert.strictEqual(errorStub.callCount, 1);
-    const expected = '[500] http://fake.local/fake';
+    const expected = '[500] http://fake.local/fake - HTTP 500';
     assert.strictEqual(errorStub.getCalls()[0].args[0], expected);
 
     scope.done();
@@ -618,6 +618,7 @@ describe('linkinator action', () => {
       assert.deepStrictEqual(tableRows[0], [
         { data: 'Status', header: true },
         { data: 'URL', header: true },
+        { data: 'Reason', header: true },
         { data: 'Source', header: true },
       ]);
     });
@@ -655,10 +656,10 @@ describe('linkinator action', () => {
       const tableRows = tableCall.args[0];
       assert.strictEqual(tableRows.length, 4); // header + 3 broken links
 
-      // Check links are sorted by parent
-      assert.strictEqual(tableRows[1][2], 'other.md');
-      assert.strictEqual(tableRows[2][2], 'test.md');
-      assert.strictEqual(tableRows[3][2], 'test.md');
+      // Check links are sorted by parent (Source is now at index 3)
+      assert.strictEqual(tableRows[1][3], 'other.md');
+      assert.strictEqual(tableRows[2][3], 'test.md');
+      assert.strictEqual(tableRows[3][3], 'test.md');
     });
 
     it('should handle links with no parent', async () => {
@@ -675,7 +676,7 @@ describe('linkinator action', () => {
 
       const tableCall = summaryStub.addTable.getCall(0);
       const tableRows = tableCall.args[0];
-      assert.strictEqual(tableRows[1][2], '(unknown)');
+      assert.strictEqual(tableRows[1][3], '(unknown)');
     });
   });
 });

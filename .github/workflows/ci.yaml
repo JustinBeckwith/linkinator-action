@@ -12,6 +12,7 @@ jobs:
       - uses: ./
         with:
           skip: "CHANGELOG.md"
+          checkFragments: true
       - uses: ./
         with:
           paths: test/fixtures/test.md
