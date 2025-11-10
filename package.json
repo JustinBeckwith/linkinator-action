@@ -35,7 +35,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.2.7",
     "c8": "^10.1.2",
-    "esbuild": "^0.26.0",
+    "esbuild": "^0.27.0",
     "mocha": "^11.0.0",
     "nock": "^14.0.0",
     "sinon": "^21.0.0"
