@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.1](https://github.com/JustinBeckwith/linkinator-action/compare/linkinator-action-v2.3.0...linkinator-action-v2.3.1) (2025-12-09)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @actions/core to v2 ([#228](https://github.com/JustinBeckwith/linkinator-action/issues/228)) ([ae578ec](https://github.com/JustinBeckwith/linkinator-action/commit/ae578ec25f681bce010a6ba0144c69b7bd0825c3))
+
 ## [2.3.0](https://github.com/JustinBeckwith/linkinator-action/compare/linkinator-action-v2.2.0...linkinator-action-v2.3.0) (2025-10-31)
 
 
