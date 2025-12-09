@@ -29,7 +29,7 @@
   },
   "homepage": "https://github.com/JustinBeckwith/linkinator-action#readme",
   "dependencies": {
-    "@actions/core": "^1.11.1",
+    "@actions/core": "^2.0.0",
     "linkinator": "^7.4.1"
   },
   "devDependencies": {
