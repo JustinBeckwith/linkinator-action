@@ -4,14 +4,14 @@
   "description": "A GitHub Action that checks your README and other markdown for 404s.",
   "main": "dist/index.js",
   "scripts": {
-    "test": "c8 mocha",
+    "test": "vitest run",
     "fix": "biome check --write .",
     "lint": "biome check .",
     "build": "esbuild src/index.js --bundle --platform=node --format=cjs --outfile=dist/index.cjs --sourcemap"
   },
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "repository": {
     "type": "git",
@@ -29,15 +29,13 @@
   },
   "homepage": "https://github.com/JustinBeckwith/linkinator-action#readme",
   "dependencies": {
-    "@actions/core": "^2.0.0",
-    "linkinator": "^7.4.1"
+    "@actions/core": "^3.0.0",
+    "linkinator": "^7.5.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.2.7",
-    "c8": "^10.1.2",
-    "esbuild": "^0.27.0",
-    "mocha": "^11.0.0",
-    "nock": "^14.0.0",
-    "sinon": "^21.0.0"
+    "@biomejs/biome": "^2.3.13",
+    "esbuild": "^0.27.2",
+    "nock": "^14.0.10",
+    "vitest": "^4.0.18"
   }
 }
