@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.4.0](https://github.com/JustinBeckwith/linkinator-action/compare/linkinator-action-v2.3.0...linkinator-action-v2.4.0) (2026-01-29)
+
+
+### Features
+
+* Modernize project: Node.js 24, Vitest, and latest dependencies ([#232](https://github.com/JustinBeckwith/linkinator-action/issues/232)) ([29aade1](https://github.com/JustinBeckwith/linkinator-action/commit/29aade1a9c828fac441e9db9300767488bc1e6ae))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @actions/core to v2 ([#228](https://github.com/JustinBeckwith/linkinator-action/issues/228)) ([ae578ec](https://github.com/JustinBeckwith/linkinator-action/commit/ae578ec25f681bce010a6ba0144c69b7bd0825c3))
+
 ## [2.3.0](https://github.com/JustinBeckwith/linkinator-action/compare/linkinator-action-v2.2.0...linkinator-action-v2.3.0) (2025-10-31)
 
 
