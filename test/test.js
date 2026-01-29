@@ -1,133 +1,150 @@
 import assert from 'node:assert';
-import core from '@actions/core';
-import { afterEach, describe, it } from 'mocha';
+import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 import nock from 'nock';
-import sinon from 'sinon';
+
+// Mock @actions/core before importing anything else
+vi.mock('@actions/core', () => ({
+  getInput: vi.fn(),
+  setOutput: vi.fn(),
+  setFailed: vi.fn(),
+  info: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+  summary: {
+    addHeading: vi.fn(),
+    addRaw: vi.fn(),
+    addList: vi.fn(),
+    addTable: vi.fn(),
+    write: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+import * as core from '@actions/core';
 import { getFullConfig, main, generateJobSummary } from '../src/action.js';
 
 nock.disableNetConnect();
 nock.enableNetConnect('localhost');
 
-// Helper to stub out core.summary for tests
+// Helper to create a mock getInput function that can return different values based on input name
+function createGetInputMock(values = {}) {
+  return vi.spyOn(core, 'getInput').mockImplementation((name) => {
+    return values[name] || '';
+  });
+}
+
+// Helper to setup core.summary to chain properly
 function stubSummary() {
-  const summaryStub = {
-    addHeading: sinon.stub().returnsThis(),
-    addRaw: sinon.stub().returnsThis(),
-    addList: sinon.stub().returnsThis(),
-    addTable: sinon.stub().returnsThis(),
-    write: sinon.stub().resolves(),
-  };
-  sinon.stub(core, 'summary').value(summaryStub);
-  return summaryStub;
+  // Make summary methods chain
+  core.summary.addHeading.mockReturnValue(core.summary);
+  core.summary.addRaw.mockReturnValue(core.summary);
+  core.summary.addList.mockReturnValue(core.summary);
+  core.summary.addTable.mockReturnValue(core.summary);
+  return core.summary;
 }
 
 describe('linkinator action', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   afterEach(() => {
-    sinon.restore();
+    vi.restoreAllMocks();
     nock.cleanAll();
   });
 
   it('should return ok for a valid README', async () => {
     stubSummary();
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.returns('');
-    const setOutputStub = sinon.stub(core, 'setOutput');
-    const setFailedStub = sinon.stub(core, 'setFailed');
-    const infoStub = sinon.stub(core, 'info');
+    const inputStub = createGetInputMock({ paths: 'test/fixtures/test.md' });
+    const setOutputStub = vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
+    const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
     const scope = nock('http://fake.local')
       .head('/')
       .reply(200)
       .head('/fake')
       .reply(200);
     await main();
-    assert.ok(inputStub.called);
-    assert.ok(setOutputStub.called);
-    assert.ok(setFailedStub.notCalled);
-    assert.ok(infoStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
+    assert.ok(setOutputStub.mock.calls.length > 0);
+    assert.strictEqual(setFailedStub.mock.calls.length, 0);
+    assert.ok(infoStub.mock.calls.length > 0);
     scope.done();
   });
 
   it('should call setFailed on failures', async () => {
     stubSummary();
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.returns('');
-    sinon.stub(core, 'setOutput');
-    const errorStub = sinon.stub(core, 'error');
-    const infoStub = sinon.stub(core, 'info');
-    const setFailedStub = sinon.stub(core, 'setFailed');
+    const inputStub = createGetInputMock({ paths: 'test/fixtures/test.md' });
+    vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    const errorStub = vi.spyOn(core, 'error').mockImplementation(() => {});
+    const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
+    const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
     const scope = nock('http://fake.local')
       .head('/')
       .reply(404)
       .head('/fake')
       .reply(404);
     await main();
-    assert.ok(inputStub.called);
-    assert.ok(setFailedStub.called);
-    assert.ok(infoStub.called);
-    assert.ok(errorStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
+    assert.ok(setFailedStub.mock.calls.length > 0);
+    assert.ok(infoStub.mock.calls.length > 0);
+    assert.ok(errorStub.mock.calls.length > 0);
     scope.done();
   });
 
   it('should surface exceptions from linkinator with call stack', async () => {
     stubSummary();
-    const inputStub = sinon.stub(core, 'getInput').throws(new Error('😱'));
-    const setFailedStub = sinon.stub(core, 'setFailed');
+    const inputStub = vi.spyOn(core, 'getInput').mockImplementation(() => {
+      throw new Error('😱');
+    });
+    const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
     await main();
-    assert.ok(inputStub.called);
-    assert.ok(setFailedStub.called);
-    assert.ok(setFailedStub.firstCall.firstArg.includes('test.js:'));
+    assert.ok(inputStub.mock.calls.length > 0);
+    assert.ok(setFailedStub.mock.calls.length > 0);
+    assert.ok(setFailedStub.mock.calls[0][0].includes('test.js:'));
   });
 
   it('should handle linksToSkip', async () => {
     stubSummary();
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub
-      .withArgs('linksToSkip')
-      .returns('http://fake.local,http://fake.local/fake');
-    inputStub.returns('');
-    const infoStub = sinon.stub(core, 'info');
-    const setOutputStub = sinon.stub(core, 'setOutput');
-    sinon.stub(core, 'setFailed').callsFake((output) => {
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md',
+      linksToSkip: 'http://fake.local,http://fake.local/fake',
+    });
+    const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
+    const setOutputStub = vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    vi.spyOn(core, 'setFailed').mockImplementation((output) => {
       throw new Error(output);
     });
     await main();
-    assert.ok(inputStub.called);
-    assert.ok(infoStub.called);
-    assert.ok(setOutputStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
+    assert.ok(infoStub.mock.calls.length > 0);
+    assert.ok(setOutputStub.mock.calls.length > 0);
   });
 
   it('should handle skips and spaces', async () => {
     stubSummary();
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub
-      .withArgs('skip')
-      .returns('http://fake.local http://fake.local/fake');
-    inputStub.returns('');
-    const infoStub = sinon.stub(core, 'info');
-    const setOutputStub = sinon.stub(core, 'setOutput');
-    sinon.stub(core, 'setFailed').callsFake((output) => {
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md',
+      skip: 'http://fake.local http://fake.local/fake',
+    });
+    const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
+    const setOutputStub = vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    vi.spyOn(core, 'setFailed').mockImplementation((output) => {
       throw new Error(output);
     });
     await main();
-    assert.ok(inputStub.called);
-    assert.ok(infoStub.called);
-    assert.ok(setOutputStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
+    assert.ok(infoStub.mock.calls.length > 0);
+    assert.ok(setOutputStub.mock.calls.length > 0);
   });
 
   it('should handle multiple paths', async () => {
     stubSummary();
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub
-      .withArgs('paths')
-      .returns('test/fixtures/test.md, test/fixtures/test2.md');
-    inputStub.returns('');
-    const setOutputStub = sinon.stub(core, 'setOutput');
-    const infoStub = sinon.stub(core, 'info');
-    sinon.stub(core, 'setFailed').callsFake((output) => {
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md, test/fixtures/test2.md',
+    });
+    const setOutputStub = vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
+    vi.spyOn(core, 'setFailed').mockImplementation((output) => {
       throw new Error(output);
     });
     const scope = nock('http://fake.local')
@@ -136,45 +153,45 @@ describe('linkinator action', () => {
       .head('/fake')
       .reply(200);
     await main();
-    assert.ok(inputStub.called);
-    assert.ok(infoStub.called);
-    assert.ok(setOutputStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
+    assert.ok(infoStub.mock.calls.length > 0);
+    assert.ok(setOutputStub.mock.calls.length > 0);
     scope.done();
   });
 
   it('should respect verbosity set to ERROR', async () => {
     stubSummary();
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.withArgs('verbosity').returns('ERROR');
-    inputStub.returns('');
-    const setOutputStub = sinon.stub(core, 'setOutput');
-    const setFailedStub = sinon.stub(core, 'setFailed');
-    const infoStub = sinon.stub(core, 'info');
-    const errorStub = sinon.stub(core, 'error');
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md',
+      verbosity: 'ERROR',
+    });
+    const setOutputStub = vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
+    const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
+    const errorStub = vi.spyOn(core, 'error').mockImplementation(() => {});
     const scope = nock('http://fake.local')
       .head('/')
       .reply(200)
       .head('/fake')
       .reply(500);
     await main();
-    assert.ok(inputStub.called);
-    assert.strictEqual(setOutputStub.callCount, 1);
-    assert.strictEqual(setFailedStub.callCount, 1);
+    assert.ok(inputStub.mock.calls.length > 0);
+    assert.strictEqual(setOutputStub.mock.calls.length, 1);
+    assert.strictEqual(setFailedStub.mock.calls.length, 1);
 
     // ensure `Scanning ...` is always shown
     assert.strictEqual(
-      infoStub.getCalls().filter((x) => {
-        return x.args[0].startsWith('Scanning ');
+      infoStub.mock.calls.filter((call) => {
+        return call[0].startsWith('Scanning ');
       }).length,
       1,
     );
 
     // Ensure total count is always shown
     assert.strictEqual(
-      setFailedStub.getCalls().filter((x) => {
+      setFailedStub.mock.calls.filter((call) => {
         return (
-          x.args[0] ===
+          call[0] ===
           'Detected 1 broken links.\n test/fixtures/test.md\n   [500] http://fake.local/fake - HTTP 500'
         );
       }).length,
@@ -182,9 +199,9 @@ describe('linkinator action', () => {
     );
 
     // Ensure `core.error` is called for each failure
-    assert.strictEqual(errorStub.callCount, 1);
+    assert.strictEqual(errorStub.mock.calls.length, 1);
     const expected = '[500] http://fake.local/fake - HTTP 500';
-    assert.strictEqual(errorStub.getCalls()[0].args[0], expected);
+    assert.strictEqual(errorStub.mock.calls[0][0], expected);
 
     scope.done();
   });
@@ -192,97 +209,94 @@ describe('linkinator action', () => {
   it('should show skipped links when verbosity is INFO', async () => {
     stubSummary();
     // Unset GITHUB_EVENT_PATH, so that no replacement is attempted.
-    sinon.stub(process, 'env').value({
-      GITHUB_EVENT_PATH: undefined,
+    vi.stubEnv('GITHUB_EVENT_PATH', undefined);
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md',
+      skip: 'http://fake.local/fake',
+      verbosity: 'INFO',
     });
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.withArgs('skip').returns('http://fake.local/fake');
-    inputStub.withArgs('verbosity').returns('INFO');
-    inputStub.returns('');
-    const setOutputStub = sinon.stub(core, 'setOutput');
-    const setFailedStub = sinon.stub(core, 'setFailed');
-    const infoStub = sinon.stub(core, 'info');
-    const errorStub = sinon.stub(core, 'error');
+    const setOutputStub = vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
+    const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
+    const errorStub = vi.spyOn(core, 'error').mockImplementation(() => {});
     const scope = nock('http://fake.local').head('/').reply(200);
     await main();
-    assert.ok(inputStub.called);
-    assert.strictEqual(setOutputStub.callCount, 1);
-    assert.ok(setFailedStub.notCalled);
-    assert.ok(errorStub.notCalled);
-    assert.strictEqual(infoStub.getCalls().length, 5);
+    assert.ok(inputStub.mock.calls.length > 0);
+    assert.strictEqual(setOutputStub.mock.calls.length, 1);
+    assert.strictEqual(setFailedStub.mock.calls.length, 0);
+    assert.strictEqual(errorStub.mock.calls.length, 0);
+    assert.strictEqual(infoStub.mock.calls.length, 5);
     const expected = '[SKP] http://fake.local/fake';
-    assert.ok(infoStub.getCalls().find((x) => x.args[0] === expected));
+    assert.ok(infoStub.mock.calls.find((call) => call[0] === expected));
     scope.done();
   });
 
   it('should show failure details when verbosity is DEBUG', async () => {
     stubSummary();
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.withArgs('verbosity').returns('DEBUG');
-    inputStub.returns('');
-    const setOutputStub = sinon.stub(core, 'setOutput');
-    const setFailedStub = sinon.stub(core, 'setFailed');
-    const infoStub = sinon.stub(core, 'info');
-    const errorStub = sinon.stub(core, 'error');
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md',
+      verbosity: 'DEBUG',
+    });
+    const setOutputStub = vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
+    const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
+    const errorStub = vi.spyOn(core, 'error').mockImplementation(() => {});
     const scope = nock('http://fake.local')
       .head('/')
       .reply(200)
       .head('/fake')
       .reply(500);
     await main();
-    assert.ok(inputStub.called);
-    assert.ok(infoStub.called);
-    assert.strictEqual(setOutputStub.callCount, 1);
-    assert.strictEqual(setFailedStub.callCount, 1);
-    assert.strictEqual(errorStub.callCount, 1);
+    assert.ok(inputStub.mock.calls.length > 0);
+    assert.ok(infoStub.mock.calls.length > 0);
+    assert.strictEqual(setOutputStub.mock.calls.length, 1);
+    assert.strictEqual(setFailedStub.mock.calls.length, 1);
+    assert.strictEqual(errorStub.mock.calls.length, 1);
     // Check that failure details are logged (contains status or headers from HttpResponse)
-    const hasFailureDetails = infoStub
-      .getCalls()
-      .some((x) => /status|headers/.test(x.args[0]));
+    const hasFailureDetails = infoStub.mock.calls
+      .some((call) => /status|headers/.test(call[0]));
     assert.ok(hasFailureDetails);
     scope.done();
   });
 
   it('should respect local config with overrides', async () => {
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.withArgs('config').returns('test/fixtures/config.json');
-    inputStub.withArgs('concurrency').returns('100');
-    inputStub.withArgs('recurse').returns('true');
-    inputStub.withArgs('verbosity').returns('ERROR');
-    inputStub.returns('');
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md',
+      config: 'test/fixtures/config.json',
+      concurrency: '100',
+      recurse: 'true',
+      verbosity: 'ERROR',
+    });
     const config = await getFullConfig();
     assert.strictEqual(config.retry, true);
     assert.strictEqual(config.verbosity, 'ERROR');
     assert.strictEqual(config.concurrency, 100);
     assert.strictEqual(config.markdown, true);
     assert.strictEqual(config.recurse, true);
-    assert.ok(inputStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
   });
 
   it('should throw for invalid verbosity', async () => {
     stubSummary();
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.withArgs('verbosity').returns('NOT_VALID');
-    inputStub.returns('');
-    const setFailedStub = sinon.stub(core, 'setFailed');
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md',
+      verbosity: 'NOT_VALID',
+    });
+    const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
     await main();
-    assert.ok(/must be one of/.test(setFailedStub.getCalls()[0].args[0]));
+    assert.ok(/must be one of/.test(setFailedStub.mock.calls[0][0]));
   });
 
   it('should respect url rewrite rules', async () => {
     stubSummary();
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.withArgs('urlRewriteSearch').returns('fake.local');
-    inputStub.withArgs('urlRewriteReplace').returns('real.remote');
-    inputStub.returns('');
-    const setOutputStub = sinon.stub(core, 'setOutput');
-    const infoStub = sinon.stub(core, 'info');
-    sinon.stub(core, 'setFailed').callsFake((output) => {
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md',
+      urlRewriteSearch: 'fake.local',
+      urlRewriteReplace: 'real.remote',
+    });
+    const setOutputStub = vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
+    vi.spyOn(core, 'setFailed').mockImplementation((output) => {
       throw new Error(output);
     });
     const scope = nock('http://real.remote')
@@ -291,112 +305,110 @@ describe('linkinator action', () => {
       .head('/fake')
       .reply(200);
     await main();
-    assert.ok(inputStub.called);
-    assert.ok(infoStub.called);
-    assert.ok(setOutputStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
+    assert.ok(infoStub.mock.calls.length > 0);
+    assert.ok(setOutputStub.mock.calls.length > 0);
     scope.done();
   });
 
   it('should automatically rewrite urls on the incoming branch', async () => {
     stubSummary();
-    sinon.stub(process, 'env').value({
-      GITHUB_HEAD_REF: 'incoming',
-      GITHUB_BASE_REF: 'main',
-      GITHUB_REPOSITORY: 'JustinBeckwith/linkinator-action',
-      GITHUB_EVENT_PATH: './test/fixtures/payload.json',
+    vi.stubEnv('GITHUB_HEAD_REF', 'incoming');
+    vi.stubEnv('GITHUB_BASE_REF', 'main');
+    vi.stubEnv('GITHUB_REPOSITORY', 'JustinBeckwith/linkinator-action');
+    vi.stubEnv('GITHUB_EVENT_PATH', './test/fixtures/payload.json');
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/github.md',
     });
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/github.md');
-    inputStub.returns('');
-    const setOutputStub = sinon.stub(core, 'setOutput');
-    const setFailedStub = sinon.stub(core, 'setFailed');
-    const infoStub = sinon.stub(core, 'info');
+    const setOutputStub = vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
+    const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
     const scope = nock('https://github.com')
       .get('/Codertocat/Hello-World/blob/incoming/LICENSE')
       .reply(200);
     await main();
-    assert.ok(inputStub.called);
-    assert.ok(setOutputStub.called);
-    assert.ok(setFailedStub.notCalled);
-    assert.ok(infoStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
+    assert.ok(setOutputStub.mock.calls.length > 0);
+    assert.strictEqual(setFailedStub.mock.calls.length, 0);
+    assert.ok(infoStub.mock.calls.length > 0);
     scope.done();
   });
 
   it('should handle allowInsecureCerts option', async () => {
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.withArgs('allowInsecureCerts').returns('true');
-    inputStub.returns('');
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md',
+      allowInsecureCerts: 'true',
+    });
     const config = await getFullConfig();
     assert.strictEqual(config.allowInsecureCerts, true);
-    assert.ok(inputStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
   });
 
   it('should handle requireHttps option', async () => {
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.withArgs('requireHttps').returns('true');
-    inputStub.returns('');
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md',
+      requireHttps: 'true',
+    });
     const config = await getFullConfig();
     assert.strictEqual(config.requireHttps, true);
-    assert.ok(inputStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
   });
 
   it('should handle cleanUrls option', async () => {
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.withArgs('cleanUrls').returns('true');
-    inputStub.returns('');
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md',
+      cleanUrls: 'true',
+    });
     const config = await getFullConfig();
     assert.strictEqual(config.cleanUrls, true);
-    assert.ok(inputStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
   });
 
   it('should handle checkCss option', async () => {
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.withArgs('checkCss').returns('true');
-    inputStub.returns('');
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md',
+      checkCss: 'true',
+    });
     const config = await getFullConfig();
     assert.strictEqual(config.checkCss, true);
-    assert.ok(inputStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
   });
 
   it('should handle checkFragments option', async () => {
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.withArgs('checkFragments').returns('true');
-    inputStub.returns('');
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md',
+      checkFragments: 'true',
+    });
     const config = await getFullConfig();
     assert.strictEqual(config.checkFragments, true);
-    assert.ok(inputStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
   });
 
   it('should handle statusCodes option', async () => {
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.withArgs('statusCodes').returns('{"404":"error","5xx":"warn"}');
-    inputStub.returns('');
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md',
+      statusCodes: '{"404":"error","5xx":"warn"}',
+    });
     const config = await getFullConfig();
     assert.deepStrictEqual(config.statusCodes, { '404': 'error', '5xx': 'warn' });
-    assert.ok(inputStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
   });
 
   it('should handle redirects option', async () => {
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.withArgs('redirects').returns('warn');
-    inputStub.returns('');
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md',
+      redirects: 'warn',
+    });
     const config = await getFullConfig();
     assert.strictEqual(config.redirects, 'warn');
-    assert.ok(inputStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
   });
 
   it('should throw for invalid statusCodes JSON', async () => {
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.withArgs('statusCodes').returns('{invalid json}');
-    inputStub.returns('');
+    createGetInputMock({
+      paths: 'test/fixtures/test.md',
+      statusCodes: '{invalid json}',
+    });
     await assert.rejects(
       async () => await getFullConfig(),
       /Invalid JSON for statusCodes/
@@ -405,18 +417,16 @@ describe('linkinator action', () => {
 
   it('should handle branch names with slashes in URL rewriting', async () => {
     stubSummary();
-    sinon.stub(process, 'env').value({
-      GITHUB_HEAD_REF: 'release-please/branches/main',
-      GITHUB_BASE_REF: 'main',
-      GITHUB_REPOSITORY: 'JustinBeckwith/linkinator-action',
-      GITHUB_EVENT_PATH: './test/fixtures/payload-slashes.json',
+    vi.stubEnv('GITHUB_HEAD_REF', 'release-please/branches/main');
+    vi.stubEnv('GITHUB_BASE_REF', 'main');
+    vi.stubEnv('GITHUB_REPOSITORY', 'JustinBeckwith/linkinator-action');
+    vi.stubEnv('GITHUB_EVENT_PATH', './test/fixtures/payload-slashes.json');
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/github-slashed-branch.md',
     });
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/github-slashed-branch.md');
-    inputStub.returns('');
-    const setOutputStub = sinon.stub(core, 'setOutput');
-    const setFailedStub = sinon.stub(core, 'setFailed');
-    const infoStub = sinon.stub(core, 'info');
+    const setOutputStub = vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
+    const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
 
     // The action should rewrite URLs from main branch to the slashed branch
     // Original: https://github.com/JustinBeckwith/linkinator-action/blob/main/CONTRIBUTING.md
@@ -428,27 +438,25 @@ describe('linkinator action', () => {
       .reply(200);
 
     await main();
-    assert.ok(inputStub.called);
-    assert.ok(setOutputStub.called);
-    assert.ok(setFailedStub.notCalled);
-    assert.ok(infoStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
+    assert.ok(setOutputStub.mock.calls.length > 0);
+    assert.strictEqual(setFailedStub.mock.calls.length, 0);
+    assert.ok(infoStub.mock.calls.length > 0);
     scope.done();
   });
 
   it('should handle branch names with multiple slashes', async () => {
     stubSummary();
-    sinon.stub(process, 'env').value({
-      GITHUB_HEAD_REF: 'feature/deep/nested/branch',
-      GITHUB_BASE_REF: 'main',
-      GITHUB_REPOSITORY: 'JustinBeckwith/linkinator-action',
-      GITHUB_EVENT_PATH: './test/fixtures/payload-slashes.json',
+    vi.stubEnv('GITHUB_HEAD_REF', 'feature/deep/nested/branch');
+    vi.stubEnv('GITHUB_BASE_REF', 'main');
+    vi.stubEnv('GITHUB_REPOSITORY', 'JustinBeckwith/linkinator-action');
+    vi.stubEnv('GITHUB_EVENT_PATH', './test/fixtures/payload-slashes.json');
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/github-slashed-branch.md',
     });
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/github-slashed-branch.md');
-    inputStub.returns('');
-    const setOutputStub = sinon.stub(core, 'setOutput');
-    const setFailedStub = sinon.stub(core, 'setFailed');
-    const infoStub = sinon.stub(core, 'info');
+    const setOutputStub = vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
+    const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
 
     const scope = nock('https://github.com')
       .get('/Codertocat/Hello-World/blob/feature/deep/nested/branch/CONTRIBUTING.md')
@@ -457,27 +465,25 @@ describe('linkinator action', () => {
       .reply(200);
 
     await main();
-    assert.ok(inputStub.called);
-    assert.ok(setOutputStub.called);
-    assert.ok(setFailedStub.notCalled);
-    assert.ok(infoStub.called);
+    assert.ok(inputStub.mock.calls.length > 0);
+    assert.ok(setOutputStub.mock.calls.length > 0);
+    assert.strictEqual(setFailedStub.mock.calls.length, 0);
+    assert.ok(infoStub.mock.calls.length > 0);
     scope.done();
   });
 
   it('should handle tree URLs as well as blob URLs', async () => {
     stubSummary();
-    sinon.stub(process, 'env').value({
-      GITHUB_HEAD_REF: 'feature/test',
-      GITHUB_BASE_REF: 'main',
-      GITHUB_REPOSITORY: 'JustinBeckwith/linkinator-action',
-      GITHUB_EVENT_PATH: './test/fixtures/payload-slashes.json',
+    vi.stubEnv('GITHUB_HEAD_REF', 'feature/test');
+    vi.stubEnv('GITHUB_BASE_REF', 'main');
+    vi.stubEnv('GITHUB_REPOSITORY', 'JustinBeckwith/linkinator-action');
+    vi.stubEnv('GITHUB_EVENT_PATH', './test/fixtures/payload-slashes.json');
+    createGetInputMock({
+      paths: 'test/fixtures/test.md',
     });
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/test.md');
-    inputStub.returns('');
-    sinon.stub(core, 'setOutput');
-    sinon.stub(core, 'setFailed');
-    sinon.stub(core, 'info');
+    vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    vi.spyOn(core, 'setFailed').mockImplementation(() => {});
+    vi.spyOn(core, 'info').mockImplementation(() => {});
 
     // Mock both blob and tree URLs
     const scope = nock('http://fake.local')
@@ -501,18 +507,16 @@ describe('linkinator action', () => {
     const testContent = '[Link](https://github.com/JustinBeckwith/linkinator-action/blob/release-please/branches/main/FILE.md)';
     await fs.writeFile('test/fixtures/github-already-on-branch.md', testContent);
 
-    sinon.stub(process, 'env').value({
-      GITHUB_HEAD_REF: 'release-please/branches/main',
-      GITHUB_BASE_REF: 'main', // Note: base is just "main", a substring of the head ref!
-      GITHUB_REPOSITORY: 'JustinBeckwith/linkinator-action',
-      GITHUB_EVENT_PATH: './test/fixtures/payload-slashes.json',
+    vi.stubEnv('GITHUB_HEAD_REF', 'release-please/branches/main');
+    vi.stubEnv('GITHUB_BASE_REF', 'main');
+    vi.stubEnv('GITHUB_REPOSITORY', 'JustinBeckwith/linkinator-action');
+    vi.stubEnv('GITHUB_EVENT_PATH', './test/fixtures/payload-slashes.json');
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/github-already-on-branch.md',
     });
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/github-already-on-branch.md');
-    inputStub.returns('');
-    const setOutputStub = sinon.stub(core, 'setOutput');
-    const setFailedStub = sinon.stub(core, 'setFailed');
-    sinon.stub(core, 'info');
+    const setOutputStub = vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
+    vi.spyOn(core, 'info').mockImplementation(() => {});
 
     // The URL should NOT be rewritten because it's already on the correct branch
     // It should NOT become: /blob/release-please/branches/release-please/branches/main/FILE.md
@@ -524,9 +528,9 @@ describe('linkinator action', () => {
       .reply(200);
 
     await main();
-    assert.ok(inputStub.called);
-    assert.ok(setOutputStub.called);
-    assert.ok(setFailedStub.notCalled);
+    assert.ok(inputStub.mock.calls.length > 0);
+    assert.ok(setOutputStub.mock.calls.length > 0);
+    assert.strictEqual(setFailedStub.mock.calls.length, 0);
     scope.done();
 
     // Cleanup
@@ -540,27 +544,25 @@ describe('linkinator action', () => {
     const testContent = '[Link](https://github.com/JustinBeckwith/linkinator-action/blob/v1.0.0/FILE.md)';
     await fs.writeFile('test/fixtures/github-special-chars.md', testContent);
 
-    sinon.stub(process, 'env').value({
-      GITHUB_HEAD_REF: 'feature/test',
-      GITHUB_BASE_REF: 'v1.0.0', // Contains dots which are regex wildcards
-      GITHUB_REPOSITORY: 'JustinBeckwith/linkinator-action',
-      GITHUB_EVENT_PATH: './test/fixtures/payload-slashes.json',
+    vi.stubEnv('GITHUB_HEAD_REF', 'feature/test');
+    vi.stubEnv('GITHUB_BASE_REF', 'v1.0.0');
+    vi.stubEnv('GITHUB_REPOSITORY', 'JustinBeckwith/linkinator-action');
+    vi.stubEnv('GITHUB_EVENT_PATH', './test/fixtures/payload-slashes.json');
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/github-special-chars.md',
     });
-    const inputStub = sinon.stub(core, 'getInput');
-    inputStub.withArgs('paths').returns('test/fixtures/github-special-chars.md');
-    inputStub.returns('');
-    const setOutputStub = sinon.stub(core, 'setOutput');
-    const setFailedStub = sinon.stub(core, 'setFailed');
-    sinon.stub(core, 'info');
+    const setOutputStub = vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
+    vi.spyOn(core, 'info').mockImplementation(() => {});
 
     const scope = nock('https://github.com')
       .get('/Codertocat/Hello-World/blob/feature/test/FILE.md')
       .reply(200);
 
     await main();
-    assert.ok(inputStub.called);
-    assert.ok(setOutputStub.called);
-    assert.ok(setFailedStub.notCalled);
+    assert.ok(inputStub.mock.calls.length > 0);
+    assert.ok(setOutputStub.mock.calls.length > 0);
+    assert.strictEqual(setFailedStub.mock.calls.length, 0);
     scope.done();
 
     // Cleanup
@@ -582,13 +584,13 @@ describe('linkinator action', () => {
 
       await generateJobSummary(result);
 
-      assert.ok(summaryStub.addHeading.calledWith('🔗 Linkinator Results', 2));
-      assert.ok(summaryStub.addRaw.calledWith('\n**Status:** ✅ All links are valid!\n\n'));
-      assert.ok(summaryStub.addHeading.calledWith('📊 Summary', 3));
-      assert.ok(summaryStub.addList.called);
-      assert.ok(summaryStub.write.called);
+      assert.ok(summaryStub.addHeading.mock.calls.some(c => c[0] === '🔗 Linkinator Results' && c[1] === 2));
+      assert.ok(summaryStub.addRaw.mock.calls.some(c => c[0] === '\n**Status:** ✅ All links are valid!\n\n'));
+      assert.ok(summaryStub.addHeading.mock.calls.some(c => c[0] === '📊 Summary' && c[1] === 3));
+      assert.ok(summaryStub.addList.mock.calls.length > 0);
+      assert.ok(summaryStub.write.mock.calls.length > 0);
       // Should not add broken links table
-      assert.strictEqual(summaryStub.addTable.called, false);
+      assert.strictEqual(summaryStub.addTable.mock.calls.length, 0);
     });
 
     it('should generate summary with broken links table', async () => {
@@ -605,15 +607,15 @@ describe('linkinator action', () => {
 
       await generateJobSummary(result);
 
-      assert.ok(summaryStub.addHeading.calledWith('🔗 Linkinator Results', 2));
-      assert.ok(summaryStub.addRaw.calledWith('\n**Status:** ❌ Found 2 broken links\n\n'));
-      assert.ok(summaryStub.addHeading.calledWith('❌ Broken Links', 3));
-      assert.ok(summaryStub.addTable.called);
-      assert.ok(summaryStub.write.called);
+      assert.ok(summaryStub.addHeading.mock.calls.some(c => c[0] === '🔗 Linkinator Results' && c[1] === 2));
+      assert.ok(summaryStub.addRaw.mock.calls.some(c => c[0] === '\n**Status:** ❌ Found 2 broken links\n\n'));
+      assert.ok(summaryStub.addHeading.mock.calls.some(c => c[0] === '❌ Broken Links' && c[1] === 3));
+      assert.ok(summaryStub.addTable.mock.calls.length > 0);
+      assert.ok(summaryStub.write.mock.calls.length > 0);
 
       // Check table structure
-      const tableCall = summaryStub.addTable.getCall(0);
-      const tableRows = tableCall.args[0];
+      const tableCall = summaryStub.addTable.mock.calls[0];
+      const tableRows = tableCall[0];
       assert.strictEqual(tableRows.length, 3); // header + 2 broken links
       assert.deepStrictEqual(tableRows[0], [
         { data: 'Status', header: true },
@@ -635,7 +637,7 @@ describe('linkinator action', () => {
 
       await generateJobSummary(result);
 
-      assert.ok(summaryStub.addRaw.calledWith('\n**Status:** ❌ Found 1 broken link\n\n'));
+      assert.ok(summaryStub.addRaw.mock.calls.some(c => c[0] === '\n**Status:** ❌ Found 1 broken link\n\n'));
     });
 
     it('should group broken links by parent in table', async () => {
@@ -652,8 +654,8 @@ describe('linkinator action', () => {
 
       await generateJobSummary(result);
 
-      const tableCall = summaryStub.addTable.getCall(0);
-      const tableRows = tableCall.args[0];
+      const tableCall = summaryStub.addTable.mock.calls[0];
+      const tableRows = tableCall[0];
       assert.strictEqual(tableRows.length, 4); // header + 3 broken links
 
       // Check links are sorted by parent (Source is now at index 3)
@@ -674,8 +676,8 @@ describe('linkinator action', () => {
 
       await generateJobSummary(result);
 
-      const tableCall = summaryStub.addTable.getCall(0);
-      const tableRows = tableCall.args[0];
+      const tableCall = summaryStub.addTable.mock.calls[0];
+      const tableRows = tableCall[0];
       assert.strictEqual(tableRows[1][3], '(unknown)');
     });
   });

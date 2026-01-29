@@ -101,5 +101,5 @@ outputs:
   results:
     description: 'The full results of the scan.'
 runs:
-  using: 'node20'
+  using: 'node24'
   main: 'dist/index.cjs'
