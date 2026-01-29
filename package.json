@@ -7,7 +7,7 @@
     "test": "vitest run",
     "fix": "biome check --write .",
     "lint": "biome check .",
-    "build": "esbuild src/index.js --bundle --platform=node --format=esm --outfile=dist/index.js --sourcemap"
+    "build": "esbuild src/index.js --bundle --platform=node --format=esm --outfile=dist/index.js --sourcemap --packages=external"
   },
   "type": "module",
   "engines": {
