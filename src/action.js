@@ -330,7 +330,7 @@ function parseNumber(input) {
 function parseBoolean(input) {
   const value = core.getInput(input) || undefined;
   if (value) {
-    return Boolean(value);
+    return value === 'true';
   }
   return undefined;
 }
