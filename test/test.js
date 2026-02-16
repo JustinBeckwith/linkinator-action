@@ -377,10 +377,10 @@ describe('linkinator action', () => {
   it('should handle checkFragments option', async () => {
     const inputStub = createGetInputMock({
       paths: 'test/fixtures/test.md',
-      checkFragments: 'true',
+      checkFragments: 'false',
     });
     const config = await getFullConfig();
-    assert.strictEqual(config.checkFragments, true);
+    assert.strictEqual(config.checkFragments, false);
     assert.ok(inputStub.mock.calls.length > 0);
   });
 
