@@ -28,7 +28,7 @@ jobs:
           node-version: 24
       - run: npm install
       - run: npm test
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v6
   lint:
     runs-on: ubuntu-latest
     steps:
