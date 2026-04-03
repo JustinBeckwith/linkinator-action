@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.1](https://github.com/JustinBeckwith/linkinator-action/compare/linkinator-action-v2.4.0...linkinator-action-v2.4.1) (2026-04-03)
+
+
+### Bug Fixes
+
+* publish patch version tags ([8ace0d9](https://github.com/JustinBeckwith/linkinator-action/commit/8ace0d936ff884af509d398bbbc7d295dff566f2))
+
 ## [2.4.0](https://github.com/JustinBeckwith/linkinator-action/compare/linkinator-action-v2.3.0...linkinator-action-v2.4.0) (2026-01-29)
 
 
