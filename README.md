@@ -85,7 +85,6 @@ To view skipped links, failure details, and more debugging information [enable s
 Temporary links for validating issue #247 behavior in GitHub Actions:
 
 - [Lemur Browser](https://www.lemurbrowser.com/)
-- [ElonSucks](https://elonsucks.org/@adam?utm_source=duckduckgpt&utm_content=github_shield)
 
 ## License
 
