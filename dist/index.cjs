@@ -46049,6 +46049,7 @@ var openPattern = /\\{/g;
 var closePattern = /\\}/g;
 var commaPattern = /\\,/g;
 var periodPattern = /\\./g;
+var EXPANSION_MAX = 1e5;
 function numeric(str) {
   return !isNaN(str) ? parseInt(str, 10) : str.charCodeAt(0);
 }
@@ -46079,14 +46080,15 @@ function parseCommaParts(str) {
   parts.push.apply(parts, p);
   return parts;
 }
-function expand(str) {
+function expand(str, options = {}) {
   if (!str) {
     return [];
   }
+  const { max = EXPANSION_MAX } = options;
   if (str.slice(0, 2) === "{}") {
     str = "\\{\\}" + str.slice(2);
   }
-  return expand_(escapeBraces(str), true).map(unescapeBraces);
+  return expand_(escapeBraces(str), max, true).map(unescapeBraces);
 }
 function embrace(str) {
   return "{" + str + "}";
@@ -46100,15 +46102,15 @@ function lte(i, y2) {
 function gte(i, y2) {
   return i >= y2;
 }
-function expand_(str, isTop) {
+function expand_(str, max, isTop) {
   const expansions = [];
   const m2 = balanced("{", "}", str);
   if (!m2)
     return [str];
   const pre = m2.pre;
-  const post = m2.post.length ? expand_(m2.post, false) : [""];
+  const post = m2.post.length ? expand_(m2.post, max, false) : [""];
   if (/\$$/.test(m2.pre)) {
-    for (let k2 = 0; k2 < post.length; k2++) {
+    for (let k2 = 0; k2 < post.length && k2 < max; k2++) {
       const expansion = pre + "{" + m2.body + "}" + post[k2];
       expansions.push(expansion);
     }
@@ -46120,7 +46122,7 @@ function expand_(str, isTop) {
     if (!isSequence && !isOptions) {
       if (m2.post.match(/,(?!,).*\}/)) {
         str = m2.pre + "{" + m2.body + escClose + m2.post;
-        return expand_(str);
+        return expand_(str, max, true);
       }
       return [str];
     }
@@ -46130,7 +46132,7 @@ function expand_(str, isTop) {
     } else {
       n = parseCommaParts(m2.body);
       if (n.length === 1 && n[0] !== void 0) {
-        n = expand_(n[0], false).map(embrace);
+        n = expand_(n[0], max, false).map(embrace);
         if (n.length === 1) {
           return post.map((p) => m2.pre + n[0] + p);
         }
@@ -46176,11 +46178,11 @@ function expand_(str, isTop) {
     } else {
       N2 = [];
       for (let j2 = 0; j2 < n.length; j2++) {
-        N2.push.apply(N2, expand_(n[j2], false));
+        N2.push.apply(N2, expand_(n[j2], max, false));
       }
     }
     for (let j2 = 0; j2 < N2.length; j2++) {
-      for (let k2 = 0; k2 < post.length; k2++) {
+      for (let k2 = 0; k2 < post.length && expansions.length < max; k2++) {
         const expansion = pre + N2[j2] + post[k2];
         if (!isTop || isSequence || expansion) {
           expansions.push(expansion);
