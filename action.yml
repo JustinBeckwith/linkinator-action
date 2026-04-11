@@ -36,7 +36,7 @@ inputs:
     required: false
   directoryListing:
     description: 'Include an automatic directory index file when linking to a directory.'
-    default: 'false'
+    default: 'true'
     required: false
   retry:
     description: 'Automatically retry requests that return HTTP 429 responses and include a "retry-after" header.'
