@@ -10,6 +10,7 @@ export async function getFullConfig() {
     skip: [],
     timeout: 0,
     markdown: true,
+    directoryListing: true,
     retry: false,
     retryErrors: false,
     retryErrorsCount: 3,

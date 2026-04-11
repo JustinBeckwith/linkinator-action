@@ -404,6 +404,15 @@ describe('linkinator action', () => {
     assert.ok(inputStub.mock.calls.length > 0);
   });
 
+  it('should default directoryListing to true', async () => {
+    const inputStub = createGetInputMock({
+      paths: 'test/fixtures/test.md',
+    });
+    const config = await getFullConfig();
+    assert.strictEqual(config.directoryListing, true);
+    assert.ok(inputStub.mock.calls.length > 0);
+  });
+
   it('should throw for invalid statusCodes JSON', async () => {
     createGetInputMock({
       paths: 'test/fixtures/test.md',
