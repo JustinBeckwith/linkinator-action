@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.2](https://github.com/JustinBeckwith/linkinator-action/compare/linkinator-action-v2.4.1...linkinator-action-v2.4.2) (2026-04-11)
+
+
+### Bug Fixes
+
+* default directory listing to true ([#249](https://github.com/JustinBeckwith/linkinator-action/issues/249)) ([57fc185](https://github.com/JustinBeckwith/linkinator-action/commit/57fc1852a4a0a69e5906c6c7d9f8ba63fa91f13e))
+
 ## [2.4.1](https://github.com/JustinBeckwith/linkinator-action/compare/linkinator-action-v2.4.0...linkinator-action-v2.4.1) (2026-04-03)
 
 
