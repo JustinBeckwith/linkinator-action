@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run Release Please
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@v5
         id: release
         with:
           token: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
