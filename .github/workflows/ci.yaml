@@ -45,7 +45,7 @@ jobs:
         with:
           ref: ${{github.event.pull_request.head.ref}}
           repository: ${{github.event.pull_request.head.repo.full_name}}
-          token: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
+          token: ${{ secrets.BECKWITH_ROBOT_TOKEN || github.token }}
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 24
@@ -57,5 +57,9 @@ jobs:
           git config user.email justin.beckwith+beckwithrobot@gmail.com
       - name: git push
         run: |
-          git commit -a -m 'npm run build' || echo 'no changes'
-          git push
+          if git diff --quiet; then
+            echo 'no changes'
+          else
+            git commit -a -m 'npm run build'
+            git push
+          fi
