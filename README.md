@@ -80,6 +80,12 @@ jobs:
 
 To view skipped links, failure details, and more debugging information [enable step debug logging](https://docs.github.com/en/free-pro-team@latest/actions/managing-workflow-runs/enabling-debug-logging#enabling-step-debug-logging).
 
+## Verification
+
+Temporary links for validating issue #247 behavior in GitHub Actions:
+
+- [Lemur Browser](https://www.lemurbrowser.com/)
+
 ## License
 
 [MIT](LICENSE)

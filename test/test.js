@@ -1,5 +1,11 @@
 import assert from 'node:assert';
+import { once } from 'node:events';
+import fs from 'node:fs/promises';
+import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, it, vi } from 'vitest';
+import { LinkChecker } from 'linkinator';
 import nock from 'nock';
 
 // Mock @actions/core before importing anything else
@@ -23,7 +29,9 @@ import * as core from '@actions/core';
 import { getFullConfig, main, generateJobSummary } from '../src/action.js';
 
 nock.disableNetConnect();
-nock.enableNetConnect('localhost');
+nock.enableNetConnect((host) => {
+  return host.includes('localhost') || host.includes('127.0.0.1');
+});
 
 // Helper to create a mock getInput function that can return different values based on input name
 function createGetInputMock(values = {}) {
@@ -257,6 +265,68 @@ describe('linkinator action', () => {
       .some((call) => /status|headers/.test(call[0]));
     assert.ok(hasFailureDetails);
     scope.done();
+  });
+
+  it('should reproduce a valid URL failing to fetch when automated requests are dropped', async () => {
+    const requests = [];
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'linkinator-247-'));
+    const markdownPath = path.join(tempDir, 'issue-247.md');
+    const server = http.createServer((req, res) => {
+      requests.push({
+        method: req.method,
+        userAgent: req.headers['user-agent'],
+      });
+
+      // Simulate a site/CDN that serves browsers but drops automated checks.
+      if (req.headers['user-agent'] === 'node') {
+        req.socket.destroy();
+        return;
+      }
+
+      res.writeHead(200, { 'content-type': 'text/html' });
+      res.end('<html><body>ok</body></html>');
+    });
+
+    try {
+      server.listen(0, '127.0.0.1');
+      await once(server, 'listening');
+
+      const { port } = server.address();
+      const url = `http://127.0.0.1:${port}/`;
+      await fs.writeFile(markdownPath, `[valid in browser](${url})\n`);
+
+      const browserResponse = await fetch(url, {
+        headers: { 'user-agent': 'Mozilla/5.0 repro' },
+      });
+      assert.strictEqual(browserResponse.status, 200);
+
+      const result = await new LinkChecker().check({
+        path: [markdownPath],
+        recurse: false,
+        markdown: true,
+        concurrency: 1,
+        timeout: 5000,
+        skip: [],
+      });
+
+      assert.strictEqual(result.passed, false);
+
+      const brokenLink = result.links.find((link) => link.url === url);
+      assert.ok(brokenLink);
+      assert.strictEqual(brokenLink.status, 0);
+      assert.deepStrictEqual(
+        requests.map((request) => request.method),
+        ['GET', 'HEAD', 'GET'],
+      );
+      assert.ok(
+        brokenLink.failureDetails.some((detail) => {
+          return detail.message.includes('fetch failed');
+        }),
+      );
+    } finally {
+      server.close();
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
   });
 
   it('should respect local config with overrides', async () => {
