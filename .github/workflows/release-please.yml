@@ -3,6 +3,9 @@ on:
     branches:
       - main
 name: release-please
+permissions:
+  contents: write
+  pull-requests: write
 jobs:
   release-please:
     runs-on: ubuntu-latest
@@ -12,22 +15,52 @@ jobs:
         id: release
         with:
           token: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - name: tag major, minor, and patch versions
+      - name: Check out the released source
+        if: ${{ steps.release.outputs.release_created }}
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          fetch-depth: 0
+          token: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
+      - name: Set up Node.js
+        if: ${{ steps.release.outputs.release_created }}
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Build the release bundle
+        if: ${{ steps.release.outputs.release_created }}
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - name: Create the release commit and tags
         if: ${{ steps.release.outputs.release_created }}
         run: |
           git config user.name github-actions[bot]
-          git config user.email justin.beckwith@gmail.com
-          git remote add gh-token "https://${{ secrets.GITHUB_TOKEN}}@github.com/JustinBeckwith/linkinator-action.git"
-          git tag -d v${{ steps.release.outputs.major }} || true
-          git tag -d v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }} || true
-          git tag -d v${{ steps.release.outputs.version }} || true
-          git push origin :v${{ steps.release.outputs.major }} || true
-          git push origin :v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }} || true
-          git push origin :v${{ steps.release.outputs.version }} || true
-          git tag -a v${{ steps.release.outputs.major }} -m "Release v${{ steps.release.outputs.major }}"
-          git tag -a v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }} -m "Release v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}"
-          git tag -a v${{ steps.release.outputs.version }} -m "Release v${{ steps.release.outputs.version }}"
-          git push origin v${{ steps.release.outputs.major }}
-          git push origin v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}
-          git push origin v${{ steps.release.outputs.version }}
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+
+          tag='${{ steps.release.outputs.tag_name }}'
+          major='v${{ steps.release.outputs.major }}'
+          minor='v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}'
+
+          if git rev-parse "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Refusing to replace existing release tag $tag" >&2
+            exit 1
+          fi
+
+          git add --force dist/index.cjs dist/index.cjs.map
+          git commit -m "chore: package $tag"
+          git tag --annotate "$tag" --message "Release $tag"
+          git tag --force --annotate "$major" --message "Release $major"
+          git tag --force --annotate "$minor" --message "Release $minor"
+
+          git push --atomic --force origin \
+            "refs/tags/$tag" \
+            "refs/tags/$major" \
+            "refs/tags/$minor"
+      - name: Publish the immutable release
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
+        run: gh release edit '${{ steps.release.outputs.tag_name }}' --draft=false --latest
