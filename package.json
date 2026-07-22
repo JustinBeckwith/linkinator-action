@@ -35,7 +35,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.3.13",
     "esbuild": "^0.28.1",
-    "nock": "^14.0.10",
+    "undici": "^8.8.0",
     "vitest": "^4.0.18"
   }
 }

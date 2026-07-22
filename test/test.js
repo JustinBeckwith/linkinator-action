@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { afterEach, beforeEach, describe, it, vi } from 'vitest';
-import nock from 'nock';
+import { MockAgent, setGlobalDispatcher } from 'undici';
 
 // Mock @actions/core before importing anything else
 vi.mock('@actions/core', () => ({
@@ -22,8 +22,26 @@ vi.mock('@actions/core', () => ({
 import * as core from '@actions/core';
 import { getFullConfig, main, generateJobSummary } from '../src/action.js';
 
-nock.disableNetConnect();
-nock.enableNetConnect('localhost');
+let mockAgent;
+
+function mock(origin) {
+  const pool = mockAgent.get(origin);
+  let interceptor;
+  const scope = {
+    get(path) {
+      interceptor = pool.intercept({ path, method: 'GET' });
+      return scope;
+    },
+    reply(statusCode, data = '') {
+      interceptor.reply(statusCode, data);
+      return scope;
+    },
+    done() {
+      mockAgent.assertNoPendingInterceptors();
+    },
+  };
+  return scope;
+}
 
 // Helper to create a mock getInput function that can return different values based on input name
 function createGetInputMock(values = {}) {
@@ -44,12 +62,18 @@ function stubSummary() {
 
 describe('linkinator action', () => {
   beforeEach(() => {
+    mockAgent = new MockAgent();
+    mockAgent.disableNetConnect();
+    mockAgent.enableNetConnect((host) =>
+      /^(?:localhost|127\.0\.0\.1):/.test(host),
+    );
+    setGlobalDispatcher(mockAgent);
     vi.clearAllMocks();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks();
-    nock.cleanAll();
+    await mockAgent.close();
   });
 
   it('should return ok for a valid README', async () => {
@@ -58,10 +82,10 @@ describe('linkinator action', () => {
     const setOutputStub = vi.spyOn(core, 'setOutput').mockImplementation(() => {});
     const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
     const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
-    const scope = nock('http://fake.local')
-      .head('/')
+    const scope = mock('http://fake.local')
+      .get('/')
       .reply(200)
-      .head('/fake')
+      .get('/fake')
       .reply(200);
     await main();
     assert.ok(inputStub.mock.calls.length > 0);
@@ -78,10 +102,10 @@ describe('linkinator action', () => {
     const errorStub = vi.spyOn(core, 'error').mockImplementation(() => {});
     const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
     const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
-    const scope = nock('http://fake.local')
-      .head('/')
+    const scope = mock('http://fake.local')
+      .get('/')
       .reply(404)
-      .head('/fake')
+      .get('/fake')
       .reply(404);
     await main();
     assert.ok(inputStub.mock.calls.length > 0);
@@ -147,10 +171,10 @@ describe('linkinator action', () => {
     vi.spyOn(core, 'setFailed').mockImplementation((output) => {
       throw new Error(output);
     });
-    const scope = nock('http://fake.local')
-      .head('/')
+    const scope = mock('http://fake.local')
+      .get('/')
       .reply(200)
-      .head('/fake')
+      .get('/fake')
       .reply(200);
     await main();
     assert.ok(inputStub.mock.calls.length > 0);
@@ -169,10 +193,10 @@ describe('linkinator action', () => {
     const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
     const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
     const errorStub = vi.spyOn(core, 'error').mockImplementation(() => {});
-    const scope = nock('http://fake.local')
-      .head('/')
+    const scope = mock('http://fake.local')
+      .get('/')
       .reply(200)
-      .head('/fake')
+      .get('/fake')
       .reply(500);
     await main();
     assert.ok(inputStub.mock.calls.length > 0);
@@ -192,7 +216,7 @@ describe('linkinator action', () => {
       setFailedStub.mock.calls.filter((call) => {
         return (
           call[0] ===
-          'Detected 1 broken links.\n test/fixtures/test.md\n   [500] http://fake.local/fake - HTTP 500'
+          'Detected 1 broken links.\n test/fixtures/test.md\n   [500] http://fake.local/fake - fetch failed'
         );
       }).length,
       1,
@@ -200,7 +224,7 @@ describe('linkinator action', () => {
 
     // Ensure `core.error` is called for each failure
     assert.strictEqual(errorStub.mock.calls.length, 1);
-    const expected = '[500] http://fake.local/fake - HTTP 500';
+    const expected = '[500] http://fake.local/fake - fetch failed';
     assert.strictEqual(errorStub.mock.calls[0][0], expected);
 
     scope.done();
@@ -219,7 +243,7 @@ describe('linkinator action', () => {
     const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
     const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
     const errorStub = vi.spyOn(core, 'error').mockImplementation(() => {});
-    const scope = nock('http://fake.local').head('/').reply(200);
+    const scope = mock('http://fake.local').get('/').reply(200);
     await main();
     assert.ok(inputStub.mock.calls.length > 0);
     assert.strictEqual(setOutputStub.mock.calls.length, 1);
@@ -241,10 +265,10 @@ describe('linkinator action', () => {
     const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
     const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
     const errorStub = vi.spyOn(core, 'error').mockImplementation(() => {});
-    const scope = nock('http://fake.local')
-      .head('/')
+    const scope = mock('http://fake.local')
+      .get('/')
       .reply(200)
-      .head('/fake')
+      .get('/fake')
       .reply(500);
     await main();
     assert.ok(inputStub.mock.calls.length > 0);
@@ -299,10 +323,10 @@ describe('linkinator action', () => {
     vi.spyOn(core, 'setFailed').mockImplementation((output) => {
       throw new Error(output);
     });
-    const scope = nock('http://real.remote')
-      .head('/')
+    const scope = mock('http://real.remote')
+      .get('/')
       .reply(200)
-      .head('/fake')
+      .get('/fake')
       .reply(200);
     await main();
     assert.ok(inputStub.mock.calls.length > 0);
@@ -323,7 +347,7 @@ describe('linkinator action', () => {
     const setOutputStub = vi.spyOn(core, 'setOutput').mockImplementation(() => {});
     const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
     const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
-    const scope = nock('https://github.com')
+    const scope = mock('https://github.com')
       .get('/Codertocat/Hello-World/blob/incoming/LICENSE')
       .reply(200);
     await main();
@@ -440,7 +464,7 @@ describe('linkinator action', () => {
     // The action should rewrite URLs from main branch to the slashed branch
     // Original: https://github.com/JustinBeckwith/linkinator-action/blob/main/CONTRIBUTING.md
     // Expected: https://github.com/Codertocat/Hello-World/blob/release-please/branches/main/CONTRIBUTING.md
-    const scope = nock('https://github.com')
+    const scope = mock('https://github.com')
       .get('/Codertocat/Hello-World/blob/release-please/branches/main/CONTRIBUTING.md')
       .reply(200)
       .get('/Codertocat/Hello-World/blob/release-please/branches/main/CODE_OF_CONDUCT.md')
@@ -467,7 +491,7 @@ describe('linkinator action', () => {
     const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
     const infoStub = vi.spyOn(core, 'info').mockImplementation(() => {});
 
-    const scope = nock('https://github.com')
+    const scope = mock('https://github.com')
       .get('/Codertocat/Hello-World/blob/feature/deep/nested/branch/CONTRIBUTING.md')
       .reply(200)
       .get('/Codertocat/Hello-World/blob/feature/deep/nested/branch/CODE_OF_CONDUCT.md')
@@ -495,10 +519,10 @@ describe('linkinator action', () => {
     vi.spyOn(core, 'info').mockImplementation(() => {});
 
     // Mock both blob and tree URLs
-    const scope = nock('http://fake.local')
-      .head('/')
+    const scope = mock('http://fake.local')
+      .get('/')
       .reply(200)
-      .head('/fake')
+      .get('/fake')
       .reply(200);
 
     await main();
@@ -532,7 +556,7 @@ describe('linkinator action', () => {
     // With the old regex, it WOULD match and duplicate. With the new regex, it should NOT match at all
     // because the pattern is specifically /blob/{BASE_REF}/ not /blob/anything/with/main/at/end/
     // Since it doesn't match the base ref, it stays as-is and checks the original repo
-    const scope = nock('https://github.com')
+    const scope = mock('https://github.com')
       .get('/JustinBeckwith/linkinator-action/blob/release-please/branches/main/FILE.md')
       .reply(200);
 
@@ -564,7 +588,7 @@ describe('linkinator action', () => {
     const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
     vi.spyOn(core, 'info').mockImplementation(() => {});
 
-    const scope = nock('https://github.com')
+    const scope = mock('https://github.com')
       .get('/Codertocat/Hello-World/blob/feature/test/FILE.md')
       .reply(200);
 
