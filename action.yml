@@ -75,7 +75,7 @@ inputs:
     default: 'false'
     required: false
   requireHttps:
-    description: Require all links to use HTTPS. Any HTTP links will be treated as broken.
+    description: Require links to use HTTPS. Accepts off, warn, or error; true is an alias for error and false is an alias for off.
     default: 'false'
     required: false
   cleanUrls:

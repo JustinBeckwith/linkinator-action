@@ -17,7 +17,7 @@ export async function getFullConfig() {
     retryErrorsJitter: 2000,
     verbosity: 'WARNING',
     allowInsecureCerts: false,
-    requireHttps: false,
+    requireHttps: 'off',
     cleanUrls: false,
     checkCss: false,
     checkFragments: false,
@@ -41,7 +41,7 @@ export async function getFullConfig() {
     verbosity: parseString('verbosity'),
     config: parseString('config'),
     allowInsecureCerts: parseBoolean('allowInsecureCerts'),
-    requireHttps: parseBoolean('requireHttps'),
+    requireHttps: parseRequireHttps('requireHttps'),
     cleanUrls: parseBoolean('cleanUrls'),
     checkCss: parseBoolean('checkCss'),
     checkFragments: parseBoolean('checkFragments'),
@@ -79,11 +79,6 @@ function isFragmentFailure(link) {
         }
       }
     }
-  }
-
-  // If we got a 200 but still failed, it's likely a fragment issue
-  if (link.status === 200 && link.state === 'BROKEN') {
-    return true;
   }
 
   return false;
@@ -334,6 +329,26 @@ function parseBoolean(input) {
     return value === 'true';
   }
   return undefined;
+}
+
+function parseRequireHttps(input) {
+  const value = core.getInput(input).trim().toLowerCase();
+  switch (value) {
+    case '':
+      return undefined;
+    case 'true':
+    case 'error':
+      return 'error';
+    case 'false':
+    case 'off':
+      return 'off';
+    case 'warn':
+      return 'warn';
+    default:
+      throw new Error(
+        `Invalid requireHttps value "${value}". Expected true, false, off, warn, or error.`,
+      );
+  }
 }
 
 function parseJSON(input) {

@@ -62,7 +62,7 @@ jobs:
 - `retryErrorsJitter` - The maximum jitter in milliseconds to apply to retry delays. Defaults to `2000`.
 - `userAgent` - Custom User-Agent header to use for requests.
 - `allowInsecureCerts` - Allow checking links with insecure certificates. Useful for local development with self-signed certificates. Defaults to `false`.
-- `requireHttps` - Require all links to use HTTPS. Any HTTP links will be treated as broken. Defaults to `false`.
+- `requireHttps` - Require links to use HTTPS. Accepts `off`, `warn`, or `error`; `true` is an alias for `error` and `false` is an alias for `off`. Defaults to `false`.
 - `cleanUrls` - Enable support for clean URLs (extensionless paths). Allows validation of URLs without file extensions, useful for modern static hosting. Defaults to `false`.
 - `checkCss` - Enable parsing and extraction of URLs from CSS files, style blocks, and inline styles. Defaults to `false`.
 - `checkFragments` - Enable validation of fragment identifiers (anchor links) on HTML pages. Defaults to `false`.
