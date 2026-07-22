@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.3](https://github.com/JustinBeckwith/linkinator-action/compare/v2.4.2...v2.4.3) (2026-07-22)
+
+
+### Bug Fixes
+
+* **deps:** update dependency linkinator to v8 ([#276](https://github.com/JustinBeckwith/linkinator-action/issues/276)) ([7558309](https://github.com/JustinBeckwith/linkinator-action/commit/75583096e786fccc083758c31dfc3e62da57cda2))
+
 ## [2.4.2](https://github.com/JustinBeckwith/linkinator-action/compare/linkinator-action-v2.4.1...linkinator-action-v2.4.2) (2026-04-11)
 
 
