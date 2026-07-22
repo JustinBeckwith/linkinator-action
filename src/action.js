@@ -101,7 +101,7 @@ function getDisplayStatus(link) {
  * @param {object} link The link result object
  * @returns {string} A human-readable failure reason
  */
-function getFailureReason(link) {
+export function getFailureReason(link) {
   // If there are no failure details, return generic message
   if (!link.failureDetails || link.failureDetails.length === 0) {
     return link.status ? 'HTTP Error' : 'Request failed';
@@ -112,19 +112,62 @@ function getFailureReason(link) {
     return 'Fragment not found';
   }
 
-  // Check for other error messages in failure details
+  // Prefer the most specific message in the error cause chain. Undici wraps
+  // network errors such as ENOTFOUND and ECONNREFUSED in `TypeError: fetch
+  // failed`, so reporting only the outer message hides the actionable detail.
   for (const detail of link.failureDetails) {
-    if (detail instanceof Error) {
-      const message = detail.message || '';
-      // Return the error message if it's informative
-      if (message && message.length < 100) {
-        return message;
+    const messages = [];
+    const seen = new Set();
+    let error = detail;
+
+    while (error && typeof error === 'object' && !seen.has(error)) {
+      seen.add(error);
+      if (typeof error.message === 'string' && error.message) {
+        messages.push(error.message);
       }
+      error = error.cause;
+    }
+
+    if (messages.length > 0) {
+      return messages.at(-1);
     }
   }
 
   // Default to HTTP error for other cases
   return link.status ? `HTTP ${link.status}` : 'Request failed';
+}
+
+/**
+ * Serialize failure details, including non-enumerable Error properties.
+ * @param {unknown} failureDetails Linkinator failure details
+ * @returns {string} JSON suitable for DEBUG logging
+ */
+export function stringifyFailureDetails(failureDetails) {
+  const seen = new WeakSet();
+
+  return JSON.stringify(
+    failureDetails,
+    (_key, value) => {
+      if (value && typeof value === 'object') {
+        if (seen.has(value)) {
+          return '[Circular]';
+        }
+        seen.add(value);
+
+        if (value instanceof Error) {
+          return {
+            name: value.name,
+            message: value.message,
+            stack: value.stack,
+            cause: value.cause,
+            ...value,
+          };
+        }
+      }
+      return value;
+    },
+    2,
+  );
 }
 
 export async function generateJobSummary(result, logger) {
@@ -289,7 +332,7 @@ export async function main() {
           const reason = getFailureReason(link);
           const displayStatus = getDisplayStatus(link);
           failureOutput += `\n   [${displayStatus}] ${link.url} - ${reason}`;
-          logger.debug(JSON.stringify(link.failureDetails, null, 2));
+          logger.debug(stringifyFailureDetails(link.failureDetails));
         }
       }
       core.setFailed(failureOutput);
