@@ -28,7 +28,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Build the release bundle
+      - name: Build the bundle in the release pull request
         if: ${{ steps.release.outputs.prs_created == 'true' }}
         run: |
           npm ci
