@@ -22,6 +22,12 @@ jobs:
           ref: ${{ steps.release.outputs.sha }}
           fetch-depth: 0
           token: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
+      - name: Check out the packaged release
+        if: "${{ !steps.release.outputs.release_created && startsWith(github.event.head_commit.message, 'chore: package v') }}"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
       - name: Set up Node.js
         if: ${{ steps.release.outputs.release_created }}
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -34,23 +40,24 @@ jobs:
           npm ci
           npm test
           npm run build
-      - name: Create the release commit and tags
+      - name: Create the release packaging pull request
         if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
 
           tag='${{ steps.release.outputs.tag_name }}'
-          major='v${{ steps.release.outputs.major }}'
-          minor='v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}'
           release_sha='${{ steps.release.outputs.sha }}'
+          branch="release/package-$tag"
 
           # Release Please creates the tag before this step so that draft
           # releases still establish a boundary for the next release PR. Only
-          # move that tag when it points at the release commit from this run.
+          # package a tag when it points at the release commit from this run.
           tag_sha="$(git rev-list -n 1 "$tag")"
           if [[ "$tag_sha" != "$release_sha" ]]; then
-            echo "Refusing to replace $tag at unexpected commit $tag_sha" >&2
+            echo "Refusing to package $tag at unexpected commit $tag_sha" >&2
             exit 1
           fi
 
@@ -70,20 +77,47 @@ jobs:
           git add --force dist/index.cjs dist/index.cjs.map
           git add release-please-config.json
           git commit -m "chore: package $tag"
+
+          remote_sha="$(git ls-remote --heads origin "$branch" | cut -f1)"
+          git push \
+            --force-with-lease="refs/heads/$branch:$remote_sha" \
+            origin "HEAD:refs/heads/$branch"
+
+          pr_url="$(gh pr list --state open --head "$branch" --json url --jq '.[0].url')"
+          if [[ -z "$pr_url" ]]; then
+            pr_url="$(gh pr create \
+              --base main \
+              --head "$branch" \
+              --title "chore: package $tag" \
+              --body "Build and commit the distribution bundle for $tag.")"
+          fi
+          gh pr merge "$pr_url" --auto --squash --delete-branch
+      - name: Publish the immutable release
+        if: "${{ !steps.release.outputs.release_created && startsWith(github.event.head_commit.message, 'chore: package v') }}"
+        env:
+          GH_TOKEN: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
+        run: |
+          tag="v$(node --print "require('./package.json').version")"
+          major="$(cut -d. -f1 <<<"$tag")"
+          minor="$(cut -d. -f1-2 <<<"$tag")"
+
+          tag_sha="$(git rev-list -n 1 "$tag")"
+          if [[ -z "$tag_sha" ]] || ! git merge-base --is-ancestor "$tag_sha" HEAD; then
+            echo "Refusing to publish $tag from unrelated commit $tag_sha" >&2
+            exit 1
+          fi
+          if ! git ls-files --error-unmatch dist/index.cjs dist/index.cjs.map >/dev/null; then
+            echo "Refusing to publish $tag without a committed distribution bundle" >&2
+            exit 1
+          fi
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git tag --force --annotate "$tag" --message "Release $tag"
           git tag --force --annotate "$major" --message "Release $major"
           git tag --force --annotate "$minor" --message "Release $minor"
-
-          # Keep the packaged commit in main's history so Release Please can
-          # find the final immutable tag on later runs. The branch update is a
-          # normal fast-forward; only the release tags are force-updated.
           git push --atomic origin \
-            HEAD:refs/heads/main \
             "+refs/tags/$tag" \
             "+refs/tags/$major" \
             "+refs/tags/$minor"
-      - name: Publish the immutable release
-        if: ${{ steps.release.outputs.release_created }}
-        env:
-          GH_TOKEN: ${{ secrets.BECKWITH_ROBOT_TOKEN }}
-        run: gh release edit '${{ steps.release.outputs.tag_name }}' --draft=false --latest
+          gh release edit "$tag" --draft=false --latest
