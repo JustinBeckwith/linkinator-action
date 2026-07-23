@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.4.5](https://github.com/JustinBeckwith/linkinator-action/compare/v2.4.4...v2.4.5) (2026-07-23)
+
+
+### Bug Fixes
+
+* **deps:** update linkinator to 8.0.2 ([#290](https://github.com/JustinBeckwith/linkinator-action/issues/290)) ([131e9c8](https://github.com/JustinBeckwith/linkinator-action/commit/131e9c8e2915419cbc3dbf958263c8aa8b14a49f))
+* package action bundle before release ([652b142](https://github.com/JustinBeckwith/linkinator-action/commit/652b1425c2dae49d4079828e0fcdd33fbd49d256))
+
 ## [2.4.4](https://github.com/JustinBeckwith/linkinator-action/compare/v2.4.3...v2.4.4) (2026-07-23)
 
 
