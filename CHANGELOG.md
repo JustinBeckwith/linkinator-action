@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.4](https://github.com/JustinBeckwith/linkinator-action/compare/v2.4.3...v2.4.4) (2026-07-23)
+
+
+### Bug Fixes
+
+* surface underlying network errors ([#279](https://github.com/JustinBeckwith/linkinator-action/issues/279)) ([36118a2](https://github.com/JustinBeckwith/linkinator-action/commit/36118a2136ce8c37907ee1d292fe017ed17094c9))
+
 ## [2.4.3](https://github.com/JustinBeckwith/linkinator-action/compare/v2.4.2...v2.4.3) (2026-07-22)
 
 
