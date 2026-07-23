@@ -43,22 +43,45 @@ jobs:
           tag='${{ steps.release.outputs.tag_name }}'
           major='v${{ steps.release.outputs.major }}'
           minor='v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}'
+          release_sha='${{ steps.release.outputs.sha }}'
 
-          if git rev-parse "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "Refusing to replace existing release tag $tag" >&2
+          # Release Please creates the tag before this step so that draft
+          # releases still establish a boundary for the next release PR. Only
+          # move that tag when it points at the release commit from this run.
+          tag_sha="$(git rev-list -n 1 "$tag")"
+          if [[ "$tag_sha" != "$release_sha" ]]; then
+            echo "Refusing to replace $tag at unexpected commit $tag_sha" >&2
             exit 1
           fi
 
+          # last-release-sha repairs the boundary for the first release after
+          # this workflow change. Remove it in that packaged release commit so
+          # subsequent runs return to normal tag discovery.
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const path = "release-please-config.json";
+            const config = JSON.parse(fs.readFileSync(path, "utf8"));
+            if (config["last-release-sha"]) {
+              delete config["last-release-sha"];
+              fs.writeFileSync(path, JSON.stringify(config, null, 2) + "\n");
+            }
+          '
+
           git add --force dist/index.cjs dist/index.cjs.map
+          git add release-please-config.json
           git commit -m "chore: package $tag"
-          git tag --annotate "$tag" --message "Release $tag"
+          git tag --force --annotate "$tag" --message "Release $tag"
           git tag --force --annotate "$major" --message "Release $major"
           git tag --force --annotate "$minor" --message "Release $minor"
 
-          git push --atomic --force origin \
-            "refs/tags/$tag" \
-            "refs/tags/$major" \
-            "refs/tags/$minor"
+          # Keep the packaged commit in main's history so Release Please can
+          # find the final immutable tag on later runs. The branch update is a
+          # normal fast-forward; only the release tags are force-updated.
+          git push --atomic origin \
+            HEAD:refs/heads/main \
+            "+refs/tags/$tag" \
+            "+refs/tags/$major" \
+            "+refs/tags/$minor"
       - name: Publish the immutable release
         if: ${{ steps.release.outputs.release_created }}
         env:
