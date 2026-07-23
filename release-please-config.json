@@ -1,6 +1,5 @@
 {
   "force-tag-creation": true,
-  "last-release-sha": "aed8a13fc74597852f21eddd477e369c1c1ae593",
   "packages": {
     ".": {
       "release-type": "node",
