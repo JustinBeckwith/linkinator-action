@@ -30,7 +30,7 @@
   "homepage": "https://github.com/JustinBeckwith/linkinator-action#readme",
   "dependencies": {
     "@actions/core": "^3.0.0",
-    "linkinator": "^8.0.0"
+    "linkinator": "^8.0.2"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.13",
