@@ -8646,7 +8646,7 @@ var require_proxy_agent = __commonJS({
         return this.#client.destroy(err);
       }
     };
-    var ProxyAgent3 = class extends DispatcherBase {
+    var ProxyAgent2 = class extends DispatcherBase {
       constructor(opts) {
         super();
         if (!opts || typeof opts === "object" && !(opts instanceof URL2) && !opts.uri) {
@@ -8787,7 +8787,7 @@ var require_proxy_agent = __commonJS({
         throw new InvalidArgumentError("Proxy-Authorization should be sent in ProxyAgent constructor");
       }
     }
-    module2.exports = ProxyAgent3;
+    module2.exports = ProxyAgent2;
   }
 });
 
@@ -8797,14 +8797,14 @@ var require_env_http_proxy_agent = __commonJS({
     "use strict";
     var DispatcherBase = require_dispatcher_base();
     var { kClose, kDestroy, kClosed, kDestroyed, kDispatch, kNoProxyAgent, kHttpProxyAgent, kHttpsProxyAgent } = require_symbols();
-    var ProxyAgent3 = require_proxy_agent();
+    var ProxyAgent2 = require_proxy_agent();
     var Agent2 = require_agent();
     var DEFAULT_PORTS = {
       "http:": 80,
       "https:": 443
     };
     var experimentalWarned = false;
-    var EnvHttpProxyAgent = class extends DispatcherBase {
+    var EnvHttpProxyAgent2 = class extends DispatcherBase {
       #noProxyValue = null;
       #noProxyEntries = null;
       #opts = null;
@@ -8821,13 +8821,13 @@ var require_env_http_proxy_agent = __commonJS({
         this[kNoProxyAgent] = new Agent2(agentOpts);
         const HTTP_PROXY = httpProxy ?? process.env.http_proxy ?? process.env.HTTP_PROXY;
         if (HTTP_PROXY) {
-          this[kHttpProxyAgent] = new ProxyAgent3({ ...agentOpts, uri: HTTP_PROXY });
+          this[kHttpProxyAgent] = new ProxyAgent2({ ...agentOpts, uri: HTTP_PROXY });
         } else {
           this[kHttpProxyAgent] = this[kNoProxyAgent];
         }
         const HTTPS_PROXY = httpsProxy ?? process.env.https_proxy ?? process.env.HTTPS_PROXY;
         if (HTTPS_PROXY) {
-          this[kHttpsProxyAgent] = new ProxyAgent3({ ...agentOpts, uri: HTTPS_PROXY });
+          this[kHttpsProxyAgent] = new ProxyAgent2({ ...agentOpts, uri: HTTPS_PROXY });
         } else {
           this[kHttpsProxyAgent] = this[kHttpProxyAgent];
         }
@@ -8923,7 +8923,7 @@ var require_env_http_proxy_agent = __commonJS({
         return process.env.no_proxy ?? process.env.NO_PROXY ?? "";
       }
     };
-    module2.exports = EnvHttpProxyAgent;
+    module2.exports = EnvHttpProxyAgent2;
   }
 });
 
@@ -18611,8 +18611,8 @@ var require_undici = __commonJS({
     var Pool = require_pool();
     var BalancedPool = require_balanced_pool();
     var Agent2 = require_agent();
-    var ProxyAgent3 = require_proxy_agent();
-    var EnvHttpProxyAgent = require_env_http_proxy_agent();
+    var ProxyAgent2 = require_proxy_agent();
+    var EnvHttpProxyAgent2 = require_env_http_proxy_agent();
     var RetryAgent = require_retry_agent();
     var errors = require_errors();
     var util = require_util();
@@ -18634,8 +18634,8 @@ var require_undici = __commonJS({
     module2.exports.Pool = Pool;
     module2.exports.BalancedPool = BalancedPool;
     module2.exports.Agent = Agent2;
-    module2.exports.ProxyAgent = ProxyAgent3;
-    module2.exports.EnvHttpProxyAgent = EnvHttpProxyAgent;
+    module2.exports.ProxyAgent = ProxyAgent2;
+    module2.exports.EnvHttpProxyAgent = EnvHttpProxyAgent2;
     module2.exports.RetryAgent = RetryAgent;
     module2.exports.RetryHandler = RetryHandler;
     module2.exports.DecoratorHandler = DecoratorHandler;
@@ -29875,7 +29875,7 @@ var require_proxy_agent2 = __commonJS({
         return this.#client.destroy(err);
       }
     };
-    var ProxyAgent3 = class extends DispatcherBase {
+    var ProxyAgent2 = class extends DispatcherBase {
       constructor(opts) {
         if (!opts || typeof opts === "object" && !(opts instanceof URL) && !opts.uri) {
           throw new InvalidArgumentError("Proxy uri is mandatory");
@@ -30074,7 +30074,7 @@ var require_proxy_agent2 = __commonJS({
     function throwProxyAuthError() {
       throw new InvalidArgumentError("Proxy-Authorization should be sent in ProxyAgent constructor");
     }
-    module2.exports = ProxyAgent3;
+    module2.exports = ProxyAgent2;
   }
 });
 
@@ -30084,13 +30084,13 @@ var require_env_http_proxy_agent2 = __commonJS({
     "use strict";
     var DispatcherBase = require_dispatcher_base2();
     var { kClose, kDestroy, kClosed, kDestroyed, kDispatch, kNoProxyAgent, kHttpProxyAgent, kHttpsProxyAgent } = require_symbols6();
-    var ProxyAgent3 = require_proxy_agent2();
+    var ProxyAgent2 = require_proxy_agent2();
     var Agent2 = require_agent2();
     var DEFAULT_PORTS = {
       "http:": 80,
       "https:": 443
     };
-    var EnvHttpProxyAgent = class extends DispatcherBase {
+    var EnvHttpProxyAgent2 = class extends DispatcherBase {
       #noProxyValue = null;
       #noProxyEntries = null;
       #opts = null;
@@ -30101,13 +30101,13 @@ var require_env_http_proxy_agent2 = __commonJS({
         this[kNoProxyAgent] = new Agent2(agentOpts);
         const HTTP_PROXY = httpProxy ?? process.env.http_proxy ?? process.env.HTTP_PROXY;
         if (HTTP_PROXY) {
-          this[kHttpProxyAgent] = new ProxyAgent3({ ...agentOpts, uri: HTTP_PROXY });
+          this[kHttpProxyAgent] = new ProxyAgent2({ ...agentOpts, uri: HTTP_PROXY });
         } else {
           this[kHttpProxyAgent] = this[kNoProxyAgent];
         }
         const HTTPS_PROXY = httpsProxy ?? process.env.https_proxy ?? process.env.HTTPS_PROXY;
         if (HTTPS_PROXY) {
-          this[kHttpsProxyAgent] = new ProxyAgent3({ ...agentOpts, uri: HTTPS_PROXY });
+          this[kHttpsProxyAgent] = new ProxyAgent2({ ...agentOpts, uri: HTTPS_PROXY });
         } else {
           this[kHttpsProxyAgent] = this[kHttpProxyAgent];
         }
@@ -30197,7 +30197,7 @@ var require_env_http_proxy_agent2 = __commonJS({
         return process.env.no_proxy ?? process.env.NO_PROXY ?? "";
       }
     };
-    module2.exports = EnvHttpProxyAgent;
+    module2.exports = EnvHttpProxyAgent2;
   }
 });
 
@@ -44687,9 +44687,9 @@ var require_undici2 = __commonJS({
     var RoundRobinPool = require_round_robin_pool();
     var Agent2 = require_agent2();
     var Dispatcher1Wrapper = require_dispatcher1_wrapper();
-    var ProxyAgent3 = require_proxy_agent2();
+    var ProxyAgent2 = require_proxy_agent2();
     var Socks5ProxyAgent = require_socks5_proxy_agent();
-    var EnvHttpProxyAgent = require_env_http_proxy_agent2();
+    var EnvHttpProxyAgent2 = require_env_http_proxy_agent2();
     var RetryAgent = require_retry_agent2();
     var H2CClient = require_h2c_client();
     var errors = require_errors2();
@@ -44715,9 +44715,9 @@ var require_undici2 = __commonJS({
     module2.exports.RoundRobinPool = RoundRobinPool;
     module2.exports.Agent = Agent2;
     module2.exports.Dispatcher1Wrapper = Dispatcher1Wrapper;
-    module2.exports.ProxyAgent = ProxyAgent3;
+    module2.exports.ProxyAgent = ProxyAgent2;
     module2.exports.Socks5ProxyAgent = Socks5ProxyAgent;
-    module2.exports.EnvHttpProxyAgent = EnvHttpProxyAgent;
+    module2.exports.EnvHttpProxyAgent = EnvHttpProxyAgent2;
     module2.exports.RetryAgent = RetryAgent;
     module2.exports.H2CClient = H2CClient;
     module2.exports.RetryHandler = RetryHandler;
@@ -50947,13 +50947,11 @@ var Queue = class extends import_node_events2.EventEmitter {
   q = [];
   activeFunctions = 0;
   concurrency;
+  wakeup;
+  wakeupTime;
   constructor(options) {
     super();
     this.concurrency = options.concurrency;
-    setInterval(() => {
-      if (this.activeFunctions === 0)
-        this.tick();
-    }, 2500).unref();
   }
   // biome-ignore lint/suspicious/noExplicitAny: this can actually be any
   on(event, listener) {
@@ -50966,25 +50964,28 @@ var Queue = class extends import_node_events2.EventEmitter {
       fn: function_,
       timeToRun
     });
-    setTimeout(() => {
-      this.tick();
-    }, delay);
+    this.scheduleWakeup();
   }
   async onIdle() {
+    if (this.activeFunctions === 0 && this.q.length === 0) {
+      return;
+    }
     return new Promise((resolve) => {
-      this.on("done", () => {
+      this.once("done", () => {
         resolve();
       });
     });
   }
   tick() {
     if (this.activeFunctions === 0 && this.q.length === 0) {
+      this.cancelWakeup();
       this.emit("done");
       return;
     }
-    for (let i = 0; i < this.q.length; i++) {
+    const queuedItems = this.q.length;
+    for (let i = 0; i < queuedItems; i++) {
       if (this.activeFunctions >= this.concurrency) {
-        return;
+        break;
       }
       const item = this.q.shift();
       if (item === void 0) {
@@ -51001,6 +51002,39 @@ var Queue = class extends import_node_events2.EventEmitter {
         this.q.push(item);
       }
     }
+    if (this.q.length === 0) {
+      this.cancelWakeup();
+      return;
+    }
+    this.scheduleWakeup();
+  }
+  cancelWakeup() {
+    if (this.wakeup !== void 0) {
+      clearTimeout(this.wakeup);
+      this.wakeup = void 0;
+      this.wakeupTime = void 0;
+    }
+  }
+  scheduleWakeup() {
+    if (this.activeFunctions >= this.concurrency || this.q.length === 0) {
+      return;
+    }
+    let nextRun = Number.POSITIVE_INFINITY;
+    for (const item of this.q) {
+      nextRun = Math.min(nextRun, item.timeToRun);
+    }
+    if (this.wakeup !== void 0 && this.wakeupTime !== void 0 && this.wakeupTime <= nextRun) {
+      return;
+    }
+    if (this.wakeup !== void 0) {
+      this.cancelWakeup();
+    }
+    this.wakeupTime = nextRun;
+    this.wakeup = setTimeout(() => {
+      this.wakeup = void 0;
+      this.wakeupTime = void 0;
+      this.tick();
+    }, Math.max(0, nextRun - Date.now()));
   }
 };
 
@@ -52602,30 +52636,6 @@ async function bufferStream(stream) {
   return Buffer.concat(chunks);
 }
 
-// node_modules/linkinator/build/src/url-utils.js
-function normalizeBaseUrl(baseUrl, cleanUrls = false) {
-  if (cleanUrls) {
-    return baseUrl;
-  }
-  try {
-    const url = new URL(baseUrl);
-    const pathname = url.pathname;
-    if (pathname.endsWith("/")) {
-      return baseUrl;
-    }
-    const lastSegment = pathname.split("/").pop() || "";
-    const hasExtension = lastSegment.includes(".") && lastSegment.indexOf(".") > 0;
-    const isCommonPageName = ["index", "default", "home", "main"].includes(lastSegment.toLowerCase());
-    if (!hasExtension && !isCommonPageName) {
-      url.pathname = `${pathname}/`;
-      return url.href;
-    }
-    return baseUrl;
-  } catch {
-    return baseUrl;
-  }
-}
-
 // node_modules/linkinator/build/src/config.js
 var import_node_fs3 = require("node:fs");
 var import_node_path4 = __toESM(require("node:path"), 1);
@@ -52704,7 +52714,10 @@ function getProxyUrl2() {
 }
 function getSharedProxyAgent(proxyUrl) {
   if (!sharedProxyAgent || cachedProxyUrl !== proxyUrl) {
-    sharedProxyAgent = new import_undici2.ProxyAgent(proxyUrl);
+    sharedProxyAgent = new import_undici2.EnvHttpProxyAgent({
+      httpProxy: proxyUrl,
+      httpsProxy: proxyUrl
+    });
     cachedProxyUrl = proxyUrl;
   }
   return sharedProxyAgent;
@@ -53065,10 +53078,7 @@ var LinkChecker = class extends import_node_events3.EventEmitter {
       let htmlContentForFragments;
       if (response?.body) {
         const nodeStream = toNodeReadable(response.body);
-        let baseUrl = response.url || options.url.href;
-        if (isHtml(response)) {
-          baseUrl = normalizeBaseUrl(baseUrl, options.checkOptions.cleanUrls);
-        }
+        const baseUrl = response.url || options.url.href;
         if (isHtml(response)) {
           if (options.checkOptions.checkFragments) {
             htmlContentForFragments = await bufferStream(nodeStream);
@@ -53105,11 +53115,21 @@ var LinkChecker = class extends import_node_events3.EventEmitter {
           continue;
         }
         if (options.checkOptions.checkFragments && result2.fragment && result2.fragment.length > 0) {
-          const urlKey = result2.url.href;
-          if (!this.fragmentsToCheck.has(urlKey)) {
-            this.fragmentsToCheck.set(urlKey, /* @__PURE__ */ new Set());
+          if (await this.shouldSkipFragment(result2.fragment, result2.urlWithFragment ?? result2.url.href, options.checkOptions)) {
+            const skippedFragmentResult = {
+              url: mapUrl(result2.urlWithFragment ?? result2.url.href, options.checkOptions),
+              state: LinkState.SKIPPED,
+              parent: mapUrl(options.url.href, options.checkOptions)
+            };
+            options.results.push(skippedFragmentResult);
+            this.emit("link", skippedFragmentResult);
+          } else {
+            const urlKey = result2.url.href;
+            if (!this.fragmentsToCheck.has(urlKey)) {
+              this.fragmentsToCheck.set(urlKey, /* @__PURE__ */ new Set());
+            }
+            this.fragmentsToCheck.get(urlKey)?.add(result2.fragment);
           }
-          this.fragmentsToCheck.get(urlKey)?.add(result2.fragment);
         }
         let crawl = options.checkOptions.recurse && result2.url?.href.startsWith(options.rootPath);
         if (crawl) {
@@ -53209,6 +53229,12 @@ var LinkChecker = class extends import_node_events3.EventEmitter {
     }
     return Boolean(checkOptions.linksToSkip?.some((linkToSkip) => new RegExp(linkToSkip).test(href)));
   }
+  async shouldSkipFragment(fragment, url, checkOptions) {
+    if (typeof checkOptions.fragmentsToSkip === "function") {
+      return checkOptions.fragmentsToSkip(fragment, url);
+    }
+    return Boolean(checkOptions.fragmentsToSkip?.some((fragmentToSkip) => new RegExp(fragmentToSkip).test(fragment)));
+  }
   recordSkippedResult(options) {
     const result = {
       url: mapUrl(options.url.href, options.checkOptions),
@@ -53293,17 +53319,13 @@ var LinkChecker = class extends import_node_events3.EventEmitter {
     if (status > 0 && status < 500 && status !== 429) {
       return false;
     }
-    let currentRetries = 1;
-    const cachedRetries = options.retryErrorsCache.get(options.url.href);
-    if (cachedRetries !== void 0) {
-      currentRetries = cachedRetries;
-      if (currentRetries > maxRetries)
-        return false;
-      options.retryErrorsCache.set(options.url.href, currentRetries + 1);
-    } else {
-      options.retryErrorsCache.set(options.url.href, 1);
+    const retriesScheduled = options.retryErrorsCache.get(options.url.href) ?? 0;
+    if (retriesScheduled >= maxRetries) {
+      return false;
     }
-    const retryAfter = 2 ** currentRetries * 1e3 + Math.random() * options.retryErrorsJitter;
+    const currentRetry = retriesScheduled + 1;
+    options.retryErrorsCache.set(options.url.href, currentRetry);
+    const retryAfter = 2 ** currentRetry * 1e3 + Math.random() * options.retryErrorsJitter;
     options.queue.add(async () => {
       await this.crawl(options);
     }, {
