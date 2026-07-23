@@ -20,7 +20,13 @@ vi.mock('@actions/core', () => ({
 }));
 
 import * as core from '@actions/core';
-import { getFullConfig, main, generateJobSummary } from '../src/action.js';
+import {
+  generateJobSummary,
+  getFailureReason,
+  getFullConfig,
+  main,
+  stringifyFailureDetails,
+} from '../src/action.js';
 
 let mockAgent;
 
@@ -293,6 +299,32 @@ describe('linkinator action', () => {
       .some((call) => /status|headers/.test(call[0]));
     assert.ok(hasFailureDetails);
     scope.done();
+  });
+
+  it('should surface the underlying cause of fetch failures', () => {
+    const cause = new Error(
+      'getaddrinfo ENOTFOUND this-domain-does-not-exist.invalid',
+    );
+    const failure = new TypeError('fetch failed', { cause });
+
+    assert.strictEqual(
+      getFailureReason({ status: 0, failureDetails: [failure] }),
+      'getaddrinfo ENOTFOUND this-domain-does-not-exist.invalid',
+    );
+  });
+
+  it('should include Error messages and causes in DEBUG details', () => {
+    const cause = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1'), {
+      code: 'ECONNREFUSED',
+    });
+    const failure = new TypeError('fetch failed', { cause });
+
+    const details = stringifyFailureDetails([failure]);
+
+    assert.match(details, /"message": "fetch failed"/);
+    assert.match(details, /"message": "connect ECONNREFUSED 127\.0\.0\.1"/);
+    assert.match(details, /"code": "ECONNREFUSED"/);
+    assert.notStrictEqual(details, '[\n  {}\n]');
   });
 
   it('should respect local config with overrides', async () => {
