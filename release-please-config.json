@@ -1,11 +1,9 @@
 {
-  "force-tag-creation": true,
   "packages": {
     ".": {
       "release-type": "node",
       "package-name": "linkinator-action",
-      "include-component-in-tag": false,
-      "draft": true
+      "include-component-in-tag": false
     }
   }
 }
