@@ -35,6 +35,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Verify the release bundle is reproducible
+        if: "${{ startsWith(github.head_ref, 'release-please--branches--') || contains(github.event.pull_request.labels.*.name, 'autorelease: pending') }}"
+        run: |
+          npm run build
+          git diff --exit-code -- dist/index.cjs dist/index.cjs.map
       - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
   lint:
     runs-on: ubuntu-latest
