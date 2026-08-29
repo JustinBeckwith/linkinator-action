@@ -7,6 +7,7 @@ export async function getFullConfig() {
     path: ['*.md'],
     concurrency: 100,
     recurse: false,
+    sitemap: false,
     skip: [],
     timeout: 0,
     markdown: true,
@@ -28,6 +29,8 @@ export async function getFullConfig() {
     path: parseList('paths'),
     concurrency: parseNumber('concurrency'),
     recurse: parseBoolean('recurse'),
+    sitemap: parseBoolean('sitemap'),
+    sitemapUrl: parseList('sitemapUrl'),
     skip: parseList('linksToSkip') || parseList('skip'),
     timeout: parseNumber('timeout'),
     markdown: parseBoolean('markdown'),
@@ -58,6 +61,11 @@ export async function getFullConfig() {
     });
   }
   const fileConfig = await getConfig(actionsConfig);
+  if (fileConfig.sitemap && fileConfig.sitemapUrl) {
+    throw new Error('The sitemap and sitemapUrl inputs cannot be used together.');
+  }
+  fileConfig.sitemap = fileConfig.sitemapUrl || fileConfig.sitemap;
+  delete fileConfig.sitemapUrl;
   const config = Object.assign({}, defaults, fileConfig);
   config.linksToSkip = config.skip;
   return config;
@@ -218,6 +226,7 @@ export async function generateJobSummary(result, logger) {
       [
         { data: 'Status', header: true },
         { data: 'URL', header: true },
+        { data: 'Link text', header: true },
         { data: 'Reason', header: true },
         { data: 'Source', header: true },
       ],
@@ -230,6 +239,7 @@ export async function generateJobSummary(result, logger) {
         tableRows.push([
           displayStatus,
           link.url,
+          link.displayText ?? '',
           reason,
           parent,
         ]);

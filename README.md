@@ -40,7 +40,7 @@ To scan every Markdown file in the repository:
 
 - Broken-link annotations in the workflow log
 - A GitHub Actions job summary grouped by source file
-- Support for local files, remote pages, redirects, fragments, and CSS URLs
+- Support for local files, remote pages, sitemaps, redirects, fragments, and CSS URLs
 - Configurable retries, timeouts, status-code policies, and skip patterns
 - A machine-readable `results` output for later workflow steps
 
@@ -121,6 +121,30 @@ Map an exact status or a status family to `ok`, `warn`, `skip`, or `error`:
 
 Recursive scans follow links on the same root domain. Use a reasonable concurrency value when scanning a site you do not control.
 
+### Crawl pages from a sitemap
+
+Set `sitemap` to load `/sitemap.xml` from each URL in `paths` and check every page it lists:
+
+```yaml
+- uses: JustinBeckwith/linkinator-action@v2
+  with:
+    paths: https://example.com
+    sitemap: true
+```
+
+Sitemap indexes are followed recursively. To use one or more custom sitemap locations, pass comma- or whitespace-separated URLs with `sitemapUrl` instead:
+
+```yaml
+- uses: JustinBeckwith/linkinator-action@v2
+  with:
+    paths: https://example.com
+    sitemapUrl: >-
+      https://example.com/docs-sitemap.xml
+      https://example.com/blog-sitemap.xml
+```
+
+`sitemap` and `sitemapUrl` cannot be combined. Sitemap mode checks links on the listed pages without recursively discovering unlisted pages; add `recurse: true` to crawl same-domain links from those sitemap seeds too.
+
 ### Check CSS URLs
 
 ```yaml
@@ -196,6 +220,8 @@ Values supplied directly to the action take precedence over the configuration fi
 | `config` | `linkinator.config.json` when present | Path to a Linkinator configuration file. |
 | `concurrency` | `100` | Maximum number of concurrent requests. |
 | `recurse` | `false` | Follow same-domain links recursively. |
+| `sitemap` | `false` | Load `/sitemap.xml` from each HTTP path and use its pages as crawl seeds. |
+| `sitemapUrl` | — | Comma- or whitespace-separated explicit sitemap URLs; cannot be combined with `sitemap`. |
 | `linksToSkip` | — | Comma- or whitespace-separated URL regular expressions to skip. |
 | `skip` | — | Alias for `linksToSkip`. |
 | `timeout` | `0` | Request timeout in milliseconds; `0` disables the action-level timeout. |
@@ -235,7 +261,7 @@ The action exposes the full Linkinator result as `results`:
   run: echo "$LINKINATOR_RESULTS"
 ```
 
-The result includes the overall pass/fail state and each checked link's URL, status, state, parent, and failure details.
+The result includes the overall pass/fail state and each checked link's URL, optional anchor `displayText`, status, state, parent, and failure details. Broken-link job summaries include the anchor text when Linkinator discovered the URL in an `<a>` element.
 
 ## Troubleshooting
 
