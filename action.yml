@@ -17,6 +17,12 @@ inputs:
     description: 'Recursively follow links on the same root domain.'
     default: 'false'
     required: false
+  sitemap:
+    description: 'Crawl every page listed in /sitemap.xml for each HTTP path. Sitemap indexes are followed recursively.'
+    required: false
+  sitemapUrl:
+    description: 'Comma- or whitespace-separated explicit sitemap URLs. Cannot be combined with sitemap.'
+    required: false
   linksToSkip:
     description: 'List of urls in regexy form to not include in the check.'
     required: false

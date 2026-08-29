@@ -42,8 +42,8 @@ function mock(origin) {
       interceptor = pool.intercept({ path, method: 'GET' });
       return scope;
     },
-    reply(statusCode, data = '') {
-      interceptor.reply(statusCode, data);
+    reply(statusCode, data = '', headers = {}) {
+      interceptor.reply(statusCode, data, { headers });
       return scope;
     },
     done() {
@@ -344,6 +344,88 @@ describe('linkinator action', () => {
     assert.ok(inputStub.mock.calls.length > 0);
   });
 
+  it('should enable sitemap discovery', async () => {
+    const inputStub = createGetInputMock({
+      paths: 'https://example.com',
+      sitemap: 'true',
+    });
+
+    const config = await getFullConfig();
+
+    assert.strictEqual(config.sitemap, true);
+    assert.ok(inputStub.mock.calls.length > 0);
+  });
+
+  it('should support multiple explicit sitemap URLs', async () => {
+    const inputStub = createGetInputMock({
+      paths: 'https://example.com',
+      sitemapUrl:
+        'https://example.com/docs.xml, https://example.com/blog.xml',
+    });
+
+    const config = await getFullConfig();
+
+    assert.deepStrictEqual(config.sitemap, [
+      'https://example.com/docs.xml',
+      'https://example.com/blog.xml',
+    ]);
+    assert.ok(inputStub.mock.calls.length > 0);
+  });
+
+  it('should reject sitemap and sitemapUrl together', async () => {
+    createGetInputMock({
+      paths: 'https://example.com',
+      sitemap: 'true',
+      sitemapUrl: 'https://example.com/custom.xml',
+    });
+
+    await assert.rejects(
+      async () => await getFullConfig(),
+      /sitemap and sitemapUrl inputs cannot be used together/,
+    );
+  });
+
+  it('should crawl sitemap pages and include anchor text in results', async () => {
+    stubSummary();
+    createGetInputMock({
+      paths: 'http://fake.local',
+      sitemap: 'true',
+    });
+    const setOutputStub = vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
+    vi.spyOn(core, 'info').mockImplementation(() => {});
+    vi.spyOn(core, 'error').mockImplementation(() => {});
+    const scope = mock('http://fake.local')
+      .get('/sitemap.xml')
+      .reply(
+        200,
+        '<urlset><url><loc>http://fake.local/page</loc></url></urlset>',
+        { 'content-type': 'application/xml' },
+      )
+      .get('/page')
+      .reply(200, '<a href="/missing">Missing guide</a>', {
+        'content-type': 'text/html',
+      })
+      .head('/missing')
+      .reply(404)
+      .get('/missing')
+      .reply(404);
+
+    await main();
+
+    assert.strictEqual(setOutputStub.mock.calls.length, 1);
+    const result = setOutputStub.mock.calls[0][1];
+    assert.ok(
+      result.links.some(
+        (link) =>
+          link.url === 'http://fake.local/missing' &&
+          link.displayText === 'Missing guide',
+      ),
+    );
+    assert.strictEqual(setFailedStub.mock.calls.length, 1);
+    scope.done();
+  });
+
   it('should throw for invalid verbosity', async () => {
     stubSummary();
     const inputStub = createGetInputMock({
@@ -525,6 +607,30 @@ describe('linkinator action', () => {
     const config = await getFullConfig();
     assert.strictEqual(config.redirects, 'warn');
     assert.ok(inputStub.mock.calls.length > 0);
+  });
+
+  it('should report redirect destinations in error mode', async () => {
+    stubSummary();
+    createGetInputMock({
+      paths: 'http://redirect.local/source',
+      redirects: 'error',
+    });
+    vi.spyOn(core, 'setOutput').mockImplementation(() => {});
+    const setFailedStub = vi.spyOn(core, 'setFailed').mockImplementation(() => {});
+    vi.spyOn(core, 'info').mockImplementation(() => {});
+    vi.spyOn(core, 'error').mockImplementation(() => {});
+    const scope = mock('http://redirect.local')
+      .get('/source')
+      .reply(301, '', { location: '/destination' });
+
+    await main();
+
+    assert.strictEqual(setFailedStub.mock.calls.length, 1);
+    assert.match(
+      setFailedStub.mock.calls[0][0],
+      /Redirect detected \(http:\/\/redirect\.local\/source to http:\/\/redirect\.local\/destination\)/,
+    );
+    scope.done();
   });
 
   it('should default directoryListing to true', async () => {
@@ -731,7 +837,13 @@ describe('linkinator action', () => {
       const result = {
         passed: false,
         links: [
-          { url: 'http://broken.com', state: 'BROKEN', status: 404, parent: 'test.md' },
+          {
+            url: 'http://broken.com',
+            displayText: 'Broken documentation',
+            state: 'BROKEN',
+            status: 404,
+            parent: 'test.md',
+          },
           { url: 'http://error.com', state: 'BROKEN', status: 500, parent: 'other.md' },
           { url: 'http://example.com', state: 'OK', status: 200, parent: 'test.md' },
         ],
@@ -752,9 +864,11 @@ describe('linkinator action', () => {
       assert.deepStrictEqual(tableRows[0], [
         { data: 'Status', header: true },
         { data: 'URL', header: true },
+        { data: 'Link text', header: true },
         { data: 'Reason', header: true },
         { data: 'Source', header: true },
       ]);
+      assert.strictEqual(tableRows[2][2], 'Broken documentation');
     });
 
     it('should handle singular vs plural in broken links message', async () => {
@@ -790,10 +904,10 @@ describe('linkinator action', () => {
       const tableRows = tableCall[0];
       assert.strictEqual(tableRows.length, 4); // header + 3 broken links
 
-      // Check links are sorted by parent (Source is now at index 3)
-      assert.strictEqual(tableRows[1][3], 'other.md');
-      assert.strictEqual(tableRows[2][3], 'test.md');
-      assert.strictEqual(tableRows[3][3], 'test.md');
+      // Check links are sorted by parent
+      assert.strictEqual(tableRows[1][4], 'other.md');
+      assert.strictEqual(tableRows[2][4], 'test.md');
+      assert.strictEqual(tableRows[3][4], 'test.md');
     });
 
     it('should handle links with no parent', async () => {
@@ -810,7 +924,7 @@ describe('linkinator action', () => {
 
       const tableCall = summaryStub.addTable.mock.calls[0];
       const tableRows = tableCall[0];
-      assert.strictEqual(tableRows[1][3], '(unknown)');
+      assert.strictEqual(tableRows[1][4], '(unknown)');
     });
   });
 });
