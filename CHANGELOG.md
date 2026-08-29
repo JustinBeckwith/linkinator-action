@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.0](https://github.com/JustinBeckwith/linkinator-action/compare/v2.4.5...v2.5.0) (2026-08-29)
+
+
+### Features
+
+* update to linkinator 8.1 ([#297](https://github.com/JustinBeckwith/linkinator-action/issues/297)) ([81a1903](https://github.com/JustinBeckwith/linkinator-action/commit/81a1903dcf2d05bb516f47c70629e6dfad199253))
+
 ## [2.4.5](https://github.com/JustinBeckwith/linkinator-action/compare/v2.4.4...v2.4.5) (2026-07-23)
 
 
