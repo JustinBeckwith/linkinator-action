@@ -30,7 +30,7 @@ export async function getFullConfig() {
     concurrency: parseNumber('concurrency'),
     recurse: parseBoolean('recurse'),
     sitemap: parseBoolean('sitemap'),
-    sitemapUrl: parseList('sitemapUrl'),
+    sitemapUrl: parseList('sitemapUrl', true),
     skip: parseList('linksToSkip') || parseList('skip'),
     timeout: parseNumber('timeout'),
     markdown: parseBoolean('markdown'),
@@ -357,13 +357,55 @@ function parseString(input) {
   return core.getInput(input) || undefined;
 }
 
-function parseList(input) {
+// Hosts that resolve to cloud metadata services or internal/loopback
+// addresses. Used to block SSRF via explicit sitemap URLs.
+const BLOCKED_HOSTS = new Set(['localhost', '169.254.169.254', 'metadata.google.internal']);
+
+function isUnsafeUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return true;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return true;
+  const host = url.hostname.toLowerCase();
+  if (BLOCKED_HOSTS.has(host) || host === '::1') return true;
+  const m = host.match(/^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/);
+  if (m) {
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    if (
+      a === 127 ||
+      a === 10 ||
+      a === 0 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function parseList(input, validateUrls) {
   const value = core.getInput(input) || undefined;
   if (value) {
-    return value
+    const items = value
       .split(/[\s,]+/)
       .map((x) => x.trim())
       .filter((x) => !!x);
+    if (validateUrls) {
+      for (const item of items) {
+        if (isUnsafeUrl(item)) {
+          throw new Error(
+            `Invalid ${input} value "${item}": URLs pointing to internal, loopback, or cloud metadata addresses are not allowed.`,
+          );
+        }
+      }
+    }
+    return items;
   }
   return undefined;
 }
